@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 220" role="img" aria-labelledby="title desc">
+  <title id="title">Pâtisserie Haloui</title>
+  <desc id="desc">Logo textuel avec nom arabe, nom français et mascotte pâtissier stylisée.</desc>
+  <style>
+    .ink { fill: #1f1a17; stroke: #1f1a17; }
+    .ar {
+      font-family: "Noto Naskh Arabic", "Amiri", serif;
+      font-size: 52px;
+      font-weight: 700;
+    }
+    .fr {
+      font-family: "Times New Roman", "Georgia", serif;
+      font-size: 46px;
+      font-style: italic;
+      font-weight: 600;
+    }
+    .line {
+      fill: none;
+      stroke: #1f1a17;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 5.5;
+    }
+    .line-thin {
+      fill: none;
+      stroke: #1f1a17;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 4;
+    }
+  </style>
+
+  <text class="ar ink" x="260" y="58" text-anchor="middle">حلويات الحلوي</text>
+  <text class="fr ink" x="260" y="116" text-anchor="middle">Pâtisserie Haloui</text>
+
+  <g transform="translate(203 126)">
+    <path class="line" d="M48 6c-8 2-12 9-10 18 2 8 0 12-6 18m16-36c6-8 18-8 24 0m0 0c7-9 19-9 26 0m0 0c7-8 18-7 24 1 6 8 6 19-1 27-5 6-8 11-8 18H48c0-8-3-13-8-19-7-8-7-19-1-27 6-8 18-9 25-1"/>
+    <path class="line-thin" d="M70 17v29m18-29v29"/>
+    <path class="line" d="M55 64c8-8 19-12 30-12s22 4 30 12"/>
+    <path class="line-thin" d="M64 77c4-7 11-11 21-11 9 0 16 4 20 11"/>
+    <path class="line-thin" d="M79 88c2 3 5 4 8 4s6-1 8-4m8 0c2 3 5 4 8 4s6-1 8-4"/>
+    <path class="line" d="M79 101c7 5 14 7 22 7 9 0 16-2 23-7"/>
+    <path class="line-thin" d="M92 116l-8 20m18-16v18m18-18l8 20"/>
+    <path class="line-thin" d="M62 112l-16 10m82-10l16 10"/>
+  </g>
+</svg>
