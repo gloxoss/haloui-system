@@ -7,11 +7,13 @@ import { requireAdmin, requireAuth, requireSuperadmin, updateUserPassword } from
 import { FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
 import { getCompany } from "@/lib/data";
 import {
+  bulkSaveProducts,
   convertDocument,
   createAttestation,
   deleteEmployee,
   deleteEntity,
   deleteProduct,
+  resetBusinessData,
   saveBranch,
   saveCompany,
   saveDocument,
@@ -19,7 +21,6 @@ import {
   saveEntity,
   saveFeatureFlags,
   saveProduct,
-  resetBusinessData,
   saveUser,
   updateDocumentStatus,
   upsertRevenueEntry,
@@ -41,7 +42,7 @@ function refresh(paths: string[]) {
 }
 
 export async function saveCompanyAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAuth();
   const current = getCompany();
 
   saveCompany(
@@ -58,34 +59,22 @@ export async function saveCompanyAction(formData: FormData) {
       ice: String(formData.get("ice") || ""),
       logo_path: String(formData.get("logo_path") || ""),
       legal_notice: String(formData.get("legal_notice") || ""),
-      attestation_template_simple: String(
-        formData.get("attestation_template_simple") || current.attestation_template_simple,
-      ),
-      attestation_template_salary: String(
-        formData.get("attestation_template_salary") || current.attestation_template_salary,
-      ),
-      attestation_template_visa: String(
-        formData.get("attestation_template_visa") || current.attestation_template_visa,
-      ),
-      attestation_template_bank: String(
-        formData.get("attestation_template_bank") || current.attestation_template_bank,
-      ),
     },
     session.user.id,
   );
 
-  refresh(["/dashboard", "/parametres", "/personnel/attestation"]);
+  refresh(["/dashboard", "/parametres"]);
 }
 
 export async function saveBranchAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAuth();
   saveBranch(
     {
       id: Number(formData.get("id")) || undefined,
       name: String(formData.get("name") || ""),
       address: String(formData.get("address") || ""),
       phone: String(formData.get("phone") || ""),
-      active: formData.has("id") ? Number(formData.get("active") === "1") : Number(formData.get("active") || 1),
+      active: Number(formData.get("active") || 1),
     },
     session.user.id,
   );
@@ -94,13 +83,12 @@ export async function saveBranchAction(formData: FormData) {
 
 export async function saveUserAction(formData: FormData) {
   const session = await requireAdmin();
-  const submittedRole = String(formData.get("role") || "user");
   saveUser(
     {
       id: Number(formData.get("id")) || undefined,
       username: String(formData.get("username") || ""),
       full_name: String(formData.get("full_name") || ""),
-      role: submittedRole === "admin" ? "admin" : "user",
+      role: String(formData.get("role") || "user") as "admin" | "user",
       active: Number(formData.get("active") || 1),
       password: String(formData.get("password") || "") || undefined,
     },
@@ -166,24 +154,6 @@ export async function resetBusinessDataAction() {
   ]);
 }
 
-export async function saveEntityAction(type: PartyType, formData: FormData) {
-  const session = await requireAuth();
-  saveEntity(
-    type,
-    {
-      id: Number(formData.get("id")) || undefined,
-      name: String(formData.get("name") || ""),
-      ice: String(formData.get("ice") || ""),
-      address: String(formData.get("address") || ""),
-      phone: String(formData.get("phone") || ""),
-      email: String(formData.get("email") || ""),
-      notes: String(formData.get("notes") || ""),
-    },
-    session.user.id,
-  );
-  refresh([`/${type}`]);
-}
-
 export async function quickCreateEntityAction(
   type: PartyType,
   payload: {
@@ -220,6 +190,24 @@ export async function quickCreateEntityAction(
   };
 }
 
+export async function saveEntityAction(type: PartyType, formData: FormData) {
+  const session = await requireAuth();
+  saveEntity(
+    type,
+    {
+      id: Number(formData.get("id")) || undefined,
+      name: String(formData.get("name") || ""),
+      ice: String(formData.get("ice") || ""),
+      address: String(formData.get("address") || ""),
+      phone: String(formData.get("phone") || ""),
+      email: String(formData.get("email") || ""),
+      notes: String(formData.get("notes") || ""),
+    },
+    session.user.id,
+  );
+  refresh([`/${type}`]);
+}
+
 export async function deleteEntityAction(type: PartyType, formData: FormData) {
   const session = await requireAuth();
   deleteEntity(type, Number(formData.get("id")), session.user.id);
@@ -235,7 +223,7 @@ export async function saveProductAction(formData: FormData) {
       designation: String(formData.get("designation") || ""),
       unite: String(formData.get("unite") || "u"),
       prix_ht: toNumber(formData.get("prix_ht")),
-      tva_rate: 0,
+      tva_rate: toNumber(formData.get("tva_rate")),
       active: Number(formData.get("active") || 1),
     },
     session.user.id,
@@ -247,6 +235,62 @@ export async function deleteProductAction(formData: FormData) {
   const session = await requireAuth();
   deleteProduct(Number(formData.get("id")), session.user.id);
   refresh(["/produits"]);
+}
+
+export async function bulkSaveProductsAction(formData: FormData) {
+  const session = await requireAuth();
+  const raw = String(formData.get("rows") || "").trim();
+
+  if (!raw) {
+    redirect("/produits?import=empty");
+  }
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+  const items: Array<{ ref?: string; designation: string; prix_ht: number; unite?: string }> = [];
+  let skipped = 0;
+
+  for (const line of lines) {
+    const cells = line
+      .split(/\t|\||;/)
+      .map((cell) => cell.trim())
+      .filter((cell) => cell.length > 0);
+
+    if (cells.length < 2) {
+      skipped += 1;
+      continue;
+    }
+
+    let ref: string | undefined;
+    let designation: string;
+    let prixRaw: string;
+    let unite: string | undefined;
+
+    if (cells.length === 2) {
+      [designation, prixRaw] = cells;
+    } else if (cells.length === 3) {
+      [ref, designation, prixRaw] = cells;
+    } else {
+      [ref, designation, prixRaw, unite] = cells;
+    }
+
+    const prix = toNumber(prixRaw);
+
+    if (!designation || prix <= 0) {
+      skipped += 1;
+      continue;
+    }
+
+    items.push({ ref, designation, prix_ht: prix, unite });
+  }
+
+  const inserted = items.length > 0 ? bulkSaveProducts(items, session.user.id) : 0;
+
+  refresh(["/produits"]);
+  redirect(`/produits?imported=${inserted}&skipped=${skipped}`);
 }
 
 export async function saveDocumentAction(formData: FormData) {
@@ -264,13 +308,14 @@ export async function saveDocumentAction(formData: FormData) {
       date: String(formData.get("date") || todayIso()),
       branch_id: Number(formData.get("branch_id")) || null,
       source_branch_id: Number(formData.get("source_branch_id")) || null,
-      destination_branch_id: Number(formData.get("destination_branch_id")) || null,
+      destination_branch_id:
+        Number(formData.get("destination_branch_id")) || null,
       client_id: Number(formData.get("client_id")) || null,
       fournisseur_id: Number(formData.get("fournisseur_id")) || null,
       parent_document_id: Number(formData.get("parent_document_id")) || null,
       notes: String(formData.get("notes") || ""),
       avance: toNumber(formData.get("avance")),
-      status: (String(formData.get("status") || "brouillon") as DocumentStatus),
+      status: String(formData.get("status") || "brouillon") as DocumentStatus,
       lines,
     },
     session.user.id,

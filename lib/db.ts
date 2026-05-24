@@ -13,6 +13,8 @@ import {
   DEFAULT_SUPERADMIN_USERNAME,
   SEED_BRANCHES,
   SEED_COMPANY,
+  SEED_PRODUCTS,
+  SEED_PRODUCTS_BATCH_V2_REFS,
 } from "@/lib/constants";
 import { type FeatureKey } from "@/lib/types";
 import {
@@ -180,6 +182,111 @@ function seedIfNeeded(db: Database.Database, actorId: number) {
 
     insertBranches(SEED_BRANCHES);
   }
+
+  const hasProducts = db.prepare("SELECT COUNT(*) AS count FROM produits").get() as { count: number };
+  if (hasProducts.count === 0 && SEED_PRODUCTS.length > 0) {
+    const statement = db.prepare(`
+      INSERT INTO produits (ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
+      VALUES (@ref, @designation, @unite, @prix_ht, 0, 1, @actor_id, @actor_id)
+    `);
+
+    const insertProducts = db.transaction((products: typeof SEED_PRODUCTS) => {
+      for (const product of products) {
+        statement.run({
+          ref: product.ref,
+          designation: product.designation,
+          unite: product.unite ?? "u",
+          prix_ht: product.prix_ht,
+          actor_id: actorId,
+        });
+      }
+    });
+
+    insertProducts(SEED_PRODUCTS);
+  }
+}
+
+function applyProductBatchV2(db: Database.Database, actorId: number) {
+  const flagKey = "seed.products.batch.v2";
+  const existing = db
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get(flagKey) as { value: string } | undefined;
+
+  if (existing?.value === "1") {
+    return;
+  }
+
+  const batchProducts = SEED_PRODUCTS.filter((product) =>
+    SEED_PRODUCTS_BATCH_V2_REFS.has(product.ref),
+  );
+
+  if (batchProducts.length === 0) {
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, '1')").run(flagKey);
+    return;
+  }
+
+  const checkStatement = db.prepare("SELECT 1 FROM produits WHERE ref = ? LIMIT 1");
+  const insertStatement = db.prepare(`
+    INSERT INTO produits (ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
+    VALUES (@ref, @designation, @unite, @prix_ht, 0, 1, @actor_id, @actor_id)
+  `);
+
+  const apply = db.transaction(() => {
+    for (const product of batchProducts) {
+      if (checkStatement.get(product.ref)) {
+        continue;
+      }
+      insertStatement.run({
+        ref: product.ref,
+        designation: product.designation,
+        unite: product.unite ?? "u",
+        prix_ht: product.prix_ht,
+        actor_id: actorId,
+      });
+    }
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, '1')").run(flagKey);
+  });
+
+  apply();
+}
+
+// Repairs any DB whose product catalog drifted from the latest SEED_PRODUCTS list,
+// for example installs created before a batch was added. Idempotent: only inserts
+// refs that are currently missing, and locks itself behind a one-shot flag once done.
+function applyFullProductSeedIfMissing(db: Database.Database, actorId: number) {
+  const flagKey = "seed.products.full.v1";
+  const existing = db
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get(flagKey) as { value: string } | undefined;
+
+  if (existing?.value === "1") {
+    return;
+  }
+
+  const checkStatement = db.prepare("SELECT 1 FROM produits WHERE ref = ? LIMIT 1");
+  const insertStatement = db.prepare(`
+    INSERT INTO produits (ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
+    VALUES (@ref, @designation, @unite, @prix_ht, 0, 1, @actor_id, @actor_id)
+  `);
+
+  const apply = db.transaction(() => {
+    for (const product of SEED_PRODUCTS) {
+      if (checkStatement.get(product.ref)) {
+        continue;
+      }
+      insertStatement.run({
+        ref: product.ref,
+        designation: product.designation,
+        unite: product.unite ?? "u",
+        prix_ht: product.prix_ht,
+        actor_id: actorId,
+      });
+    }
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, '1')").run(flagKey);
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, '1')").run("seed.products.batch.v2");
+  });
+
+  apply();
 }
 
 function migrateDatabase(db: Database.Database) {
@@ -219,6 +326,8 @@ function initializeDatabase() {
   migrateDatabase(db);
   const superadminId = syncSuperadminUser(db);
   seedIfNeeded(db, superadminId);
+  applyProductBatchV2(db, superadminId);
+  applyFullProductSeedIfMissing(db, superadminId);
 
   if (!isNewDatabase) {
     backupDatabase(db);

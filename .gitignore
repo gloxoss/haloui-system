@@ -1,4 +1,4 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+﻿# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
 /node_modules
@@ -44,3 +44,31 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE & System
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+*.swp
+
+# Python Virtual Envs & Caches
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+
+# PHP Composer & Cache
+vendor/
+**/vendor/
+composer.lock
+
+# Large Binary Exclusions (Detected during onboarding)
+.next/cache/webpack/client-production/0.pack
+.next/cache/webpack/server-production/0.pack
+desktop-dist/app/node-runtime/node.exe
+node_modules/@next/swc-win32-x64-msvc/next-swc.win32-x64-msvc.node
+node_modules/electron/dist/electron.exe

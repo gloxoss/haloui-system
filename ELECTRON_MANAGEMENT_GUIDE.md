@@ -215,6 +215,63 @@ Comportement d'installation:
 - raccourci bureau possible
 - dossier d'installation modifiable
 
+## 4.6 Creation d'une version ZIP portable
+
+Quand utiliser le ZIP:
+- si vous voulez envoyer une version portable sans installation
+- si vous voulez tester l'application en la decomprimant simplement
+- si vous voulez garder une copie archivee de la version desktop
+
+Important:
+- le ZIP portable ne contient pas les donnees de travail du client
+- les donnees restent dans `%APPDATA%\Haloui System\`
+- il faut attendre la fin complete de l'archivage avant d'ouvrir le fichier ZIP
+- si `tar.exe` ou un outil d'archivage est encore en cours, le ZIP peut sembler corrompu alors qu'il est juste encore en train d'etre ecrit
+
+Procedure recommandee:
+
+1. generer d'abord la version desktop:
+
+```powershell
+npm run desktop:dist
+```
+
+2. creer un dossier portable de staging puis le zipper:
+
+```powershell
+$release = "desktop-dist\\release"
+$stage = Join-Path $release "Haloui-System-0.1.0-win-x64"
+$zip = Join-Path $release "Haloui-System-0.1.0-win-x64.zip"
+
+if (Test-Path $stage) {
+  Remove-Item -LiteralPath $stage -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $stage | Out-Null
+Copy-Item (Join-Path $release "win-unpacked\\*") -Destination $stage -Recurse -Force
+
+if (Test-Path $zip) {
+  Remove-Item -LiteralPath $zip -Force
+}
+
+tar.exe -a -cf $zip -C $release "Haloui-System-0.1.0-win-x64"
+```
+
+3. recuperer le ZIP ici:
+- `desktop-dist\release\Haloui-System-0.1.0-win-x64.zip`
+
+Apres extraction, le client lance:
+- `Haloui-System-0.1.0-win-x64\Haloui System.exe`
+
+Conseil:
+- pour un client normal, preferer l'installateur `.exe`
+- garder le ZIP pour le mode portable, le support, ou l'archivage
+- si vous transferez une installation existante, copier aussi la base SQLite et les uploads
+
+Ce qu'il faut transferer en plus si vous voulez aussi les donnees:
+- `%APPDATA%\Haloui System\data\haloui.db`
+- `%APPDATA%\Haloui System\uploads\`
+
 ---
 
 ## 5. Emplacements importants
@@ -477,6 +534,9 @@ npm run desktop:dist
 2. recuperer l'installateur dans:
 - [desktop-dist\release](C:\Users\oussama\Desktop\haloui system\desktop-dist\release)
 
+Option supplementaire:
+- si vous voulez une version portable sans installation, creer aussi le ZIP avec la procedure de la section `4.6`
+
 3. sur la machine du client:
 - fermer l'application
 - lancer le nouvel installateur
@@ -621,7 +681,28 @@ npm run desktop:build
 npm run desktop:dist
 ```
 
-## 14.6 Verification TypeScript
+## 14.6 ZIP portable Windows
+
+```powershell
+$release = "desktop-dist\\release"
+$stage = Join-Path $release "Haloui-System-0.1.0-win-x64"
+$zip = Join-Path $release "Haloui-System-0.1.0-win-x64.zip"
+
+if (Test-Path $stage) {
+  Remove-Item -LiteralPath $stage -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $stage | Out-Null
+Copy-Item (Join-Path $release "win-unpacked\\*") -Destination $stage -Recurse -Force
+
+if (Test-Path $zip) {
+  Remove-Item -LiteralPath $zip -Force
+}
+
+tar.exe -a -cf $zip -C $release "Haloui-System-0.1.0-win-x64"
+```
+
+## 14.7 Verification TypeScript
 
 ```powershell
 npx tsc --noEmit
@@ -692,6 +773,8 @@ Avant de livrer une nouvelle version:
 - verifier l'impression d'un devis, d'une facture, d'un bon, d'une fiche personnel et d'une attestation
 - lancer `npm run desktop:dist`
 - tester l'installateur genere
+- si besoin portable: generer `Haloui-System-0.1.0-win-x64.zip`
+- verifier que le ZIP s'ouvre seulement apres la fin complete de `tar.exe`
 
 ---
 
@@ -737,5 +820,5 @@ Si vous ne retenez que l'essentiel:
 - les sauvegardes auto vont dans `data/backups`
 - le reset metier garde les utilisateurs mais vide les donnees operationnelles
 - `npm run desktop:dist` fabrique l'installateur Windows
+- la version portable se fait en zippant `win-unpacked` selon la section `4.6`
 - pour migrer, copier la base SQLite + les uploads
-

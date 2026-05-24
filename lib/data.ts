@@ -501,6 +501,96 @@ export function saveProduct(input: SaveProductInput, userId: number) {
   return productId;
 }
 
+export function bulkSaveProducts(
+  items: Array<{
+    ref?: string;
+    designation: string;
+    prix_ht: number;
+    unite?: string;
+  }>,
+  userId: number,
+) {
+  const db = getDb();
+
+  const validItems = items.filter(
+    (item) => item.designation.trim().length > 0,
+  );
+
+  if (validItems.length === 0) {
+    return 0;
+  }
+
+  const usedRefs = new Set(
+    (
+      db.prepare("SELECT ref FROM produits").all() as Array<{ ref: string }>
+    ).map((row) => row.ref.toUpperCase()),
+  );
+
+  const insert = db.prepare(
+    `
+      INSERT INTO produits (ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
+      VALUES (@ref, @designation, @unite, @prix_ht, 0, 1, @created_by, @created_by)
+    `,
+  );
+
+  const prefixCounters = new Map<string, number>();
+
+  function buildRef(rawRef: string | undefined, designation: string) {
+    const cleaned = (rawRef ?? "").trim().toUpperCase();
+
+    if (cleaned && !usedRefs.has(cleaned)) {
+      usedRefs.add(cleaned);
+      return cleaned;
+    }
+
+    const base =
+      (cleaned || designation)
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 12) || "PROD";
+
+    let counter = prefixCounters.get(base) ?? 1;
+
+    while (true) {
+      const candidate = `${base}-${String(counter).padStart(3, "0")}`;
+      counter += 1;
+      if (!usedRefs.has(candidate)) {
+        usedRefs.add(candidate);
+        prefixCounters.set(base, counter);
+        return candidate;
+      }
+    }
+  }
+
+  const insertedIds: number[] = [];
+
+  const runAll = db.transaction(() => {
+    for (const item of validItems) {
+      const ref = buildRef(item.ref, item.designation);
+      const result = insert.run({
+        ref,
+        designation: item.designation.trim(),
+        unite: (item.unite ?? "u").trim() || "u",
+        prix_ht: item.prix_ht,
+        created_by: userId,
+      });
+      insertedIds.push(Number(result.lastInsertRowid));
+    }
+  });
+
+  runAll();
+
+  logAudit(userId, "bulk_create", "product", null, {
+    count: insertedIds.length,
+    ids: insertedIds,
+  });
+
+  return insertedIds.length;
+}
+
 export function deleteProduct(id: number, userId: number) {
   const db = getDb();
   const snapshot = getProductById(id);
