@@ -1,14 +1,8 @@
 import Link from "next/link";
+import { ActionIcon, Button, Group, Menu, NativeSelect, Paper, Stack, Table, Text, TextInput } from "@mantine/core";
+import { Eye, MoreHorizontal, Printer } from "lucide-react";
 
 import { PageHeading } from "@/components/page-heading";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Table, TD, TH, THead } from "@/components/ui/table";
-import { Eye, MoreHorizontal, Printer } from "lucide-react";
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_COMPACT_LABELS,
@@ -17,6 +11,17 @@ import { listBranches, listDocuments, listEntities } from "@/lib/data";
 import { requireDocumentFeature } from "@/lib/features";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { type DocumentType } from "@/lib/types";
+
+type DocumentListRow = {
+  id: number;
+  numero: number;
+  date: string;
+  total_ttc: number;
+  status: keyof typeof DOCUMENT_STATUS_LABELS;
+  branch_name?: string | null;
+  source_branch_name?: string | null;
+  party_name?: string | null;
+};
 
 export async function DocumentModulePage({
   slug,
@@ -36,129 +41,159 @@ export async function DocumentModulePage({
     branchId: filters.branchId ? Number(filters.branchId) : null,
     status: filters.status,
     partyId: filters.partyId ? Number(filters.partyId) : null,
-  });
+  }) as DocumentListRow[];
+
+  const printKind =
+    type === "devis"
+      ? "devis"
+      : type === "facture"
+        ? "factures"
+        : type === "bl"
+          ? "bons-livraison"
+          : type === "bc"
+            ? "bons-commande"
+            : "bons-sortie";
 
   return (
-    <div className="grid gap-4">
+    <Stack gap="md">
       <PageHeading
         eyebrow={type === "bl" || type === "bs" || type === "bc" ? "Bons" : "Documents"}
         title={DOCUMENT_TYPE_COMPACT_LABELS[type]}
         description="Retrouvez, filtrez et ouvrez vos documents."
         actions={
-          <Link href={`/${slug}/new`}>
-            <Button>Nouveau</Button>
-          </Link>
+          <Button component={Link} href={`/${slug}/new`} radius="md">
+            Nouveau
+          </Button>
         }
       />
 
-      <Card>
-        <form className="grid gap-4 md:grid-cols-5" action="">
-          <DatePicker name="from" defaultValue={filters.from} placeholder="Date de début" />
-          <DatePicker name="to" defaultValue={filters.to} placeholder="Date de fin" />
-          <Select name="branchId" defaultValue={filters.branchId ?? "all"}>
-            <SelectTrigger>
-              <SelectValue placeholder="Tous les magasins" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les magasins</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={String(branch.id)}>{branch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select name="partyId" defaultValue={filters.partyId ?? "all"}>
-            <SelectTrigger>
-              <SelectValue placeholder={type === "bc" ? "Tous les fournisseurs" : "Tous les clients"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{type === "bc" ? "Tous les fournisseurs" : "Tous les clients"}</SelectItem>
-              {parties.map((party) => (
-                <SelectItem key={party.id} value={String(party.id)}>{party.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Select name="status" defaultValue={filters.status ?? "all"}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tous les statuts" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="brouillon">À finaliser</SelectItem>
-                <SelectItem value="valide">Prêt à imprimer</SelectItem>
-                <SelectItem value="imprime">Terminé</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button type="submit" variant="secondary">Filtrer</Button>
-          </div>
+      <Paper
+        radius={24}
+        shadow="sm"
+        withBorder
+        p="lg"
+        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+      >
+        <form className="grid gap-3 md:grid-cols-5" action="">
+          <TextInput name="from" type="date" defaultValue={filters.from} label="Du" radius="md" />
+          <TextInput name="to" type="date" defaultValue={filters.to} label="Au" radius="md" />
+          <NativeSelect
+            name="branchId"
+            label="Magasin"
+            defaultValue={filters.branchId ?? "all"}
+            radius="md"
+            data={[
+              { value: "all", label: "Tous les magasins" },
+              ...branches.map((branch) => ({ value: String(branch.id), label: branch.name })),
+            ]}
+          />
+          <NativeSelect
+            name="partyId"
+            label={type === "bc" ? "Fournisseur" : "Client"}
+            defaultValue={filters.partyId ?? "all"}
+            radius="md"
+            data={[
+              { value: "all", label: type === "bc" ? "Tous les fournisseurs" : "Tous les clients" },
+              ...parties.map((party) => ({ value: String(party.id), label: party.name })),
+            ]}
+          />
+          <Group align="end" gap="sm" wrap="nowrap">
+            <NativeSelect
+              name="status"
+              label="Etat"
+              defaultValue={filters.status ?? "all"}
+              radius="md"
+              style={{ flex: 1 }}
+              data={[
+                { value: "all", label: "Tous" },
+                { value: "brouillon", label: "A finaliser" },
+                { value: "valide", label: "Pret a imprimer" },
+                { value: "imprime", label: "Termine" },
+              ]}
+            />
+            <Button type="submit" radius="md" variant="default">
+              Filtrer
+            </Button>
+          </Group>
         </form>
-      </Card>
+      </Paper>
 
-      <Card>
-        <Table>
-          <THead>
-            <tr>
-              <TH>N°</TH>
-              <TH>Date</TH>
-              <TH>Magasin</TH>
-              <TH>Client / fournisseur</TH>
-              <TH>Total TTC</TH>
-              <TH>Statut</TH>
-              <TH className="text-right">Actions</TH>
-            </tr>
-          </THead>
-          <tbody>
+      <Paper
+        radius={24}
+        shadow="sm"
+        withBorder
+        p="lg"
+        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+      >
+        <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>No</Table.Th>
+              <Table.Th>Date</Table.Th>
+              <Table.Th>Magasin</Table.Th>
+              <Table.Th>Client / fournisseur</Table.Th>
+              <Table.Th>Total</Table.Th>
+              <Table.Th>Etat</Table.Th>
+              <Table.Th style={{ textAlign: "right" }}>Actions</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
             {documents.length === 0 ? (
-              <tr>
-                <TD colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                  Aucun document pour l&apos;instant.{" "}
-                  <Link href={`/${slug}/new`} className="font-semibold text-[var(--accent)] hover:underline">
-                    Créer le premier
+              <Table.Tr>
+                <Table.Td colSpan={7} style={{ padding: "28px", textAlign: "center" }}>
+                  <Text c="dimmed" span>
+                    Aucun document pour l&apos;instant.{" "}
+                  </Text>
+                  <Link href={`/${slug}/new`} style={{ fontWeight: 700, color: "var(--accent)" }}>
+                    Creer le premier
                   </Link>
-                </TD>
-              </tr>
+                </Table.Td>
+              </Table.Tr>
             ) : (
-              documents.map((document: any) => (
-                <tr key={document.id}>
-                  <TD className="font-semibold">
-                    <Link href={`/${slug}/${document.id}/edit`} className="hover:underline">
-                      {document.numero}
-                    </Link>
-                  </TD>
-                  <TD>{formatDate(document.date)}</TD>
-                  <TD>{String(document.branch_name ?? document.source_branch_name ?? "—")}</TD>
-                  <TD>{String(document.party_name ?? "—")}</TD>
-                  <TD>{formatCurrency(document.total_ttc)}</TD>
-                  <TD>{DOCUMENT_STATUS_LABELS[document.status as keyof typeof DOCUMENT_STATUS_LABELS]}</TD>
-                  <TD className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-[var(--background-alt)]">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild className="cursor-pointer">
-                          <Link href={`/${slug}/${document.id}/edit`}>
-                            <Eye className="mr-2 h-4 w-4" />
+              documents.map((document) => (
+                <Table.Tr key={document.id}>
+                  <Table.Td fw={700}>
+                    <Link href={`/${slug}/${document.id}/edit`}>{document.numero}</Link>
+                  </Table.Td>
+                  <Table.Td>{formatDate(document.date)}</Table.Td>
+                  <Table.Td>{String(document.branch_name ?? document.source_branch_name ?? "-")}</Table.Td>
+                  <Table.Td>{String(document.party_name ?? "-")}</Table.Td>
+                  <Table.Td>{formatCurrency(document.total_ttc)}</Table.Td>
+                  <Table.Td>{DOCUMENT_STATUS_LABELS[document.status]}</Table.Td>
+                  <Table.Td>
+                    <Group justify="flex-end">
+                      <Menu position="bottom-end" shadow="md" width={210}>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle" color="gray" radius="xl" size="lg">
+                            <MoreHorizontal size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Item
+                            component={Link}
+                            href={`/${slug}/${document.id}/edit`}
+                            leftSection={<Eye size={15} />}
+                          >
                             {document.status === "brouillon" ? "Modifier" : "Consulter"}
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild className="cursor-pointer">
-                          <Link href={`/print/${type === "devis" ? "devis" : type === "facture" ? "factures" : type === "bl" ? "bons-livraison" : type === "bc" ? "bons-commande" : "bons-sortie"}/${document.id}`} target="_blank">
-                            <Printer className="mr-2 h-4 w-4" />
+                          </Menu.Item>
+                          <Menu.Item
+                            component={Link}
+                            href={`/print/${printKind}/${document.id}`}
+                            target="_blank"
+                            leftSection={<Printer size={15} />}
+                          >
                             Imprimer / PDF
-                          </Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TD>
-                </tr>
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
               ))
             )}
-          </tbody>
+          </Table.Tbody>
         </Table>
-      </Card>
-    </div>
+      </Paper>
+    </Stack>
   );
 }

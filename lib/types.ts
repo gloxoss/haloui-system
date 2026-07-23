@@ -17,6 +17,14 @@ export type FeatureKey =
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
+export type ThemePreset = "haloui-classic" | "slate-minimal" | "olive-ledger";
+export type ThemeDensity = "compact" | "comfortable";
+
+export type ThemeSettings = {
+  preset: ThemePreset;
+  density: ThemeDensity;
+};
+
 export type DocumentType = "devis" | "facture" | "bl" | "bs" | "bc";
 
 export type DocumentStatus = "brouillon" | "valide" | "imprime";

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { Group, Paper, Stack, Text, Title } from "@mantine/core";
 
 export function PageHeading({
   eyebrow,
@@ -14,24 +14,33 @@ export function PageHeading({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-2.5 rounded-[16px] border bg-[var(--card)] px-4 py-3 shadow-[var(--shadow-md)] lg:flex-row lg:items-end lg:justify-between",
-        className,
-      )}
+    <Paper
+      radius="xl"
+      shadow="sm"
+      p="lg"
+      withBorder
+      className={className}
+      style={{
+        background: "var(--card)",
+        borderColor: "var(--border-strong)",
+      }}
     >
-      <div>
-        <p className="text-xs font-semibold text-[var(--muted)]">{eyebrow}</p>
-        <h2 className="mt-0.5 text-[1.25rem] font-black leading-tight">
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-1 max-w-[70ch] text-[13px] leading-5 text-[var(--muted)]">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {actions ? <div className="flex flex-wrap gap-2.5">{actions}</div> : null}
-    </div>
+      <Group justify="space-between" align="flex-end" gap="md">
+        <Stack gap={4}>
+          <Text size="10px" fw={800} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.14em" }}>
+            {eyebrow}
+          </Text>
+          <Title order={2} style={{ fontSize: "1.65rem", lineHeight: 1.1, letterSpacing: "-0.03em" }}>
+            {title}
+          </Title>
+          {description ? (
+            <Text size="sm" c="dimmed" maw={700}>
+              {description}
+            </Text>
+          ) : null}
+        </Stack>
+        {actions ? <Group gap="sm">{actions}</Group> : null}
+      </Group>
+    </Paper>
   );
 }

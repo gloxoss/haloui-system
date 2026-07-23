@@ -1,9 +1,6 @@
 import Link from "next/link";
+import { Badge, Button, Group, Paper, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Table, TD, TH, THead } from "@/components/ui/table";
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
@@ -12,6 +9,18 @@ import {
 import { getCompany, getDashboardStats, getFeatureFlags, getRevenueGrid } from "@/lib/data";
 import { DOCUMENT_FEATURE_MAP } from "@/lib/features";
 import { formatCurrency, formatDate, formatDateLong, monthKey, todayIso } from "@/lib/utils";
+
+function statusColor(status: "brouillon" | "valide" | "imprime") {
+  if (status === "imprime") {
+    return "green";
+  }
+
+  if (status === "valide") {
+    return "blue";
+  }
+
+  return "yellow";
+}
 
 export default function DashboardPage() {
   const company = getCompany();
@@ -35,119 +44,155 @@ export default function DashboardPage() {
   const todayRow = revenue?.table.find((row) => row.date === today);
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-col gap-3 rounded-[20px] border bg-[var(--card)] px-4 py-4 shadow-[var(--shadow-md)] md:flex-row md:items-center md:justify-between">
-        <h2 className="text-lg font-black">
-          {company.name} - {formatDateLong(new Date())}
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {featureFlags.devis ? (
-            <Link href="/devis/new">
-              <Button>Nouveau devis</Button>
-            </Link>
-          ) : null}
-          {featureFlags.chiffre_affaires ? (
-            <Link href="/chiffre-affaires">
-              <Button variant="secondary">Entrer les recettes du jour</Button>
-            </Link>
-          ) : null}
-        </div>
-      </div>
+    <Stack gap="md">
+      <Paper
+        radius={24}
+        shadow="sm"
+        withBorder
+        p="lg"
+        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+      >
+        <Group justify="space-between" align="center" gap="md">
+          <Stack gap={2}>
+            <Text size="11px" fw={800} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.14em" }}>
+              Tableau de bord
+            </Text>
+            <Title order={2} style={{ letterSpacing: "-0.04em" }}>
+              {company.name} - {formatDateLong(new Date())}
+            </Title>
+          </Stack>
+
+          <Group gap="sm">
+            {featureFlags.devis ? (
+              <Button component={Link} href="/devis/new" radius="md">
+                Nouveau devis
+              </Button>
+            ) : null}
+            {featureFlags.chiffre_affaires ? (
+              <Button component={Link} href="/chiffre-affaires" radius="md" variant="default">
+                Entrer les recettes du jour
+              </Button>
+            ) : null}
+          </Group>
+        </Group>
+      </Paper>
 
       {featureFlags.chiffre_affaires && revenue ? (
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[var(--muted)]">Aujourd&apos;hui</p>
-              <h3 className="text-lg font-black">Recettes par magasin</h3>
-            </div>
-            <div className="text-sm font-semibold">
+        <Paper
+          radius={24}
+          shadow="sm"
+          withBorder
+          p="lg"
+          style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+        >
+          <Group justify="space-between" align="center" mb="md">
+            <Stack gap={2}>
+              <Text size="11px" fw={800} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.14em" }}>
+                Aujourd&apos;hui
+              </Text>
+              <Title order={3} style={{ letterSpacing: "-0.03em" }}>
+                Recettes par magasin
+              </Title>
+            </Stack>
+            <Text fw={800} size="lg">
               {formatCurrency(todayRow?.total ?? 0)}
-            </div>
-          </div>
+            </Text>
+          </Group>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md">
             {revenue.branches.map((branch) => (
-              <div key={branch.id} className="rounded-[20px] border bg-[var(--background)] px-3.5 py-3.5">
-                <p className="text-[13px] text-[var(--muted)]">{branch.name}</p>
-                <p className="mt-1.5 text-xl font-black">
-                  {formatCurrency(todayRow?.values[branch.id] ?? 0)}
-                </p>
-              </div>
+              <Paper
+                key={branch.id}
+                radius="xl"
+                withBorder
+                p="md"
+                style={{ background: "var(--surface-soft)", borderColor: "var(--border)" }}
+              >
+                <Stack gap={2}>
+                  <Text size="sm" c="dimmed">
+                    {branch.name}
+                  </Text>
+                  <Text fw={800} size="xl" style={{ letterSpacing: "-0.03em" }}>
+                    {formatCurrency(todayRow?.values[branch.id] ?? 0)}
+                  </Text>
+                </Stack>
+              </Paper>
             ))}
-          </div>
-        </Card>
+          </SimpleGrid>
+        </Paper>
       ) : null}
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-[var(--muted)]">A suivre</p>
-            <h3 className="text-lg font-black">5 derniers documents</h3>
-          </div>
-          <Link href={featureFlags.factures ? "/factures" : "/devis"}>
-            <Button variant="secondary">Voir plus</Button>
-          </Link>
-        </div>
+      <Paper
+        radius={24}
+        shadow="sm"
+        withBorder
+        p="lg"
+        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+      >
+        <Group justify="space-between" align="center" mb="md">
+          <Stack gap={2}>
+            <Text size="11px" fw={800} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.14em" }}>
+              A suivre
+            </Text>
+            <Title order={3} style={{ letterSpacing: "-0.03em" }}>
+              5 derniers documents
+            </Title>
+          </Stack>
+          <Button component={Link} href={featureFlags.factures ? "/factures" : "/devis"} variant="default" radius="md">
+            Voir plus
+          </Button>
+        </Group>
 
-        <Table>
-          <THead>
-            <tr>
-              <TH>Document</TH>
-              <TH>Client</TH>
-              <TH>Magasin</TH>
-              <TH>Date</TH>
-              <TH>Total</TH>
-              <TH>Etat</TH>
-            </tr>
-          </THead>
-          <tbody>
+        <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Document</Table.Th>
+              <Table.Th>Client</Table.Th>
+              <Table.Th>Magasin</Table.Th>
+              <Table.Th>Date</Table.Th>
+              <Table.Th>Total</Table.Th>
+              <Table.Th>Etat</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
             {latestDocuments.length === 0 ? (
-              <tr>
-                <TD colSpan={6} className="py-8 text-center text-[var(--muted)]">
+              <Table.Tr>
+                <Table.Td colSpan={6} style={{ padding: "28px", textAlign: "center", color: "var(--muted)" }}>
                   Aucun document pour l&apos;instant.{" "}
                   <Link
                     href={featureFlags.devis ? "/devis/new" : featureFlags.factures ? "/factures/new" : "/dashboard"}
-                    className="font-semibold text-[var(--accent)] hover:underline"
+                    style={{ fontWeight: 700, color: "var(--accent)" }}
                   >
                     Creer le premier
                   </Link>
-                </TD>
-              </tr>
+                </Table.Td>
+              </Table.Tr>
             ) : (
               latestDocuments.map((document) => (
-                <tr key={document.id}>
-                  <TD>
+                <Table.Tr key={document.id}>
+                  <Table.Td>
                     <Link
                       href={`/${getModuleSlugByType(document.type)}/${document.id}/edit`}
-                      className="font-semibold hover:underline"
+                      style={{ fontWeight: 700 }}
                     >
                       {DOCUMENT_TYPE_LABELS[document.type]} #{document.numero}
                     </Link>
-                  </TD>
-                  <TD>{String(document.party_name ?? "-")}</TD>
-                  <TD>{String(document.branch_name ?? "-")}</TD>
-                  <TD>{formatDate(document.date)}</TD>
-                  <TD>{formatCurrency(document.total_ttc)}</TD>
-                  <TD>
-                    <Badge
-                      tone={
-                        document.status === "imprime"
-                          ? "success"
-                          : document.status === "valide"
-                            ? "accent"
-                            : "warning"
-                      }
-                    >
+                  </Table.Td>
+                  <Table.Td>{String(document.party_name ?? "-")}</Table.Td>
+                  <Table.Td>{String(document.branch_name ?? "-")}</Table.Td>
+                  <Table.Td>{formatDate(document.date)}</Table.Td>
+                  <Table.Td>{formatCurrency(document.total_ttc)}</Table.Td>
+                  <Table.Td>
+                    <Badge color={statusColor(document.status)} variant="light" radius="xl">
                       {DOCUMENT_STATUS_LABELS[document.status]}
                     </Badge>
-                  </TD>
-                </tr>
+                  </Table.Td>
+                </Table.Tr>
               ))
             )}
-          </tbody>
+          </Table.Tbody>
         </Table>
-      </Card>
-    </div>
+      </Paper>
+    </Stack>
   );
 }

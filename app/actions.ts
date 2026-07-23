@@ -20,6 +20,7 @@ import {
   saveEmployee,
   saveEntity,
   saveFeatureFlags,
+  saveThemeSettings,
   saveProduct,
   saveUser,
   updateDocumentStatus,
@@ -33,6 +34,8 @@ import {
   type DocumentType,
   type EmployeeAttestationType,
   type PartyType,
+  type ThemeDensity,
+  type ThemePreset,
 } from "@/lib/types";
 
 function refresh(paths: string[]) {
@@ -108,6 +111,35 @@ export async function saveFeatureFlagsAction(formData: FormData) {
   );
 
   saveFeatureFlags(payload, session.user.id);
+  refresh([
+    "/dashboard",
+    "/devis",
+    "/factures",
+    "/bons-livraison",
+    "/bons-sortie",
+    "/bons-commande",
+    "/produits",
+    "/clients",
+    "/fournisseurs",
+    "/personnel",
+    "/personnel/attestation",
+    "/chiffre-affaires",
+    "/utilisateurs",
+    "/parametres",
+  ]);
+}
+
+export async function saveThemeSettingsAction(formData: FormData) {
+  const session = await requireSuperadmin();
+
+  saveThemeSettings(
+    {
+      preset: String(formData.get("theme_preset") || "") as ThemePreset,
+      density: String(formData.get("theme_density") || "") as ThemeDensity,
+    },
+    session.user.id,
+  );
+
   refresh([
     "/dashboard",
     "/devis",

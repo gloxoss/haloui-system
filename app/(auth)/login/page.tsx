@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { Center, Paper, Stack, Text, Title } from "@mantine/core";
 
-import { Card } from "@/components/ui/card";
 import { getAuthSession } from "@/lib/auth";
 import { getCompany } from "@/lib/data";
 
@@ -16,25 +16,55 @@ export default async function LoginPage() {
   const company = getCompany();
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--background)] p-5">
-      <Card className="w-full max-w-md p-6">
-        <div className="mb-5 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-[20px] border bg-[var(--background)]">
-            <Image
-              src={company.logo_path || "/assets/logo-placeholder.svg"}
-              alt={company.name}
-              width={88}
-              height={88}
-              className="h-auto w-20 object-contain"
-            />
-          </div>
-          <h1 className="text-xl font-black">{company.name}</h1>
-          <p className="mt-1 font-[var(--font-arabic)] text-sm text-[var(--muted)]">
-            {company.arabic_name}
-          </p>
-        </div>
-        <LoginForm />
-      </Card>
+    <main className="min-h-screen bg-[var(--background)] px-4 py-8">
+      <Center mih="calc(100vh - 4rem)">
+        <Paper
+          radius={30}
+          shadow="md"
+          withBorder
+          p="xl"
+          w="100%"
+          maw={460}
+          style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+        >
+          <Stack align="center" gap="lg">
+            <div
+              style={{
+                width: 92,
+                height: 92,
+                borderRadius: 24,
+                background: "var(--surface-soft)",
+                border: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Image
+                src={company.logo_path || "/assets/logo-placeholder.svg"}
+                alt={company.name}
+                width={92}
+                height={92}
+                className="h-auto w-20 object-contain"
+              />
+            </div>
+
+            <Stack gap={4} align="center">
+              <Title order={1} ta="center" style={{ letterSpacing: "-0.04em" }}>
+                {company.name}
+              </Title>
+              <Text c="dimmed" ta="center">
+                Connexion a l&apos;espace de gestion
+              </Text>
+              <Text ta="center" style={{ fontFamily: "var(--font-arabic)" }} c="dimmed">
+                {company.arabic_name}
+              </Text>
+            </Stack>
+
+            <LoginForm />
+          </Stack>
+        </Paper>
+      </Center>
     </main>
   );
 }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { getAuthSession, userNeedsPasswordReset } from "@/lib/auth";
-import { getCompany, getFeatureFlags } from "@/lib/data";
+import { getCompany, getFeatureFlags, getThemeSettings } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,7 @@ export default async function ProtectedLayout({
 
   const company = getCompany();
   const featureFlags = getFeatureFlags();
+  const themeSettings = getThemeSettings();
 
   return (
     <AppShell
@@ -30,6 +31,7 @@ export default async function ProtectedLayout({
       userRole={session.user.role}
       logoPath={company.logo_path}
       featureFlags={featureFlags}
+      themeSettings={themeSettings}
     >
       {children}
     </AppShell>

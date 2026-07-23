@@ -35,7 +35,7 @@ export function DatePicker({
         <button
           type="button"
           className={cn(
-            "flex min-h-10 w-full items-center justify-between rounded-xl border bg-[var(--card)] px-3 py-2 text-[13px] shadow-sm transition duration-200 hover:bg-[var(--background-alt)]",
+            "flex min-h-[var(--control-height)] w-full items-center justify-between rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--control-bg)] px-3.5 py-2 text-[13px] shadow-[var(--shadow-sm)] transition duration-200 hover:bg-[var(--surface-soft)]",
             !date && "text-[var(--muted)]"
           )}
         >

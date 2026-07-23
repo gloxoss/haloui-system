@@ -2,19 +2,39 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  ChartColumn,
+  ClipboardList,
+  FileText,
+  Home,
+  Package,
+  Receipt,
+  Settings2,
+  ShoppingBag,
+  Truck,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { NavLink, Stack } from "@mantine/core";
 
 import { BONS_NAV_ITEMS, MORE_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "@/lib/constants";
 import { type FeatureFlags, type Role } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-function navItemClass(active: boolean) {
-  return cn(
-    "flex min-h-11 items-center rounded-xl px-3 py-2 text-[13px] font-medium transition duration-200",
-    active
-      ? "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[var(--shadow-md)]"
-      : "text-[var(--foreground)] hover:bg-[var(--background-alt)]",
-  );
-}
+const navIcons = {
+  "/dashboard": Home,
+  "/devis": FileText,
+  "/factures": Receipt,
+  "/personnel": Users,
+  "/chiffre-affaires": ChartColumn,
+  "/bons-livraison": Package,
+  "/bons-sortie": Truck,
+  "/bons-commande": ClipboardList,
+  "/produits": ShoppingBag,
+  "/clients": UserRound,
+  "/fournisseurs": Truck,
+  "/utilisateurs": Users,
+  "/parametres": Settings2,
+} as const;
 
 function hasFeature(
   featureFlags: FeatureFlags,
@@ -33,12 +53,46 @@ function hasFeature(
   return Boolean(featureFlags[feature]);
 }
 
+function navStyles(active: boolean) {
+  return {
+    root: {
+      borderRadius: "14px",
+      minHeight: "42px",
+      background: active ? "var(--accent)" : "transparent",
+      color: active ? "var(--accent-foreground)" : "var(--foreground)",
+      border: active ? "1px solid transparent" : "1px solid transparent",
+      transition: "background-color 180ms ease, color 180ms ease, box-shadow 180ms ease",
+      boxShadow: active ? "var(--shadow-sm)" : "none",
+    },
+    body: {
+      gap: "10px",
+    },
+    label: {
+      fontSize: "13px",
+      fontWeight: 700,
+    },
+    description: {
+      fontSize: "11px",
+    },
+    section: {
+      color: active ? "var(--accent-foreground)" : "var(--muted-strong)",
+    },
+    children: {
+      display: "grid",
+      gap: "6px",
+      paddingTop: "8px",
+    },
+  } as const;
+}
+
 export function SidebarNav({
   userRole,
   featureFlags,
+  onNavigate,
 }: {
   userRole: Role;
   featureFlags: FeatureFlags;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const primaryItems = PRIMARY_NAV_ITEMS.filter((item) =>
@@ -60,64 +114,103 @@ export function SidebarNav({
   const moreActive = moreItems.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
 
   return (
-    <nav className="grid gap-2">
+    <Stack gap="xs">
       {primaryItems.slice(0, 3).map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const Icon = navIcons[item.href];
+
         return (
-          <Link key={item.href} href={item.href} className={navItemClass(active)}>
-            {item.label}
-          </Link>
+          <NavLink
+            key={item.href}
+            component={Link}
+            href={item.href}
+            onClick={onNavigate}
+            active={active}
+            label={item.label}
+            leftSection={<Icon size={16} strokeWidth={2} />}
+            styles={navStyles(active)}
+          />
         );
       })}
 
       {bonsItems.length > 0 ? (
-        <details open={bonsActive} className="group">
-          <summary className={cn(navItemClass(bonsActive), "cursor-pointer list-none justify-between")}>
-            <span>Bons</span>
-            <span className="text-xs text-current/70">{bonsItems.length}</span>
-          </summary>
-          <div className="mt-2 grid gap-1.5 pl-2">
-            {bonsItems.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return (
-                <Link key={item.href} href={item.href} className={navItemClass(active)}>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </details>
+        <NavLink
+          label="Bons"
+          active={bonsActive}
+          defaultOpened={bonsActive}
+          leftSection={<Package size={16} strokeWidth={2} />}
+          rightSection={<span style={{ fontSize: 11, fontWeight: 700 }}>{bonsItems.length}</span>}
+          childrenOffset={10}
+          styles={navStyles(bonsActive)}
+        >
+          {bonsItems.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const Icon = navIcons[item.href];
+
+            return (
+              <NavLink
+                key={item.href}
+                component={Link}
+                href={item.href}
+                onClick={onNavigate}
+                active={active}
+                label={item.label}
+                leftSection={<Icon size={15} strokeWidth={2} />}
+                styles={navStyles(active)}
+              />
+            );
+          })}
+        </NavLink>
       ) : null}
 
       {primaryItems.slice(3).map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const Icon = navIcons[item.href];
+
         return (
-          <Link key={item.href} href={item.href} className={navItemClass(active)}>
-            {item.label}
-          </Link>
+          <NavLink
+            key={item.href}
+            component={Link}
+            href={item.href}
+            onClick={onNavigate}
+            active={active}
+            label={item.label}
+            leftSection={<Icon size={16} strokeWidth={2} />}
+            styles={navStyles(active)}
+          />
         );
       })}
 
       {moreItems.length > 0 ? (
-        <div className="mt-2 border-t pt-2">
-          <details className="group" open={moreActive}>
-            <summary className={cn(navItemClass(moreActive), "cursor-pointer list-none justify-between")}>
-              <span>Plus...</span>
-              <span className="text-xs text-current/70">{moreItems.length}</span>
-            </summary>
-            <div className="mt-2 grid gap-1.5 pl-2">
-              {moreItems.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <Link key={item.href} href={item.href} className={navItemClass(active)}>
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </details>
-        </div>
+        <NavLink
+          label="Plus"
+          active={moreActive}
+          defaultOpened={moreActive}
+          leftSection={<Settings2 size={16} strokeWidth={2} />}
+          rightSection={<span style={{ fontSize: 11, fontWeight: 700 }}>{moreItems.length}</span>}
+          childrenOffset={10}
+          mt="sm"
+          styles={navStyles(moreActive)}
+        >
+          {moreItems.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const Icon = navIcons[item.href];
+
+            return (
+              <NavLink
+                key={item.href}
+                component={Link}
+                href={item.href}
+                onClick={onNavigate}
+                active={active}
+                label={item.label}
+                leftSection={<Icon size={15} strokeWidth={2} />}
+                styles={navStyles(active)}
+              />
+            );
+          })}
+        </NavLink>
       ) : null}
-    </nav>
+    </Stack>
   );
 }

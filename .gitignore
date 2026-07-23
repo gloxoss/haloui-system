@@ -72,3 +72,11 @@ composer.lock
 desktop-dist/app/node-runtime/node.exe
 node_modules/@next/swc-win32-x64-msvc/next-swc.win32-x64-msvc.node
 node_modules/electron/dist/electron.exe
+
+# Large Binary Exclusions (Detected during onboarding)
+.next/cache/webpack/client-production/3.pack
+.next/cache/webpack/client-production/index.pack
+.next/cache/webpack/client-production/index.pack.old
+.next/cache/webpack/server-production/3.pack
+.next/cache/webpack/server-production/index.pack
+.next/cache/webpack/server-production/index.pack.old

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useState, startTransition } from "react";
+import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { Button, Kbd, Modal, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import { Search } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
 import { type SearchResult } from "@/lib/types";
 
 export function CommandPalette() {
@@ -49,48 +50,68 @@ export function CommandPalette() {
     };
   }, [deferredQuery, open]);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="hidden min-h-9 rounded-xl border bg-[var(--card)] px-3 text-[13px] text-[var(--muted)] shadow-sm md:inline-flex md:min-w-56 md:items-center md:justify-between"
-      >
-        <span>Recherche globale</span>
-        <span className="rounded-full bg-[var(--background-alt)] px-2 py-1 text-xs">Ctrl+K</span>
-      </button>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-[rgba(55,35,18,0.24)] px-4 pt-16 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-[20px] border bg-[var(--card)] p-3 shadow-[var(--shadow-lg)]">
-        <Input
-          autoFocus
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Rechercher un document, un produit, un client..."
-        />
-        <div className="mt-4 grid gap-2">
-          {results.length === 0 ? (
-            <p className="rounded-xl bg-[var(--background-alt)] px-3 py-4 text-[13px] text-[var(--muted)]">
-              {query.trim() ? "Aucun résultat." : "Commencez à taper pour lancer la recherche."}
-            </p>
-          ) : (
-            results.map((result) => (
-              <Link
-                key={`${result.type}-${result.id}`}
-                href={result.href}
-                onClick={() => setOpen(false)}
-                className="rounded-xl border bg-[var(--background)] px-3 py-2.5 transition duration-200 hover:border-[var(--accent)] hover:bg-[var(--background-alt)]"
-              >
-                <div className="font-semibold">{result.label}</div>
-                <div className="text-xs text-[var(--muted)]">{result.meta}</div>
-              </Link>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+    <>
+      <Button
+        type="button"
+        variant="default"
+        radius="md"
+        leftSection={<Search size={15} />}
+        rightSection={<Kbd>Ctrl+K</Kbd>}
+        className="hidden md:inline-flex"
+        onClick={() => setOpen(true)}
+      >
+        Recherche globale
+      </Button>
+
+      <Modal
+        opened={open}
+        onClose={() => setOpen(false)}
+        title="Recherche globale"
+        centered
+        radius="xl"
+        size="lg"
+      >
+        <Stack gap="md">
+          <TextInput
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Rechercher un document, un produit, un client..."
+            leftSection={<Search size={16} />}
+            radius="md"
+          />
+
+          <Stack gap="xs">
+            {results.length === 0 ? (
+              <Text c="dimmed" size="sm">
+                {query.trim() ? "Aucun resultat." : "Commencez a taper pour lancer la recherche."}
+              </Text>
+            ) : (
+              results.map((result) => (
+                <UnstyledButton
+                  key={`${result.type}-${result.id}`}
+                  component={Link}
+                  href={result.href}
+                  onClick={() => setOpen(false)}
+                  style={{
+                    border: "1px solid var(--border)",
+                    background: "var(--surface-soft)",
+                    borderRadius: 16,
+                    padding: "12px 14px",
+                    textAlign: "left",
+                  }}
+                >
+                  <Text fw={700}>{result.label}</Text>
+                  <Text size="xs" c="dimmed">
+                    {result.meta}
+                  </Text>
+                </UnstyledButton>
+              ))
+            )}
+          </Stack>
+        </Stack>
+      </Modal>
+    </>
   );
 }

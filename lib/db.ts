@@ -8,6 +8,7 @@ import {
   ADMIN_TEMP_PASSWORD,
   DEFAULT_ATTESTATION_TEMPLATES,
   DEFAULT_FEATURE_FLAGS,
+  DEFAULT_THEME_SETTINGS,
   DEFAULT_SUPERADMIN_NAME,
   DEFAULT_SUPERADMIN_PASSWORD,
   DEFAULT_SUPERADMIN_USERNAME,
@@ -86,6 +87,9 @@ function seedFeatureFlags(db: Database.Database) {
   for (const [key, enabled] of Object.entries(DEFAULT_FEATURE_FLAGS) as Array<[FeatureKey, boolean]>) {
     insertSetting.run(`feature.${key}`, enabled ? "1" : "0");
   }
+
+  insertSetting.run("theme.preset", DEFAULT_THEME_SETTINGS.preset);
+  insertSetting.run("theme.density", DEFAULT_THEME_SETTINGS.density);
 }
 
 function getSuperadminConfig() {

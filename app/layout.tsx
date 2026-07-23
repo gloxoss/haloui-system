@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { ColorSchemeScript } from "@mantine/core";
 import { Lora, Manrope, Noto_Naskh_Arabic } from "next/font/google";
 
+import "@mantine/core/styles.css";
+import "@mantine/dates/styles.css";
 import "@/app/globals.css";
 
 import { APP_NAME } from "@/lib/constants";
@@ -35,6 +38,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
+      <head>
+        <ColorSchemeScript defaultColorScheme="light" />
+      </head>
       <body className={`${manrope.variable} ${lora.variable} ${naskh.variable} bg-[var(--background)] text-[var(--foreground)] antialiased`}>
         <Providers>{children}</Providers>
       </body>

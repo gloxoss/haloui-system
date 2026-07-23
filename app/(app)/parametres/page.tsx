@@ -4,6 +4,7 @@ import {
   saveBranchAction,
   saveCompanyAction,
   saveFeatureFlagsAction,
+  saveThemeSettingsAction,
 } from "@/app/actions";
 import { PageHeading } from "@/components/page-heading";
 import { UploadField } from "@/components/upload-field";
@@ -16,8 +17,13 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { requireSuperadmin } from "@/lib/auth";
-import { APP_VERSION, FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
-import { getCompany, getFeatureFlags, listBranches } from "@/lib/data";
+import {
+  APP_VERSION,
+  FEATURE_TOGGLE_DEFINITIONS,
+  THEME_DENSITY_DEFINITIONS,
+  THEME_PRESET_DEFINITIONS,
+} from "@/lib/constants";
+import { getCompany, getFeatureFlags, getThemeSettings, listBranches } from "@/lib/data";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +41,7 @@ export default async function ParametresPage() {
   const company = getCompany();
   const branches = listBranches();
   const featureFlags = getFeatureFlags();
+  const themeSettings = getThemeSettings();
 
   return (
     <div className="grid gap-4">
@@ -151,6 +158,61 @@ export default async function ParametresPage() {
         <div className="grid gap-4">
           <Card>
             <div className="mb-4">
+              <h3 className="text-lg font-black">Theme et densite</h3>
+              <p className="text-sm text-[var(--muted)]">
+                Choisissez un rendu plus professionnel selon le client ou le contexte.
+              </p>
+            </div>
+
+            <form action={saveThemeSettingsAction} className="grid gap-4">
+              <div className="grid gap-3">
+                {THEME_PRESET_DEFINITIONS.map((theme) => (
+                  <label
+                    key={theme.key}
+                    className="flex items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3"
+                  >
+                    <input
+                      type="radio"
+                      name="theme_preset"
+                      value={theme.key}
+                      defaultChecked={themeSettings.preset === theme.key}
+                      className="mt-1 h-4 w-4 accent-[var(--accent)]"
+                    />
+                    <span className="grid gap-0.5">
+                      <span className="text-sm font-semibold">{theme.label}</span>
+                      <span className="text-xs text-[var(--muted)]">{theme.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {THEME_DENSITY_DEFINITIONS.map((density) => (
+                  <label
+                    key={density.key}
+                    className="flex items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3"
+                  >
+                    <input
+                      type="radio"
+                      name="theme_density"
+                      value={density.key}
+                      defaultChecked={themeSettings.density === density.key}
+                      className="mt-1 h-4 w-4 accent-[var(--accent)]"
+                    />
+                    <span className="grid gap-0.5">
+                      <span className="text-sm font-semibold">{density.label}</span>
+                      <span className="text-xs text-[var(--muted)]">{density.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <SubmitButton>Enregistrer le theme</SubmitButton>
+            </form>
+          </Card>
+
+          <Card>
+            <div className="mb-4">
               <h3 className="text-lg font-black">Services actives</h3>
               <p className="text-sm text-[var(--muted)]">
                 Cochez ce que l'utilisateur voit dans l'application.
@@ -247,8 +309,8 @@ export default async function ParametresPage() {
               </p>
             </div>
 
-            <div className="grid gap-3 rounded-[18px] border border-[#d6b3a7] bg-[#fbefeb] px-3.5 py-3">
-              <div className="text-sm text-[#6e3a2a]">
+            <div className="grid gap-3 rounded-[18px] border border-[var(--danger)] bg-[var(--danger-soft)] px-3.5 py-3">
+              <div className="text-sm text-[var(--danger)]">
                 Les comptes utilisateurs sont conserves. Une sauvegarde locale est creee juste avant la reinitialisation.
               </div>
               <form action={resetBusinessDataAction}>

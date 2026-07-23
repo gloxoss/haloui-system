@@ -3,10 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Alert, Button, PasswordInput, Stack, Text, TextInput } from "@mantine/core";
 
 export function LoginForm() {
   const router = useRouter();
@@ -15,10 +12,11 @@ export function LoginForm() {
 
   return (
     <form
-      className="grid gap-4"
+      style={{ width: "100%" }}
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
+
         startTransition(async () => {
           const result = await signIn("credentials", {
             username: String(formData.get("username") || ""),
@@ -27,7 +25,7 @@ export function LoginForm() {
           });
 
           if (result?.error) {
-            setError("Identifiants invalides ou utilisateur désactivé.");
+            setError("Identifiants invalides ou utilisateur desactive.");
             return;
           }
 
@@ -36,19 +34,40 @@ export function LoginForm() {
         });
       }}
     >
-      <Field label="Nom d'utilisateur">
-        <Input name="username" defaultValue="admin" required />
-      </Field>
-      <Field label="Mot de passe" hint="Mot de passe temporaire initial: admin123">
-        <Input name="password" type="password" defaultValue="admin123" required />
-      </Field>
-      {error ? <p className="rounded-xl bg-[#f7e4e0] px-3 py-2.5 text-[13px]">{error}</p> : null}
-      <p className="text-[13px] text-[var(--muted)]">
-        Mot de passe oublié ? Demandez à l&apos;administrateur.
-      </p>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Connexion..." : "Se connecter"}
-      </Button>
+      <Stack gap="md">
+        <TextInput
+          name="username"
+          label="Nom d'utilisateur"
+          defaultValue="admin"
+          required
+          radius="md"
+          size="md"
+        />
+
+        <PasswordInput
+          name="password"
+          label="Mot de passe"
+          defaultValue="admin123"
+          required
+          radius="md"
+          size="md"
+          description="Mot de passe temporaire initial: admin123"
+        />
+
+        {error ? (
+          <Alert color="red" radius="md" variant="light">
+            {error}
+          </Alert>
+        ) : null}
+
+        <Text size="sm" c="dimmed">
+          Mot de passe oublie ? Demandez a l&apos;administrateur.
+        </Text>
+
+        <Button type="submit" size="md" radius="md" loading={pending} fullWidth>
+          Se connecter
+        </Button>
+      </Stack>
     </form>
   );
 }

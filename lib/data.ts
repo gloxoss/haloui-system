@@ -3,12 +3,15 @@ import bcrypt from "bcryptjs";
 import {
   ATTESTATION_TYPE_LABELS,
   DEFAULT_FEATURE_FLAGS,
+  DEFAULT_THEME_SETTINGS,
   DEFAULT_TVA_RATE,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
   FEATURE_TOGGLE_DEFINITIONS,
   SEED_BRANCHES,
   SEED_COMPANY,
+  THEME_DENSITY_DEFINITIONS,
+  THEME_PRESET_DEFINITIONS,
   getModuleSlugByType,
 } from "@/lib/constants";
 import { getAuthSession } from "@/lib/auth";
@@ -45,6 +48,7 @@ import {
   type RevenueMonthlyBranchPoint,
   type RevenueStats,
   type SearchResult,
+  type ThemeSettings,
   type UserRecord,
 } from "@/lib/types";
 
@@ -150,6 +154,31 @@ export function getFeatureFlags(): FeatureFlags {
   return flags;
 }
 
+export function getThemeSettings(): ThemeSettings {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT key, value
+    FROM app_settings
+    WHERE key IN ('theme.preset', 'theme.density')
+  `).all() as Array<{ key: string; value: string }>;
+
+  const allowedPresets = new Set(THEME_PRESET_DEFINITIONS.map((item) => item.key));
+  const allowedDensities = new Set(THEME_DENSITY_DEFINITIONS.map((item) => item.key));
+  const theme = { ...DEFAULT_THEME_SETTINGS } as ThemeSettings;
+
+  for (const row of rows) {
+    if (row.key === "theme.preset" && allowedPresets.has(row.value as ThemeSettings["preset"])) {
+      theme.preset = row.value as ThemeSettings["preset"];
+    }
+
+    if (row.key === "theme.density" && allowedDensities.has(row.value as ThemeSettings["density"])) {
+      theme.density = row.value as ThemeSettings["density"];
+    }
+  }
+
+  return theme;
+}
+
 export function saveFeatureFlags(input: Partial<FeatureFlags>, userId: number) {
   const db = getDb();
   const statement = db.prepare(`
@@ -169,6 +198,32 @@ export function saveFeatureFlags(input: Partial<FeatureFlags>, userId: number) {
 
   transaction();
   logAudit(userId, "update", "feature_flags", null, input);
+}
+
+export function saveThemeSettings(input: Partial<ThemeSettings>, userId: number) {
+  const db = getDb();
+  const statement = db.prepare(`
+    INSERT INTO app_settings (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+  const allowedPresets = new Set(THEME_PRESET_DEFINITIONS.map((item) => item.key));
+  const allowedDensities = new Set(THEME_DENSITY_DEFINITIONS.map((item) => item.key));
+
+  const nextTheme = { ...getThemeSettings(), ...input };
+
+  const transaction = db.transaction(() => {
+    if (allowedPresets.has(nextTheme.preset)) {
+      statement.run("theme.preset", nextTheme.preset);
+    }
+
+    if (allowedDensities.has(nextTheme.density)) {
+      statement.run("theme.density", nextTheme.density);
+    }
+  });
+
+  transaction();
+  logAudit(userId, "update", "theme_settings", null, nextTheme);
 }
 
 export function resetBusinessData() {
@@ -214,6 +269,9 @@ export function resetBusinessData() {
     for (const [key, enabled] of Object.entries(DEFAULT_FEATURE_FLAGS) as Array<[FeatureKey, boolean]>) {
       insertSetting.run(`feature.${key}`, enabled ? "1" : "0");
     }
+
+    insertSetting.run("theme.preset", DEFAULT_THEME_SETTINGS.preset);
+    insertSetting.run("theme.density", DEFAULT_THEME_SETTINGS.density);
   });
 
   transaction();

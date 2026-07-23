@@ -4,6 +4,7 @@ import {
   type DocumentStatus,
   type DocumentType,
   type EmployeeAttestationType,
+  type ThemeSettings,
 } from "@/lib/types";
 
 export const APP_NAME = "Haloui System";
@@ -101,6 +102,42 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   chiffre_affaires: true,
   utilisateurs: true,
 };
+
+export const DEFAULT_THEME_SETTINGS = {
+  preset: "slate-minimal",
+  density: "compact",
+} satisfies ThemeSettings;
+
+export const THEME_PRESET_DEFINITIONS = [
+  {
+    key: "slate-minimal",
+    label: "Ardoise minimaliste",
+    description: "Le rendu le plus net: fond clair, gris bleute et accent profond.",
+  },
+  {
+    key: "haloui-classic",
+    label: "Haloui classique",
+    description: "Une version plus propre et plus stable de la palette chaude actuelle.",
+  },
+  {
+    key: "olive-ledger",
+    label: "Olive comptoir",
+    description: "Un theme plus institutionnel, calme et comptable pour d'autres clients.",
+  },
+] as const;
+
+export const THEME_DENSITY_DEFINITIONS = [
+  {
+    key: "compact",
+    label: "Compacte",
+    description: "Plus d'informations visibles, plus minimaliste.",
+  },
+  {
+    key: "comfortable",
+    label: "Confortable",
+    description: "Un peu plus d'air entre les blocs et les champs.",
+  },
+] as const;
 
 export const SEED_COMPANY = {
   id: 1 as const,
