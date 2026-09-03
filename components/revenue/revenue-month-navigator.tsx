@@ -3,8 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { syncRevenueAction } from "@/app/actions";
+import { SyncSalesModal } from "@/components/revenue/sync-sales-modal";
 import { useTranslation } from "@/lib/i18n";
+import { type BranchRecord, type SalesDocumentSyncCandidate } from "@/lib/types";
 import { monthKey } from "@/lib/utils";
 import {
   ActionIcon,
@@ -26,13 +27,17 @@ import {
 export function RevenueMonthNavigator({
   currentMonth,
   totalSystemMonth,
+  salesDocuments = [],
+  branches = [],
 }: {
   currentMonth: string; // Format: YYYY-MM
   totalSystemMonth?: number;
+  salesDocuments?: SalesDocumentSyncCandidate[];
+  branches?: BranchRecord[];
 }) {
   const router = useRouter();
   const { t, locale } = useTranslation();
-  const [isPending, startTransition] = React.useTransition();
+  const [syncModalOpen, setSyncModalOpen] = React.useState(false);
   const thisMonth = monthKey();
 
   // Helper to compute prev/next month
@@ -60,117 +65,111 @@ export function RevenueMonthNavigator({
   const capitalizedMonth = formattedMonth.charAt(0).toUpperCase() + formattedMonth.slice(1);
 
   return (
-    <Card
-      withBorder
-      radius="lg"
-      p="sm"
-      style={{
-        background: "var(--card)",
-        borderColor: "var(--border)",
-      }}
-    >
-      <Group justify="space-between" wrap="wrap" gap="sm">
-        {/* Navigation & Month Title */}
-        <Group gap="xs" wrap="wrap">
-          <ActionIcon
-            variant="default"
-            size="lg"
-            radius="md"
-            component={Link}
-            href={`/chiffre-affaires?month=${prevMonth}`}
-            title={locale === "ar" ? "الشهر السابق" : "Mois précédent"}
-          >
-            <ChevronLeft size={18} />
-          </ActionIcon>
+    <>
+      <Card
+        withBorder
+        radius="lg"
+        p="sm"
+        style={{
+          background: "var(--card)",
+          borderColor: "var(--border)",
+        }}
+      >
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          {/* Navigation & Month Title */}
+          <Group gap="xs" wrap="wrap">
+            <ActionIcon
+              variant="default"
+              size="lg"
+              radius="md"
+              component={Link}
+              href={`/chiffre-affaires?month=${prevMonth}`}
+              title={locale === "ar" ? "الشهر السابق" : "Mois précédent"}
+            >
+              <ChevronLeft size={18} />
+            </ActionIcon>
 
-          <Group gap="xs">
-            <Calendar size={18} className="text-blue-600" />
-            <Title order={3} size="h4" style={{ fontWeight: 800, textTransform: "capitalize" }}>
-              {capitalizedMonth}
-            </Title>
-            {currentMonth === thisMonth ? (
-              <Badge variant="light" color="teal" size="sm">
-                {locale === "ar" ? "الشهر الجاري" : "En cours"}
-              </Badge>
+            <Group gap="xs">
+              <Calendar size={18} className="text-blue-600" />
+              <Title order={3} size="h4" style={{ fontWeight: 800, textTransform: "capitalize" }}>
+                {capitalizedMonth}
+              </Title>
+              {currentMonth === thisMonth ? (
+                <Badge variant="light" color="teal" size="sm">
+                  {locale === "ar" ? "الشهر الجاري" : "En cours"}
+                </Badge>
+              ) : null}
+            </Group>
+
+            <ActionIcon
+              variant="default"
+              size="lg"
+              radius="md"
+              component={Link}
+              href={`/chiffre-affaires?month=${nextMonth}`}
+              title={locale === "ar" ? "الشهر الموالي" : "Mois suivant"}
+            >
+              <ChevronRight size={18} />
+            </ActionIcon>
+
+            {currentMonth !== thisMonth ? (
+              <Button
+                variant="subtle"
+                size="xs"
+                color="gray"
+                component={Link}
+                href={`/chiffre-affaires?month=${thisMonth}`}
+                radius="md"
+              >
+                {locale === "ar" ? "الرجوع لهاد الشهر" : "Revenir à ce mois"}
+              </Button>
             ) : null}
           </Group>
 
-          <ActionIcon
-            variant="default"
-            size="lg"
-            radius="md"
-            component={Link}
-            href={`/chiffre-affaires?month=${nextMonth}`}
-            title={locale === "ar" ? "الشهر الموالي" : "Mois suivant"}
-          >
-            <ChevronRight size={18} />
-          </ActionIcon>
-
-          {currentMonth !== thisMonth ? (
-            <Button
-              variant="subtle"
-              size="xs"
-              color="gray"
-              component={Link}
-              href={`/chiffre-affaires?month=${thisMonth}`}
-              radius="md"
-            >
-              {locale === "ar" ? "الرجوع لهاد الشهر" : "Revenir à ce mois"}
-            </Button>
-          ) : null}
-        </Group>
-
-        {/* Action Buttons: Auto-Sync & Export */}
-        <Group gap="xs" wrap="wrap">
-          <form
-            action={(formData) => {
-              const confirmMsg =
-                locale === "ar"
-                  ? `واش باغي تعمر المداخيل ديال شهر ${capitalizedMonth} أوتوماتيكياً من الفواتير وبونات التوصيل فهاد السيستيم؟`
-                  : `Voulez-vous synchroniser automatiquement toutes les recettes de ${capitalizedMonth} depuis les factures et bons de livraison du système ?\n\nLes montants correspondants seront mis à jour.`;
-
-              if (window.confirm(confirmMsg)) {
-                startTransition(async () => {
-                  await syncRevenueAction(formData);
-                });
-              }
-            }}
-          >
-            <input type="hidden" name="month" value={currentMonth} />
+          {/* Action Buttons: Granular Modal & Export */}
+          <Group gap="xs" wrap="wrap">
             <Tooltip
               label={
                 locale === "ar"
-                  ? "حساب وتعبئة مداخيل الفروع أوتوماتيك من الفواتير وبونات التوصيل المسجلة"
-                  : "Calcule et remplit automatiquement les recettes de chaque magasin pour tout le mois depuis les factures et BL validés"
+                  ? "فحص وتحديد الفواتير وبونات التوصيل قبل إضافتها لحساب المداخيل"
+                  : "Prévisualiser, filtrer et sélectionner les ventes à intégrer dans la caisse"
               }
             >
               <Button
-                type="submit"
+                type="button"
                 variant="light"
                 color="indigo"
                 radius="md"
                 size="sm"
-                loading={isPending}
+                onClick={() => setSyncModalOpen(true)}
                 leftSection={<Sparkles size={16} />}
                 style={{ fontWeight: 700 }}
               >
-                {locale === "ar" ? "مزامنة أوتوماتيكية من المبيعات" : "Synchroniser depuis les ventes"}
+                {locale === "ar" ? "مزامنة من المبيعات..." : "Synchroniser depuis les ventes..."}
               </Button>
             </Tooltip>
-          </form>
 
-          <Button
-            component={Link}
-            href={`/api/chiffre-affaires/export?month=${currentMonth}`}
-            variant="default"
-            radius="md"
-            size="sm"
-            leftSection={<Download size={15} />}
-          >
-            {t.common.exportExcel}
-          </Button>
+            <Button
+              component={Link}
+              href={`/api/chiffre-affaires/export?month=${currentMonth}`}
+              variant="default"
+              radius="md"
+              size="sm"
+              leftSection={<Download size={15} />}
+            >
+              {t.common.exportExcel}
+            </Button>
+          </Group>
         </Group>
-      </Group>
-    </Card>
+      </Card>
+
+      <SyncSalesModal
+        opened={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        month={currentMonth}
+        documents={salesDocuments}
+        branches={branches}
+      />
+    </>
   );
 }

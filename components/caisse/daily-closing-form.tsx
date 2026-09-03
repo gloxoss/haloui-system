@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { saveCashDayClosingAction } from "@/app/actions";
 import { AppDateInput } from "@/components/ui/app-date-input";
 import { UploadField } from "@/components/upload-field";
@@ -41,6 +42,7 @@ export function DailyClosingForm({
   systemSaleTotal?: number;
 }) {
   const { t, locale } = useTranslation();
+  const router = useRouter();
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(() => {
     return String(initialBranchId || branches[0]?.id || "");
   });
@@ -102,6 +104,31 @@ export function DailyClosingForm({
         }}
       >
         <Stack gap="lg">
+          {/* Quick Branch Switcher Pills */}
+          {branches.length > 1 ? (
+            <Group gap="xs" wrap="wrap">
+              <Text size="xs" fw={700} c="dimmed">
+                {locale === "ar" ? "المحل :" : "Point de vente :"}
+              </Text>
+              {branches.map((b) => (
+                <Button
+                  key={b.id}
+                  size="compact-xs"
+                  radius="xl"
+                  variant={String(b.id) === selectedBranchId ? "filled" : "default"}
+                  color={String(b.id) === selectedBranchId ? "blue" : "gray"}
+                  onClick={() => {
+                    setSelectedBranchId(String(b.id));
+                    router.push(`/chiffre-affaires?tab=cloture&branch=${b.id}&date=${selectedDate}`);
+                  }}
+                  type="button"
+                >
+                  {b.name}
+                </Button>
+              ))}
+            </Group>
+          ) : null}
+
           {/* Top Bar: Store, Date, and System Info */}
           <Group justify="space-between" align="flex-end" wrap="wrap" gap="md">
             <Group gap="md" wrap="wrap" style={{ flex: 1 }}>
@@ -116,7 +143,7 @@ export function DailyClosingForm({
                   onChange={(val) => {
                     if (val) {
                       setSelectedBranchId(val);
-                      window.location.href = `/chiffre-affaires?tab=cloture&branch=${val}&date=${selectedDate}`;
+                      router.push(`/chiffre-affaires?tab=cloture&branch=${val}&date=${selectedDate}`);
                     }
                   }}
                   required
@@ -133,7 +160,7 @@ export function DailyClosingForm({
                   onChange={(val) => {
                     if (val) {
                       setSelectedDate(val);
-                      window.location.href = `/chiffre-affaires?tab=cloture&branch=${selectedBranchId}&date=${val}`;
+                      router.push(`/chiffre-affaires?tab=cloture&branch=${selectedBranchId}&date=${val}`);
                     }
                   }}
                   clearable={false}

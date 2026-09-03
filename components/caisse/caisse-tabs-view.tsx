@@ -39,6 +39,12 @@ export function CaisseTabsView({
   chartsDaily,
   chartsMonthlyByBranch,
   pivot,
+  paymentMethods,
+  sortiesTotal = 0,
+  netCaisse = 0,
+  bestDay,
+  avgDaily = 0,
+  bestBranch,
 }: {
   month: string;
   branches: BranchRecord[];
@@ -52,6 +58,17 @@ export function CaisseTabsView({
   chartsDaily: RevenueDailyPoint[];
   chartsMonthlyByBranch: RevenueMonthlyBranchPoint[];
   pivot: RevenueMonthlyBranchPoint[];
+  paymentMethods?: {
+    especes: number;
+    carte: number;
+    cheque: number;
+    virement: number;
+  };
+  sortiesTotal?: number;
+  netCaisse?: number;
+  bestDay?: { date: string; total: number };
+  avgDaily?: number;
+  bestBranch?: { name?: string; total?: number };
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -141,7 +158,16 @@ export function CaisseTabsView({
 
       {/* Tab 4: Statistiques et graphiques */}
       <Tabs.Panel value="stats" className="space-y-4">
-        <RevenueCharts daily={chartsDaily} monthlyByBranch={chartsMonthlyByBranch} />
+        <RevenueCharts
+          daily={chartsDaily}
+          monthlyByBranch={chartsMonthlyByBranch}
+          paymentMethods={paymentMethods}
+          sortiesTotal={sortiesTotal}
+          netCaisse={netCaisse}
+          bestDay={bestDay}
+          avgDaily={avgDaily}
+          bestBranch={bestBranch}
+        />
 
         <Card>
           <p className="text-xs font-semibold text-[var(--muted)]">

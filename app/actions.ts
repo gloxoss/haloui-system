@@ -30,6 +30,7 @@ import {
   saveSortieCaisse,
   saveUser,
   syncRevenueFromSystemSales,
+  syncSelectedSalesDocuments,
   updateDocumentStatus,
   upsertRevenueEntry,
 } from "@/lib/data";
@@ -447,6 +448,13 @@ export async function syncRevenueAction(formData: FormData) {
   const month = String(formData.get("month") || monthKey());
   syncRevenueFromSystemSales(month, session.user.id);
   refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
+export async function syncSelectedSalesAction(documentIds: number[], month: string) {
+  const session = await requireAuth();
+  syncSelectedSalesDocuments(documentIds, month, session.user.id);
+  refresh(["/dashboard", "/chiffre-affaires"]);
+  return { success: true };
 }
 
 export async function saveDailyRevenueAction(formData: FormData) {

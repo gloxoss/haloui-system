@@ -48,6 +48,7 @@ import {
   type RevenueDailyPoint,
   type RevenueMonthlyBranchPoint,
   type RevenueStats,
+  type SalesDocumentSyncCandidate,
   type SearchResult,
   type SortieCaisseRecord,
   type ThemeSettings,
@@ -1223,6 +1224,74 @@ export function syncRevenueFromSystemSales(selectedMonth: string, userId: number
   return sales.length;
 }
 
+export function getSystemSalesDocumentsForMonth(selectedMonth = monthKey()): SalesDocumentSyncCandidate[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT
+      d.id,
+      d.type,
+      d.numero,
+      d.date,
+      d.branch_id,
+      COALESCE(b.name, '-') AS branch_name,
+      COALESCE(c.name, '-') AS party_name,
+      d.total_ttc,
+      d.status
+    FROM documents d
+    LEFT JOIN branches b ON b.id = d.branch_id
+    LEFT JOIN clients c ON c.id = d.client_id
+    WHERE substr(d.date, 1, 7) = ?
+      AND d.type IN ('facture', 'bl')
+      AND d.branch_id IS NOT NULL
+    ORDER BY d.date DESC, d.numero DESC
+  `).all(selectedMonth) as SalesDocumentSyncCandidate[];
+
+  return rows;
+}
+
+export function syncSelectedSalesDocuments(
+  documentIds: number[],
+  selectedMonth: string,
+  userId: number,
+) {
+  if (!documentIds.length) return 0;
+  const db = getDb();
+
+  const placeholders = documentIds.map(() => "?").join(",");
+  const rows = db.prepare(`
+    SELECT branch_id, date, COALESCE(SUM(total_ttc), 0) AS total
+    FROM documents
+    WHERE id IN (${placeholders})
+      AND type IN ('facture', 'bl')
+      AND branch_id IS NOT NULL
+    GROUP BY branch_id, date
+  `).all(...documentIds) as Array<{ branch_id: number; date: string; total: number }>;
+
+  const statement = db.prepare(`
+    INSERT INTO chiffre_affaires (branch_id, date, montant, notes, created_by, updated_by)
+    VALUES (?, ?, ?, 'Synchronisé depuis les ventes sélectionnées', ?, ?)
+    ON CONFLICT(branch_id, date) DO UPDATE SET
+      montant = excluded.montant,
+      notes = excluded.notes,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const transaction = db.transaction(() => {
+    for (const row of rows) {
+      statement.run(row.branch_id, row.date, row.total, userId, userId);
+    }
+  });
+
+  transaction();
+  logAudit(userId, "sync", "revenue_selected_sales", null, {
+    month: selectedMonth,
+    docCount: documentIds.length,
+    syncedDays: rows.length,
+  });
+  return rows.length;
+}
+
 export function batchSaveDailyRevenue(
   date: string,
   entries: Array<{ branchId: number; montant: number; notes?: string }>,
@@ -1553,6 +1622,52 @@ export function getRevenueStats(selectedMonth = monthKey()): RevenueStats {
     `,
   ).all() as RevenueMonthlyBranchPoint[];
 
+  const payments = db
+    .prepare(`
+      SELECT
+        COALESCE(SUM(especes), 0) AS especes,
+        COALESCE(SUM(carte), 0) AS carte,
+        COALESCE(SUM(cheque), 0) AS cheque,
+        COALESCE(SUM(virement), 0) AS virement
+      FROM chiffre_affaires
+      WHERE substr(date, 1, 7) = ?
+    `)
+    .get(selectedMonth) as { especes: number; carte: number; cheque: number; virement: number };
+
+  const sortiesTotalRow = db
+    .prepare(`
+      SELECT COALESCE(SUM(montant), 0) AS total
+      FROM sorties_caisse
+      WHERE substr(date, 1, 7) = ?
+    `)
+    .get(selectedMonth) as { total: number };
+
+  const sortiesTotal = sortiesTotalRow.total;
+  const netCaisse = monthTotal.total - sortiesTotal;
+
+  let paymentMethods = {
+    especes: payments.especes,
+    carte: payments.carte,
+    cheque: payments.cheque,
+    virement: payments.virement,
+  };
+
+  // If no detailed breakdown yet but monthTotal > 0, attribute to especes as baseline
+  if (
+    paymentMethods.especes === 0 &&
+    paymentMethods.carte === 0 &&
+    paymentMethods.cheque === 0 &&
+    paymentMethods.virement === 0 &&
+    monthTotal.total > 0
+  ) {
+    paymentMethods.especes = monthTotal.total;
+  }
+
+  const sortedDays = [...daily].filter((d) => d.total > 0).sort((a, b) => b.total - a.total);
+  const bestDay = sortedDays[0] ? { date: sortedDays[0].date, total: sortedDays[0].total } : undefined;
+  const activeDaysCount = daily.filter((d) => d.total > 0).length || 1;
+  const avgDaily = monthTotal.total / activeDaysCount;
+
   return {
     monthTotal: monthTotal.total,
     yearTotal: yearTotal.total,
@@ -1562,6 +1677,11 @@ export function getRevenueStats(selectedMonth = monthKey()): RevenueStats {
     daily,
     monthlyByBranch,
     pivot,
+    paymentMethods,
+    sortiesTotal,
+    netCaisse,
+    bestDay,
+    avgDaily,
   };
 }
 

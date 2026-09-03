@@ -9,6 +9,7 @@ import {
   getCashDaySummary,
   getRevenueGrid,
   getRevenueStats,
+  getSystemSalesDocumentsForMonth,
   getSystemSalesForDate,
   listBranches,
   listSortiesCaisse,
@@ -48,6 +49,7 @@ export default async function ChiffreAffairesPage({
   // Month sorties sum
   const totalMonthSorties = sorties.reduce((sum, s) => sum + Number(s.montant), 0);
   const netMonthCaisse = stats.monthTotal - totalMonthSorties;
+  const salesDocuments = getSystemSalesDocumentsForMonth(month);
 
   return (
     <div className="grid gap-4">
@@ -57,10 +59,12 @@ export default async function ChiffreAffairesPage({
         description={dict.caisse.subtitle}
       />
 
-      {/* Month Navigator Toolbar */}
+      {/* Month Navigator Toolbar with Granular Sales Sync */}
       <RevenueMonthNavigator
         currentMonth={month}
         totalSystemMonth={stats.systemMonthTotal}
+        salesDocuments={salesDocuments}
+        branches={branches}
       />
 
       {/* Financial KPIs - Simple, Clean 3 Cards */}
@@ -114,6 +118,12 @@ export default async function ChiffreAffairesPage({
         chartsDaily={stats.daily}
         chartsMonthlyByBranch={stats.monthlyByBranch}
         pivot={stats.pivot}
+        paymentMethods={stats.paymentMethods}
+        sortiesTotal={stats.sortiesTotal}
+        netCaisse={stats.netCaisse}
+        bestDay={stats.bestDay}
+        avgDaily={stats.avgDaily}
+        bestBranch={stats.bestBranch}
       />
     </div>
   );

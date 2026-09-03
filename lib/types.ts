@@ -209,6 +209,18 @@ export type RevenueMonthlyBranchPoint = {
   total: number;
 };
 
+export type SalesDocumentSyncCandidate = {
+  id: number;
+  type: "facture" | "bl";
+  numero: number;
+  date: string;
+  branch_id: number;
+  branch_name: string;
+  party_name: string;
+  total_ttc: number;
+  status: string;
+};
+
 export type RevenueStats = {
   monthTotal: number;
   yearTotal: number;
@@ -218,6 +230,16 @@ export type RevenueStats = {
   daily: RevenueDailyPoint[];
   monthlyByBranch: RevenueMonthlyBranchPoint[];
   pivot: RevenueMonthlyBranchPoint[];
+  paymentMethods: {
+    especes: number;
+    carte: number;
+    cheque: number;
+    virement: number;
+  };
+  sortiesTotal: number;
+  netCaisse: number;
+  bestDay?: { date: string; total: number };
+  avgDaily: number;
 };
 
 export type SortieCaisseRecord = {
