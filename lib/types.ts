@@ -53,7 +53,23 @@ export type EmployeeAttestationType =
   | "simple"
   | "avec-salaire"
   | "visa"
-  | "banque";
+  | "banque"
+  | "stage"
+  | "certificat-travail"
+  | "ordre-mission"
+  | "conge"
+  | "recommandation"
+  | "custom"
+  | (string & {});
+
+export type AttestationCustomPayload = {
+  title: string;
+  objet?: string;
+  body: string;
+  ville: string;
+  date: string;
+  signataire: string;
+};
 
 export type SessionUser = {
   id: number;

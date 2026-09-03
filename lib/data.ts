@@ -1123,7 +1123,13 @@ export function generateAttestationText(
   return buildAttestationContent(employee, type, company, { referenceDate: date });
 }
 
-export function createAttestation(employeeId: number, type: EmployeeAttestationType, date: string, userId: number) {
+export function createAttestation(
+  employeeId: number,
+  type: string,
+  date: string,
+  userId: number,
+  customContent?: string,
+) {
   const db = getDb();
   const employee = getEmployeeById(employeeId);
   if (!employee) {
@@ -1131,7 +1137,10 @@ export function createAttestation(employeeId: number, type: EmployeeAttestationT
   }
 
   const company = getCompany();
-  const content = generateAttestationText(employee, type, company, date);
+  const content = customContent && customContent.trim()
+    ? customContent.trim()
+    : generateAttestationText(employee, type, company, date);
+
   const result = db.prepare(
     `
       INSERT INTO attestations (employe_id, date, type, contenu_genere, created_by)

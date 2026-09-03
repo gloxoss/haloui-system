@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 
 import { requireAdmin, requireAuth, requireSuperadmin, updateUserPassword } from "@/lib/auth";
 import { FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
-import { getCompany } from "@/lib/data";
+import { getCompany, getEmployeeById } from "@/lib/data";
+import { interpolateTemplate } from "@/lib/attestations";
 import {
   batchSaveDailyRevenue,
   bulkSaveProducts,
@@ -35,7 +36,7 @@ import {
   upsertRevenueEntry,
 } from "@/lib/data";
 import { createDatabaseBackup } from "@/lib/db";
-import { monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
+import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
 import {
   type DocumentLineInput,
   type DocumentStatus,
@@ -421,11 +422,51 @@ export async function deleteEmployeeAction(formData: FormData) {
 
 export async function createAttestationAction(formData: FormData) {
   const session = await requireAuth();
+  const employeeId = Number(formData.get("employe_id"));
+  const type = String(formData.get("type") || "simple");
+  const date = String(formData.get("date") || todayIso());
+  const customTitle = String(formData.get("custom_title") || "").trim();
+  const customObjet = String(formData.get("custom_objet") || "").trim();
+  const customBody = String(formData.get("custom_body") || "").trim();
+  const customVille = String(formData.get("custom_ville") || "").trim();
+  const customSignataire = String(formData.get("custom_signataire") || "").trim();
+
+  let customContent: string | undefined = undefined;
+  if (customBody) {
+    const employee = getEmployeeById(employeeId);
+    const company = getCompany();
+    const resolvedBody = employee
+      ? interpolateTemplate(customBody, {
+          societe: company?.name?.trim() || "Entreprise Commerciale",
+          employe: `${employee.prenom} ${employee.nom}`.trim(),
+          prenom: employee.prenom || "-",
+          nom: employee.nom || "-",
+          cnss: employee.cnss || "-",
+          cin: (employee as { cin?: string }).cin || "-",
+          date_entree: employee.date_entree ? formatDate(employee.date_entree) : "-",
+          date_sortie: employee.date_sortie ? formatDate(employee.date_sortie) : "-",
+          salaire: `${formatNumber(employee.salaire ?? 0)} MAD`,
+          date_du_jour: formatDate(date),
+          ville: customVille || "Tanger",
+        })
+      : customBody;
+
+    customContent = JSON.stringify({
+      title: customTitle || undefined,
+      objet: customObjet || undefined,
+      body: resolvedBody,
+      ville: customVille || "Tanger",
+      date,
+      signataire: customSignataire || "La Direction Générale",
+    });
+  }
+
   const id = createAttestation(
-    Number(formData.get("employe_id")),
-    String(formData.get("type") || "simple") as EmployeeAttestationType,
-    String(formData.get("date") || todayIso()),
+    employeeId,
+    type,
+    date,
     session.user.id,
+    customContent,
   );
   refresh(["/personnel"]);
   redirect(`/print/attestation/${id}`);

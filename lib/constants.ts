@@ -51,22 +51,53 @@ export const DOCUMENT_MODULES: Array<{
   { slug: "bons-commande", type: "bc", label: "Bons de commande" },
 ];
 
-export const ATTESTATION_TYPE_LABELS: Record<EmployeeAttestationType, string> = {
-  simple: "Simple",
-  "avec-salaire": "Avec salaire",
-  visa: "Pour visa",
-  banque: "Pour banque",
+export const ATTESTATION_TYPE_LABELS: Record<string, string> = {
+  simple: "Attestation de travail (Standard)",
+  "avec-salaire": "Attestation de travail avec salaire",
+  visa: "Attestation pour demande de Visa",
+  banque: "Attestation pour dossier bancaire",
+  stage: "Attestation de stage",
+  "certificat-travail": "Certificat de travail (Fin de contrat)",
+  "ordre-mission": "Ordre de mission professionnelle",
+  conge: "Titre de congé annuel payé",
+  recommandation: "Lettre de recommandation",
+  custom: "Document personnalisé (Modèle libre)",
 };
 
-export const DEFAULT_ATTESTATION_TEMPLATES: Record<EmployeeAttestationType, string> = {
+export const ATTESTATION_TYPE_TITLES: Record<string, string> = {
+  simple: "ATTESTATION DE TRAVAIL",
+  "avec-salaire": "ATTESTATION DE TRAVAIL ET DE SALAIRE",
+  visa: "ATTESTATION DE TRAVAIL",
+  banque: "ATTESTATION DE TRAVAIL ET DE REVENUS",
+  stage: "ATTESTATION DE STAGE",
+  "certificat-travail": "CERTIFICAT DE TRAVAIL",
+  "ordre-mission": "ORDRE DE MISSION",
+  conge: "TITRE DE CONGÉ ANNUEL",
+  recommandation: "LETTRE DE RECOMMANDATION",
+  custom: "ATTESTATION OFFICIELLE",
+};
+
+export const DEFAULT_ATTESTATION_TEMPLATES: Record<string, string> = {
   simple:
-    "Nous soussignes, {{societe}}, attestons par la presente que {{employe}}, titulaire du numero CNSS {{cnss}}, est employe(e) au sein de notre societe depuis le {{date_entree}} en qualite de salarie(e).",
+    "Nous soussignés, {{societe}}, attestons par la présente que :\n\n{{employe}}, titulaire de la CNSS n° {{cnss}},\nest employé(e) au sein de notre société depuis le {{date_entree}} en qualité de salarié(e).\n\nCette attestation lui est délivrée sur sa demande pour servir et valoir ce que de droit.",
   "avec-salaire":
-    "Nous soussignes, {{societe}}, attestons par la presente que {{employe}}, titulaire du numero CNSS {{cnss}}, est employe(e) au sein de notre societe depuis le {{date_entree}} en qualite de salarie(e). Son salaire mensuel brut est de {{salaire}}.",
+    "Nous soussignés, {{societe}}, attestons par la présente que :\n\n{{employe}}, titulaire de la CNSS n° {{cnss}},\nest employé(e) au sein de notre établissement depuis le {{date_entree}} en qualité de salarié(e).\n\nL'intéressé(e) perçoit à ce titre une rémunération mensuelle globale de {{salaire}}.\n\nLa présente attestation est délivrée à l'intéressé(e) pour servir et valoir ce que de droit.",
   visa:
-    "Nous soussignes, {{societe}}, attestons par la presente que {{employe}}, titulaire du numero CNSS {{cnss}}, est employe(e) au sein de notre societe depuis le {{date_entree}} en qualite de salarie(e). La presente attestation est delivree pour servir et valoir ce que de droit, notamment dans le cadre d'une demande de visa.",
+    "Nous soussignés, {{societe}}, attestons par la présente que :\n\n{{employe}}, titulaire de la CNSS n° {{cnss}},\nest employé(e) au sein de notre société en contrat à durée indéterminée depuis le {{date_entree}}.\n\nL'intéressé(e) bénéficie d'un congé autorisé pour la période sollicitée et reprendra ses fonctions au sein de notre entreprise à l'issue de son séjour.\n\nCette attestation est délivrée auprès des services consulaires pour l'obtention d'un visa de voyage.",
   banque:
-    "Nous soussignes, {{societe}}, attestons par la presente que {{employe}}, titulaire du numero CNSS {{cnss}}, est employe(e) au sein de notre societe depuis le {{date_entree}} en qualite de salarie(e). Son salaire mensuel brut est de {{salaire}}. La presente attestation est remise a l'interesse(e) pour constitution d'un dossier bancaire.",
+    "Nous soussignés, {{societe}}, certifions par la présente que :\n\n{{employe}}, immatriculé(e) à la CNSS sous le n° {{cnss}},\nfait partie de notre personnel permanent depuis le {{date_entree}}.\n\nSon salaire mensuel net régulier s'élève à {{salaire}}.\n\nLa présente attestation est délivrée à l'intéressé(e) pour constitution de son dossier auprès des organismes bancaires.",
+  stage:
+    "Nous soussignés, {{societe}}, attestons par la présente que :\n\n{{employe}}\na effectué avec succès un stage pratique au sein de notre société du {{date_entree}} au {{date_sortie}}.\n\nDurant cette période de stage, l'intéressé(e) a fait preuve d'assiduité, de sérieux et de compétences remarquables dans l'exécution des missions qui lui ont été confiées.\n\nLa présente attestation lui est délivrée pour valoir ce que de droit.",
+  "certificat-travail":
+    "Nous soussignés, {{societe}}, certifions par la présente que :\n\n{{employe}}, titulaire de la CNSS n° {{cnss}},\na été employé(e) au sein de notre entreprise du {{date_entree}} au {{date_sortie}}.\n\nL'intéressé(e) quitte notre société libre de tout engagement professionnel et en conformité avec la réglementation en vigueur.\n\nFait pour servir et valoir ce que de droit.",
+  "ordre-mission":
+    "Nous soussignés, {{societe}}, ordonnons par la présente la mission suivante :\n\nIl est demandé à {{employe}}, titulaire de la CNSS n° {{cnss}},\nde se rendre en déplacement professionnel afin d'effectuer les opérations et démarches nécessaires pour le compte de notre société.\n\nPériode de mission : à compter du {{date_entree}}.\n\nLes autorités civiles et militaires sont priées de bien vouloir lui accorder aide et assistance en cas de besoin.",
+  conge:
+    "Nous soussignés, {{societe}}, certifions par la présente que :\n\n{{employe}}, titulaire de la CNSS n° {{cnss}},\nbénéficie d'un congé annuel payé régulier accordé par la direction pour la période sollicitée.\n\nL'intéressé(e) réintégrera son poste de travail dès expiration de la période de congé autorisée.",
+  recommandation:
+    "Par la présente, nous recommandons chaleureusement la candidature de :\n\n{{employe}}\nqui a exercé au sein de notre société {{societe}} depuis le {{date_entree}}.\n\nDurant son parcours parmi nous, il/elle a démontré un professionnalisme exemplaire, une rigueur constante et un grand esprit d'équipe.\n\nNous lui souhaitons pleine réussite dans ses futurs projets professionnels.",
+  custom:
+    "Nous soussignés, {{societe}}, attestons par la présente que :\n\n{{employe}}, titulaire du numéro CNSS {{cnss}},\nest employé(e) au sein de notre société depuis le {{date_entree}}.\n\n[Saisissez ici votre texte personnalisé...]",
 };
 
 export const FEATURE_TOGGLE_DEFINITIONS: Array<{
