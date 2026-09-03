@@ -14,6 +14,7 @@ import {
   listBranches,
   listSortiesCaisse,
 } from "@/lib/data";
+import { getActiveCompanyId } from "@/lib/company";
 import { requireFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { formatCurrency, monthKey, todayIso } from "@/lib/utils";
@@ -36,7 +37,8 @@ export default async function ChiffreAffairesPage({
   const params = await searchParams;
   const month = params.month || monthKey();
   const date = params.date || todayIso();
-  const branches = listBranches({ activeOnly: true });
+  const activeCompanyId = await getActiveCompanyId();
+  const branches = listBranches({ activeOnly: true, companyId: activeCompanyId });
   const selectedBranchId = params.branch ? Number(params.branch) : branches[0]?.id || 1;
 
   const grid = getRevenueGrid(month);

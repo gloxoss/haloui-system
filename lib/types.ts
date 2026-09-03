@@ -110,6 +110,7 @@ export type AttestationTemplatesConfig = Record<string, AttestationTemplateConfi
 
 export type BranchRecord = {
   id: number;
+  company_id?: number;
   name: string;
   address: string;
   phone: string;

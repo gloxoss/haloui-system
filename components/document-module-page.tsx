@@ -25,6 +25,7 @@ import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_COMPACT_LABELS,
 } from "@/lib/constants";
+import { getActiveCompanyId } from "@/lib/company";
 import { listBranches, listDocuments, listEntities } from "@/lib/data";
 import { requireDocumentFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
@@ -55,7 +56,8 @@ export async function DocumentModulePage({
   const locale = await getServerLocale();
   const dict = getServerDictionary(locale);
 
-  const branches = listBranches({ activeOnly: true });
+  const activeCompanyId = await getActiveCompanyId();
+  const branches = listBranches({ activeOnly: true, companyId: activeCompanyId });
   const parties = listEntities(type === "bc" ? "fournisseurs" : "clients");
   const documents = listDocuments(type, {
     from: filters.from,

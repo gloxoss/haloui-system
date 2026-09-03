@@ -98,9 +98,11 @@ export async function saveCompanyAction(formData: FormData) {
 
 export async function saveBranchAction(formData: FormData) {
   const session = await requireSuperadmin();
+  const activeCompanyId = await getActiveCompanyId();
   saveBranch(
     {
       id: Number(formData.get("id")) || undefined,
+      company_id: Number(formData.get("company_id")) || activeCompanyId,
       name: String(formData.get("name") || ""),
       address: String(formData.get("address") || ""),
       phone: String(formData.get("phone") || ""),

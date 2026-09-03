@@ -57,7 +57,7 @@ export default async function ParametresPage() {
   const dict = getServerDictionary(locale);
 
   const company = await getActiveCompany();
-  const branches = listBranches();
+  const branches = listBranches({ companyId: company.id });
   const featureFlags = getFeatureFlags();
   const themeSettings = getThemeSettings();
 
@@ -295,7 +295,7 @@ export default async function ParametresPage() {
       <Card>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-black">{dict.settings.storesTitle} ({branches.length})</h3>
+            <h3 className="text-lg font-black">{dict.settings.storesTitle} — {company.name} ({branches.length})</h3>
             <p className="text-sm text-[var(--muted)]">
               {dict.settings.storesDesc}
             </p>
@@ -307,6 +307,7 @@ export default async function ParametresPage() {
           action={saveBranchAction}
           className="mt-4 grid gap-3.5 rounded-[20px] border border-[var(--border)] bg-[var(--background-alt)] p-4"
         >
+          <input type="hidden" name="company_id" value={company.id} />
           <div className="text-sm font-bold text-[var(--foreground)]">{dict.settings.addNewStore}</div>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label={dict.settings.storeName}>

@@ -265,17 +265,18 @@ export const SEED_COMPANIES = [
 export const SEED_COMPANY = SEED_COMPANIES[0];
 
 export const SEED_PRODUCTS: Array<{
+  company_id?: number;
   ref: string;
   designation: string;
   prix_ht: number;
   unite?: string;
 }> = [
-  { ref: "GASOIL-10", designation: "GASOIL 10", prix_ht: 9.69, unite: "L" },
-  { ref: "ESS-SP", designation: "ESSENCE SANS PLOMB", prix_ht: 13.18, unite: "L" },
-  { ref: "LUB-15W40", designation: "HUILE MOTEUR 15W40 (5L)", prix_ht: 150.00, unite: "bidon" },
-  { ref: "SRV-LAVAGE", designation: "LAVAGE & GRAISSAGE", prix_ht: 41.67, unite: "u" },
-  { ref: "CPJ-45", designation: "CIMENT CPJ 45", prix_ht: 31250.00, unite: "tonne" },
-  { ref: "TRANS-FRET", designation: "TRANSPORT DE MARCHANDISES", prix_ht: 2192.98, unite: "voyage" },
+  { company_id: 1, ref: "GASOIL-10", designation: "GASOIL 10", prix_ht: 9.69, unite: "L" },
+  { company_id: 1, ref: "ESS-SP", designation: "ESSENCE SANS PLOMB", prix_ht: 13.18, unite: "L" },
+  { company_id: 1, ref: "LUB-15W40", designation: "HUILE MOTEUR 15W40 (5L)", prix_ht: 150.00, unite: "bidon" },
+  { company_id: 1, ref: "SRV-LAVAGE", designation: "LAVAGE & GRAISSAGE", prix_ht: 41.67, unite: "u" },
+  { company_id: 2, ref: "CPJ-45", designation: "CIMENT CPJ 45", prix_ht: 31250.00, unite: "tonne" },
+  { company_id: 2, ref: "TRANS-FRET", designation: "TRANSPORT DE MARCHANDISES", prix_ht: 2192.98, unite: "voyage" },
 ];
 
 export const SEED_CLIENTS = [
@@ -301,12 +302,32 @@ export const SEED_PRODUCTS_BATCH_V2_REFS = new Set<string>([]);
 
 export const SEED_BRANCHES = [
   {
+    company_id: 1,
     name: "Station Les Cerises - Pistes Carburant",
     address: "Ourida 4, Route d'El Menzel, Sefrou",
     phone: "05 35 66 21 01",
   },
   {
+    company_id: 1,
+    name: "Boutique & Café Station",
+    address: "Ourida 4, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
+  },
+  {
+    company_id: 1,
+    name: "Baie de Lavage & Graissage",
+    address: "Ourida 4, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
+  },
+  {
+    company_id: 2,
     name: "Bureau Transport & Logistique",
+    address: "Ourida 4, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
+  },
+  {
+    company_id: 2,
+    name: "Dépôt Matériaux & Ciment",
     address: "Ourida 4, Route d'El Menzel, Sefrou",
     phone: "05 35 66 21 01",
   },

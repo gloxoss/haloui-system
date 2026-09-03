@@ -249,8 +249,8 @@ export function resetBusinessData() {
     VALUES (?, ?)
   `);
   const insertBranch = db.prepare(`
-    INSERT INTO branches (name, address, phone, active, created_by, updated_by)
-    VALUES (@name, @address, @phone, 1, NULL, NULL)
+    INSERT INTO branches (company_id, name, address, phone, active, created_by, updated_by)
+    VALUES (@company_id, @name, @address, @phone, 1, NULL, NULL)
   `);
 
   const transaction = db.transaction(() => {
@@ -285,8 +285,8 @@ export function resetBusinessData() {
     }
 
     const insertProduct = db.prepare(`
-      INSERT INTO produits (ref, designation, prix_ht, unite, created_by, updated_by)
-      VALUES (@ref, @designation, @prix_ht, @unite, NULL, NULL)
+      INSERT INTO produits (company_id, ref, designation, prix_ht, unite, created_by, updated_by)
+      VALUES (@company_id, @ref, @designation, @prix_ht, @unite, NULL, NULL)
     `);
     for (const prod of SEED_PRODUCTS) {
       insertProduct.run(prod);
@@ -311,8 +311,20 @@ export function resetBusinessData() {
   transaction();
 }
 
-export function listBranches({ activeOnly = false } = {}) {
+export function listBranches({
+  activeOnly = false,
+  companyId,
+}: {
+  activeOnly?: boolean;
+  companyId?: number;
+} = {}) {
   const db = getDb();
+  if (companyId) {
+    const query = activeOnly
+      ? "SELECT * FROM branches WHERE active = 1 AND company_id = ? ORDER BY name"
+      : "SELECT * FROM branches WHERE company_id = ? ORDER BY active DESC, name";
+    return db.prepare(query).all(companyId) as BranchRecord[];
+  }
   const query = activeOnly
     ? "SELECT * FROM branches WHERE active = 1 ORDER BY name"
     : "SELECT * FROM branches ORDER BY active DESC, name";
@@ -355,7 +367,8 @@ export function saveBranch(input: Partial<BranchRecord> & { id?: number }, userI
     db.prepare(
       `
         UPDATE branches
-        SET name = @name,
+        SET company_id = COALESCE(@company_id, company_id),
+            name = @name,
             address = @address,
             phone = @phone,
             active = @active,
@@ -365,6 +378,7 @@ export function saveBranch(input: Partial<BranchRecord> & { id?: number }, userI
       `,
     ).run({
       id: input.id,
+      company_id: input.company_id,
       name: input.name,
       address: input.address ?? "",
       phone: input.phone ?? "",
@@ -377,10 +391,11 @@ export function saveBranch(input: Partial<BranchRecord> & { id?: number }, userI
 
   const result = db.prepare(
     `
-      INSERT INTO branches (name, address, phone, active, created_by, updated_by)
-      VALUES (@name, @address, @phone, @active, @created_by, @updated_by)
+      INSERT INTO branches (company_id, name, address, phone, active, created_by, updated_by)
+      VALUES (@company_id, @name, @address, @phone, @active, @created_by, @updated_by)
     `,
   ).run({
+    company_id: input.company_id || 1,
     name: input.name,
     address: input.address ?? "",
     phone: input.phone ?? "",
