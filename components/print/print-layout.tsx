@@ -147,11 +147,12 @@ export function PrintLayout({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 0;
+            margin: 6mm 8mm;
           }
           html, body {
-            width: 210mm !important;
-            height: 297mm !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
@@ -161,12 +162,12 @@ export function PrintLayout({
             print-color-adjust: exact !important;
           }
           .print-root {
-            width: 210mm !important;
-            max-width: 210mm !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            min-height: 100% !important;
             margin: 0 !important;
-            padding: 6mm 8mm !important;
+            padding: 0 !important;
             box-sizing: border-box !important;
             background: #ffffff !important;
             background-color: #ffffff !important;
@@ -176,10 +177,26 @@ export function PrintLayout({
             flex-direction: column !important;
             justify-content: space-between !important;
           }
-          table { page-break-inside: auto; }
-          tr, td, th { page-break-inside: avoid; }
-          .totals-box { page-break-inside: avoid; }
-          thead { display: table-header-group; }
+          table {
+            page-break-inside: auto;
+            break-inside: auto;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tfoot {
+            display: table-footer-group !important;
+          }
+          tr, td, th {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .totals-box,
+          .break-inside-avoid,
+          [class*="break-inside-avoid"] {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
         }
       `}</style>
       {children}

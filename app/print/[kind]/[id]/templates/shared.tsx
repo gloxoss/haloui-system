@@ -267,17 +267,27 @@ export function TotalsBox({
 export function SignatureStrip({
   left,
   right,
+  compact = false,
 }: {
   left: string;
   right: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-8 text-[11px]">
-      <div className="rounded-xl border border-[var(--print-border-medium)] p-3 min-h-[22mm] flex flex-col justify-between">
+    <div className="grid grid-cols-2 gap-6 text-[11px]">
+      <div
+        className={`rounded-xl border border-[var(--print-border-medium)] p-2.5 ${
+          compact ? "min-h-[16mm]" : "min-h-[20mm]"
+        } flex flex-col justify-between`}
+      >
         <div className="font-bold text-[var(--print-text)]">{left}</div>
         <div className="border-b border-dashed border-[var(--print-border-light)]" />
       </div>
-      <div className="rounded-xl border border-[var(--print-border-medium)] p-3 min-h-[22mm] flex flex-col justify-between text-right">
+      <div
+        className={`rounded-xl border border-[var(--print-border-medium)] p-2.5 ${
+          compact ? "min-h-[16mm]" : "min-h-[20mm]"
+        } flex flex-col justify-between text-right`}
+      >
         <div className="font-bold text-[var(--print-text)]">{right}</div>
         <div className="border-b border-dashed border-[var(--print-border-light)]" />
       </div>
@@ -285,16 +295,26 @@ export function SignatureStrip({
   );
 }
 
-export function AddressBar({ company }: { company: CompanyRecord }) {
+export function AddressBar({
+  company,
+  compact = false,
+}: {
+  company: CompanyRecord;
+  compact?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-[var(--print-border-medium)] bg-white px-4 py-2.5 text-center text-[10px] leading-relaxed text-[var(--print-text)]">
-      <div className="font-extrabold text-[11.5px] uppercase tracking-wider text-[var(--print-accent-dark)]">
+    <div
+      className={`rounded-xl border border-[var(--print-border-medium)] bg-white px-3.5 ${
+        compact ? "py-1.5 text-[9.5px]" : "py-2 text-[10px]"
+      } text-center leading-relaxed text-[var(--print-text)]`}
+    >
+      <div className="font-extrabold text-[11px] uppercase tracking-wider text-[var(--print-accent-dark)]">
         {company.name}
       </div>
-      <div className="text-[var(--print-text-muted)] mt-0.5">
+      <div className="text-[var(--print-text-muted)]">
         Siège social : {company.address} · Tél : {company.phone || "-"} · GSM : {company.gsm || "-"}
       </div>
-      <div className="text-[var(--print-text-muted)] font-mono text-[9px] mt-0.5">
+      <div className="text-[var(--print-text-muted)] font-mono text-[8.5px]">
         RC : {company.rc || "-"} · IF : {company.if_number || "-"} · TP : {company.tp || "-"} · ICE : {company.ice || "-"}
       </div>
     </div>
