@@ -31,12 +31,21 @@ export type ThemePreset =
   | "violet-plum"
   | "monochrome-black"
   | "olive-ledger"
-  | "haloui-classic";
+  | "haloui-classic"
+  | "custom";
 export type ThemeDensity = "compact" | "comfortable";
+
+export type CustomThemeColors = {
+  accent: string;
+  accentSoft?: string;
+  sidebarBg?: string;
+  background?: string;
+};
 
 export type ThemeSettings = {
   preset: ThemePreset;
   density: ThemeDensity;
+  customColors?: CustomThemeColors;
 };
 
 export type DocumentType = "devis" | "facture" | "bl" | "bs" | "bc";
@@ -82,7 +91,7 @@ export type SessionUser = {
 };
 
 export type CompanyRecord = {
-  id: 1;
+  id: number;
   name: string;
   arabic_name: string;
   address: string;
@@ -103,10 +112,14 @@ export type CompanyRecord = {
 };
 
 export type AttestationTemplateConfigItem = {
+  id?: string;
+  name?: string;
   title: string;
   objet?: string;
   body: string;
   signataire?: string;
+  active?: boolean;
+  isCustom?: boolean;
 };
 
 export type AttestationTemplatesConfig = Record<string, AttestationTemplateConfigItem>;

@@ -213,6 +213,12 @@ export const THEME_PRESET_DEFINITIONS = [
     description: "Palette artisanale aux tons dorés et ambrés.",
     swatches: ["#7c2d12", "#b45309", "#fef3c7"],
   },
+  {
+    key: "custom",
+    label: "Palette Personnalisée (Sur-Mesure)",
+    description: "Composez vos propres couleurs de marque (accent, menu, teintes douces).",
+    swatches: ["#2563eb", "#0f172a", "#eff6ff"],
+  },
 ] as const;
 
 export const THEME_DENSITY_DEFINITIONS = [

@@ -8,6 +8,7 @@ import {
   buildAttestationContent,
   extractCityFromAddress,
   getAttestationModelConfig,
+  getCompanyAttestationConfigs,
 } from "@/lib/attestations";
 import { ATTESTATION_TYPE_LABELS, ATTESTATION_TYPE_TITLES } from "@/lib/constants";
 import { useTranslation } from "@/lib/i18n";
@@ -122,12 +123,31 @@ export function AttestationPreview({
     }));
   }, [employees]);
 
+  const allConfigs = React.useMemo(() => {
+    return getCompanyAttestationConfigs(company);
+  }, [company]);
+
+  const activeConfigs = React.useMemo(() => {
+    return Object.entries(allConfigs).filter(([_, item]) => item.active !== false);
+  }, [allConfigs]);
+
+  // If initial or current type is deactivated, select the first active template
+  React.useEffect(() => {
+    if (activeConfigs.length > 0 && !activeConfigs.some(([key]) => key === type)) {
+      setType(activeConfigs[0][0]);
+    }
+  }, [activeConfigs, type]);
+
   const modelOptions = React.useMemo(() => {
-    return Object.entries(ATTESTATION_TYPE_LABELS).map(([key, label]) => ({
-      value: key,
-      label: String(locale === "ar" ? ATTESTATION_TYPE_LABELS_AR[key] || label : label),
-    }));
-  }, [locale]);
+    return activeConfigs.map(([key, item]) => {
+      const arabicLabel = ATTESTATION_TYPE_LABELS_AR[key];
+      const label = locale === "ar" && arabicLabel ? arabicLabel : (item.name || item.title || key);
+      return {
+        value: key,
+        label,
+      };
+    });
+  }, [activeConfigs, locale]);
 
   return (
     <div className="grid gap-6">

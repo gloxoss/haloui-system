@@ -96,6 +96,23 @@ export async function saveCompanyAction(formData: FormData) {
   refresh(["/dashboard", "/parametres"]);
 }
 
+export async function saveCompanyAttestationTemplatesAction(formData: FormData) {
+  const session = await requireSuperadmin();
+  const companyId = Number(formData.get("company_id")) || (await getActiveCompanyId());
+  const jsonRaw = String(formData.get("attestation_templates_json") || "{}");
+
+  const current = getCompany(companyId);
+  saveCompany(
+    {
+      ...current,
+      attestation_templates_json: jsonRaw,
+    },
+    session.user.id,
+  );
+
+  refresh(["/parametres", "/personnel", "/personnel/attestation"]);
+}
+
 export async function saveBranchAction(formData: FormData) {
   const session = await requireSuperadmin();
   const activeCompanyId = await getActiveCompanyId();

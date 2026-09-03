@@ -1,4 +1,4 @@
-import { ATTESTATION_TYPE_TITLES, DEFAULT_ATTESTATION_TEMPLATES } from "@/lib/constants";
+import { ATTESTATION_TYPE_LABELS, ATTESTATION_TYPE_TITLES, DEFAULT_ATTESTATION_TEMPLATES } from "@/lib/constants";
 import {
   type AttestationCustomPayload,
   type AttestationTemplateConfigItem,
@@ -65,16 +65,42 @@ export function getCompanyAttestationConfigs(company?: Partial<CompanyRecord> | 
   }
 
   const result: AttestationTemplatesConfig = {};
+
+  // 1. Initialize default models
   for (const type of Object.keys(DEFAULT_ATTESTATION_TEMPLATES)) {
     const existing = jsonConfig[type];
+    if (existing && (existing as any)._deleted) {
+      continue;
+    }
     const defaultBody = getTemplateForType(type, company, false);
     const defaultTitle = ATTESTATION_TYPE_TITLES[type] || "ATTESTATION";
+    const defaultName = ATTESTATION_TYPE_LABELS[type] || type;
     result[type] = {
+      id: type,
+      name: existing?.name || defaultName,
       title: existing?.title || defaultTitle,
       objet: existing?.objet ?? "",
       body: existing?.body || defaultBody,
       signataire: existing?.signataire || "La Direction Générale",
+      active: existing?.active !== undefined ? Boolean(existing.active) : true,
+      isCustom: Boolean(existing?.isCustom),
     };
+  }
+
+  // 2. Include any custom models added by the user
+  for (const [key, item] of Object.entries(jsonConfig)) {
+    if (!result[key] && item && !(item as any)._deleted) {
+      result[key] = {
+        id: key,
+        name: item.name || item.title || key,
+        title: item.title || "ATTESTATION",
+        objet: item.objet ?? "",
+        body: item.body || "",
+        signataire: item.signataire || "La Direction Générale",
+        active: item.active !== undefined ? Boolean(item.active) : true,
+        isCustom: true,
+      };
+    }
   }
 
   return result;
