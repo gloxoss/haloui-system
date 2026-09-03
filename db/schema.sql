@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE TABLE IF NOT EXISTS company (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   arabic_name TEXT NOT NULL,
   address TEXT NOT NULL,

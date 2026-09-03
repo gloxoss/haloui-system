@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Center, Paper, Stack, Text, Title } from "@mantine/core";
 
 import { getAuthSession } from "@/lib/auth";
-import { getCompany } from "@/lib/data";
+import { getActiveCompany } from "@/lib/company";
 
 import { LoginForm } from "./login-form";
 
@@ -13,7 +13,7 @@ export default async function LoginPage() {
     redirect("/dashboard");
   }
 
-  const company = getCompany();
+  const company = await getActiveCompany();
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-4 py-8">

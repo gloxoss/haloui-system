@@ -9,7 +9,10 @@ import {
   DOCUMENT_TYPE_LABELS,
   FEATURE_TOGGLE_DEFINITIONS,
   SEED_BRANCHES,
+  SEED_CLIENTS,
+  SEED_COMPANIES,
   SEED_COMPANY,
+  SEED_PRODUCTS,
   THEME_DENSITY_DEFINITIONS,
   THEME_PRESET_DEFINITIONS,
   getModuleSlugByType,
@@ -73,6 +76,7 @@ type SaveEmployeeInput = Omit<EmployeeRecord, "id" | "numero"> & {
 
 type SaveDocumentInput = {
   id?: number;
+  company_id?: number | null;
   type: DocumentType;
   date: string;
   branch_id?: number | null;
@@ -132,9 +136,18 @@ function nextEmployeeNumber() {
   return row.next;
 }
 
-export function getCompany() {
+export function getCompany(id?: number) {
   const db = getDb();
-  return db.prepare("SELECT * FROM company WHERE id = 1").get() as CompanyRecord;
+  if (id) {
+    const found = db.prepare("SELECT * FROM company WHERE id = ?").get(id) as CompanyRecord | undefined;
+    if (found) return found;
+  }
+  return (db.prepare("SELECT * FROM company ORDER BY id ASC LIMIT 1").get() as CompanyRecord) || SEED_COMPANY;
+}
+
+export function listCompanies(): CompanyRecord[] {
+  const db = getDb();
+  return db.prepare("SELECT * FROM company ORDER BY id ASC").all() as CompanyRecord[];
 }
 
 export function getFeatureFlags(): FeatureFlags {
@@ -255,18 +268,36 @@ export function resetBusinessData() {
     db.prepare("DELETE FROM company").run();
     db.prepare("DELETE FROM app_settings").run();
 
-    db.prepare(`
-      INSERT INTO company (
-        id, name, arabic_name, address, phone, gsm, rc, if_number, tp, ice, logo_path, legal_notice,
-        attestation_template_simple, attestation_template_salary, attestation_template_visa, attestation_template_bank
-      ) VALUES (
-        @id, @name, @arabic_name, @address, @phone, @gsm, @rc, @if_number, @tp, @ice, @logo_path, @legal_notice,
-        @attestation_template_simple, @attestation_template_salary, @attestation_template_visa, @attestation_template_bank
-      )
-    `).run(SEED_COMPANY);
+    for (const comp of SEED_COMPANIES) {
+      db.prepare(`
+        INSERT INTO company (
+          id, name, arabic_name, address, phone, gsm, rc, if_number, tp, ice, logo_path, legal_notice,
+          attestation_template_simple, attestation_template_salary, attestation_template_visa, attestation_template_bank
+        ) VALUES (
+          @id, @name, @arabic_name, @address, @phone, @gsm, @rc, @if_number, @tp, @ice, @logo_path, @legal_notice,
+          @attestation_template_simple, @attestation_template_salary, @attestation_template_visa, @attestation_template_bank
+        )
+      `).run(comp);
+    }
 
     for (const branch of SEED_BRANCHES) {
       insertBranch.run(branch);
+    }
+
+    const insertProduct = db.prepare(`
+      INSERT INTO produits (ref, designation, prix_ht, unite, created_by, updated_by)
+      VALUES (@ref, @designation, @prix_ht, @unite, NULL, NULL)
+    `);
+    for (const prod of SEED_PRODUCTS) {
+      insertProduct.run(prod);
+    }
+
+    const insertClient = db.prepare(`
+      INSERT INTO clients (name, ice, address, phone, email, notes, created_by, updated_by)
+      VALUES (@name, @ice, @address, @phone, @email, @notes, NULL, NULL)
+    `);
+    for (const cli of SEED_CLIENTS) {
+      insertClient.run(cli);
     }
 
     for (const [key, enabled] of Object.entries(DEFAULT_FEATURE_FLAGS) as Array<[FeatureKey, boolean]>) {
@@ -886,6 +917,7 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
 
   const avance = toNumber(input.avance);
   const documentPayload = {
+    company_id: input.company_id ?? 1,
     type: input.type,
     date: input.date || todayIso(),
     branch_id: input.branch_id ?? null,
@@ -912,7 +944,8 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
       db.prepare(
         `
           UPDATE documents
-          SET date = @date,
+          SET company_id = COALESCE(@company_id, company_id),
+              date = @date,
               branch_id = @branch_id,
               source_branch_id = @source_branch_id,
               destination_branch_id = @destination_branch_id,
@@ -942,10 +975,10 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
       const result = db.prepare(
         `
           INSERT INTO documents (
-            type, numero, date, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
+            company_id, type, numero, date, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
             parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste, notes, status, created_by, updated_by
           ) VALUES (
-            @type, @numero, @date, @branch_id, @source_branch_id, @destination_branch_id, @client_id, @fournisseur_id,
+            @company_id, @type, @numero, @date, @branch_id, @source_branch_id, @destination_branch_id, @client_id, @fournisseur_id,
             @parent_document_id, @total_ht, @total_tva, @total_ttc, @remise, @avance, @reste, @notes, @status, @created_by, @updated_by
           )
         `,

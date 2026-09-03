@@ -221,25 +221,48 @@ export const THEME_DENSITY_DEFINITIONS = [
   },
 ] as const;
 
-export const SEED_COMPANY = {
-  id: 1 as const,
-  name: "Entreprise Commerciale",
-  arabic_name: "الشركة التجارية",
-  address: "Boulevard Mohammed V, Tanger",
-  phone: "05 39 00 00 00",
-  gsm: "06 61 00 00 00",
-  rc: "12345",
-  if_number: "12345678",
-  tp: "12345678",
-  ice: "000000000000000",
-  logo_path: "/assets/logo.svg",
-  legal_notice:
-    "Entreprise Commerciale - RC 12345 - IF 12345678 - TP 12345678 - ICE 000000000000000",
-  attestation_template_simple: DEFAULT_ATTESTATION_TEMPLATES.simple,
-  attestation_template_salary: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
-  attestation_template_visa: DEFAULT_ATTESTATION_TEMPLATES.visa,
-  attestation_template_bank: DEFAULT_ATTESTATION_TEMPLATES.banque,
-};
+export const SEED_COMPANIES = [
+  {
+    id: 1 as const,
+    name: "STE OURIDA STATION SARL",
+    arabic_name: "شركة وريدة محطة ش.م.م",
+    address: "Ourida 4, Station Les Cerises, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
+    gsm: "06 61 00 00 00",
+    rc: "1969",
+    if_number: "20704112",
+    tp: "15311035",
+    ice: "001764405000093",
+    logo_path: "/assets/logo.svg",
+    legal_notice:
+      "STE OURIDA STATION SARL - Station Les Cerises, Route d'El Menzel, Sefrou - RC 1969 - IF 20704112 - Patente 15311035 - CNSS 5298204 - ICE 001764405000093",
+    attestation_template_simple: DEFAULT_ATTESTATION_TEMPLATES.simple,
+    attestation_template_salary: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
+    attestation_template_visa: DEFAULT_ATTESTATION_TEMPLATES.visa,
+    attestation_template_bank: DEFAULT_ATTESTATION_TEMPLATES.banque,
+  },
+  {
+    id: 2 as const,
+    name: "STE ANANAS TRANS",
+    arabic_name: "شركة أناناس ترونس",
+    address: "Ourida 4, Station Les Cerises, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
+    gsm: "06 61 00 00 00",
+    rc: "4603",
+    if_number: "66015728",
+    tp: "15302966",
+    ice: "003536046000075",
+    logo_path: "/assets/logo.svg",
+    legal_notice:
+      "STE ANANAS TRANS - Station Les Cerises, Route d'El Menzel, Sefrou - RC 4603 - IF 66015728 - Patente 15302966 - ICE 003536046000075",
+    attestation_template_simple: DEFAULT_ATTESTATION_TEMPLATES.simple,
+    attestation_template_salary: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
+    attestation_template_visa: DEFAULT_ATTESTATION_TEMPLATES.visa,
+    attestation_template_bank: DEFAULT_ATTESTATION_TEMPLATES.banque,
+  },
+];
+
+export const SEED_COMPANY = SEED_COMPANIES[0];
 
 export const SEED_PRODUCTS: Array<{
   ref: string;
@@ -247,33 +270,45 @@ export const SEED_PRODUCTS: Array<{
   prix_ht: number;
   unite?: string;
 }> = [
-  { ref: "ART-001", designation: "Article Standard A", prix_ht: 120, unite: "u" },
-  { ref: "ART-002", designation: "Produit Finition B", prix_ht: 250, unite: "u" },
-  { ref: "ART-003", designation: "Pack Fourniture C", prix_ht: 450, unite: "lot" },
-  { ref: "ART-004", designation: "Matière Première D", prix_ht: 85, unite: "kg" },
-  { ref: "SRV-001", designation: "Prestation Technique E", prix_ht: 350, unite: "h" },
-  { ref: "ART-005", designation: "Équipement Modulaire F", prix_ht: 850, unite: "u" },
-  { ref: "ART-006", designation: "Consommable Atelier G", prix_ht: 45, unite: "boite" },
-  { ref: "SRV-002", designation: "Maintenance & Support H", prix_ht: 600, unite: "forfait" },
+  { ref: "GASOIL-10", designation: "GASOIL 10", prix_ht: 9.69, unite: "L" },
+  { ref: "ESS-SP", designation: "ESSENCE SANS PLOMB", prix_ht: 13.18, unite: "L" },
+  { ref: "LUB-15W40", designation: "HUILE MOTEUR 15W40 (5L)", prix_ht: 150.00, unite: "bidon" },
+  { ref: "SRV-LAVAGE", designation: "LAVAGE & GRAISSAGE", prix_ht: 41.67, unite: "u" },
+  { ref: "CPJ-45", designation: "CIMENT CPJ 45", prix_ht: 31250.00, unite: "tonne" },
+  { ref: "TRANS-FRET", designation: "TRANSPORT DE MARCHANDISES", prix_ht: 2192.98, unite: "voyage" },
+];
+
+export const SEED_CLIENTS = [
+  {
+    name: "STE SKOURA VOYAGE",
+    ice: "003491188000002",
+    address: "Centre Skoura, Province de Sefrou",
+    phone: "05 35 66 21 01",
+    email: "",
+    notes: "Client professionnel transport & voyages - Sefrou / Skoura",
+  },
+  {
+    name: "SOSEFSAKAN",
+    ice: "003444453000071",
+    address: "Zone Industrielle, Sefrou",
+    phone: "05 35 66 21 01",
+    email: "",
+    notes: "Client professionnel - Négoce & BTP Sefrou",
+  },
 ];
 
 export const SEED_PRODUCTS_BATCH_V2_REFS = new Set<string>([]);
 
 export const SEED_BRANCHES = [
   {
-    name: "Magasin Principal (Centre)",
-    address: "Boulevard Mohammed V, Tanger",
-    phone: "05 39 00 00 01",
+    name: "Station Les Cerises - Pistes Carburant",
+    address: "Ourida 4, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
   },
   {
-    name: "Succursale 2",
-    address: "Avenue Hassan II, Tanger",
-    phone: "05 39 00 00 02",
-  },
-  {
-    name: "Dépôt Central",
-    address: "Zone Industrielle, Tanger",
-    phone: "05 39 00 00 03",
+    name: "Bureau Transport & Logistique",
+    address: "Ourida 4, Route d'El Menzel, Sefrou",
+    phone: "05 35 66 21 01",
   },
 ];
 

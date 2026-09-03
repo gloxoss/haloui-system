@@ -8,6 +8,7 @@ import { requireAdmin, requireAuth, requireSuperadmin, updateUserPassword } from
 import { FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
 import { getCompany, getEmployeeById } from "@/lib/data";
 import { interpolateTemplate } from "@/lib/attestations";
+import { ACTIVE_COMPANY_COOKIE, getActiveCompanyId } from "@/lib/company";
 import {
   batchSaveDailyRevenue,
   bulkSaveProducts,
@@ -53,13 +54,25 @@ function refresh(paths: string[]) {
   }
 }
 
+export async function switchActiveCompanyAction(companyId: number) {
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_COMPANY_COOKIE, String(companyId), {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  refresh(["/", "/dashboard", "/factures", "/devis", "/bons", "/bons-livraison", "/bons-commande", "/bons-sortie", "/chiffre-affaires", "/parametres", "/personnel"]);
+}
+
 export async function saveCompanyAction(formData: FormData) {
   const session = await requireSuperadmin();
-  const current = getCompany();
+  const targetId = Number(formData.get("id")) || 1;
+  const current = getCompany(targetId);
 
   saveCompany(
     {
       ...current,
+      id: targetId as 1,
       name: String(formData.get("name") || current.name),
       arabic_name: String(formData.get("arabic_name") || current.arabic_name),
       address: String(formData.get("address") || current.address),
@@ -347,9 +360,11 @@ export async function saveDocumentAction(formData: FormData) {
     [],
   );
 
+  const activeCompanyId = await getActiveCompanyId();
   const documentId = saveDocument(
     {
       id: Number(formData.get("id")) || undefined,
+      company_id: Number(formData.get("company_id")) || activeCompanyId,
       type: formData.get("type") as DocumentType,
       date: String(formData.get("date") || todayIso()),
       branch_id: Number(formData.get("branch_id")) || null,

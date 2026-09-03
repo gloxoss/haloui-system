@@ -13,6 +13,7 @@ import {
   DEFAULT_SUPERADMIN_PASSWORD,
   DEFAULT_SUPERADMIN_USERNAME,
   SEED_BRANCHES,
+  SEED_COMPANIES,
   SEED_COMPANY,
   SEED_PRODUCTS,
   SEED_PRODUCTS_BATCH_V2_REFS,
@@ -309,6 +310,36 @@ function applyFullProductSeedIfMissing(db: Database.Database, actorId: number) {
 }
 
 function migrateDatabase(db: Database.Database) {
+  const companyTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='company'").get() as { sql?: string } | undefined;
+  if (companyTableInfo?.sql && companyTableInfo.sql.includes("CHECK (id = 1)")) {
+    db.exec(`
+      CREATE TABLE company_new (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        arabic_name TEXT NOT NULL,
+        address TEXT NOT NULL,
+        phone TEXT,
+        gsm TEXT,
+        rc TEXT,
+        if_number TEXT,
+        tp TEXT,
+        ice TEXT,
+        logo_path TEXT,
+        legal_notice TEXT,
+        attestation_template_simple TEXT DEFAULT '',
+        attestation_template_salary TEXT DEFAULT '',
+        attestation_template_visa TEXT DEFAULT '',
+        attestation_template_bank TEXT DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO company_new (id, name, arabic_name, address, phone, gsm, rc, if_number, tp, ice, logo_path, legal_notice, updated_at)
+      SELECT id, name, arabic_name, address, phone, gsm, rc, if_number, tp, ice, logo_path, legal_notice, updated_at
+      FROM company;
+      DROP TABLE company;
+      ALTER TABLE company_new RENAME TO company;
+    `);
+  }
+
   ensureColumnExists(db, "company", "attestation_template_simple", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_salary", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_visa", "TEXT DEFAULT ''");
@@ -345,23 +376,35 @@ function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sorties_caisse_branch ON sorties_caisse(branch_id);
   `);
 
+  ensureColumnExists(db, "documents", "company_id", "INTEGER DEFAULT 1");
+  ensureColumnExists(db, "branches", "company_id", "INTEGER DEFAULT 1");
+  ensureColumnExists(db, "produits", "company_id", "INTEGER DEFAULT 1");
+  ensureColumnExists(db, "chiffre_affaires", "company_id", "INTEGER DEFAULT 1");
+
   createSettingsTable(db);
   seedFeatureFlags(db);
 
-  db.prepare(`
-    UPDATE company
-    SET
-      attestation_template_simple = COALESCE(NULLIF(attestation_template_simple, ''), @simple),
-      attestation_template_salary = COALESCE(NULLIF(attestation_template_salary, ''), @salary),
-      attestation_template_visa = COALESCE(NULLIF(attestation_template_visa, ''), @visa),
-      attestation_template_bank = COALESCE(NULLIF(attestation_template_bank, ''), @bank)
-    WHERE id = 1
-  `).run({
-    simple: DEFAULT_ATTESTATION_TEMPLATES.simple,
-    salary: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
-    visa: DEFAULT_ATTESTATION_TEMPLATES.visa,
-    bank: DEFAULT_ATTESTATION_TEMPLATES.banque,
-  });
+  for (const comp of SEED_COMPANIES) {
+    db.prepare(`
+      INSERT INTO company (
+        id, name, arabic_name, address, phone, gsm, rc, if_number, tp, ice, logo_path, legal_notice,
+        attestation_template_simple, attestation_template_salary, attestation_template_visa, attestation_template_bank
+      ) VALUES (
+        @id, @name, @arabic_name, @address, @phone, @gsm, @rc, @if_number, @tp, @ice, @logo_path, @legal_notice,
+        @attestation_template_simple, @attestation_template_salary, @attestation_template_visa, @attestation_template_bank
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        arabic_name = excluded.arabic_name,
+        address = excluded.address,
+        phone = excluded.phone,
+        rc = excluded.rc,
+        if_number = excluded.if_number,
+        tp = excluded.tp,
+        ice = excluded.ice,
+        legal_notice = excluded.legal_notice
+    `).run(comp);
+  }
 }
 
 function initializeDatabase() {

@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { getAuthSession, userNeedsPasswordReset } from "@/lib/auth";
-import { getCompany, getFeatureFlags, getThemeSettings } from "@/lib/data";
+import { getFeatureFlags, getThemeSettings } from "@/lib/data";
+import { getActiveCompany, getActiveCompanyId, getAllCompanies } from "@/lib/company";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,9 @@ export default async function ProtectedLayout({
     redirect("/premier-mot-de-passe");
   }
 
-  const company = getCompany();
+  const company = await getActiveCompany();
+  const allCompanies = getAllCompanies();
+  const activeCompanyId = await getActiveCompanyId();
   const featureFlags = getFeatureFlags();
   const cookieStore = await cookies();
   const themeSettings = getThemeSettings();
@@ -32,6 +35,8 @@ export default async function ProtectedLayout({
   return (
     <AppShell
       companyName={company.name}
+      companies={allCompanies}
+      activeCompanyId={activeCompanyId}
       userName={session.user.name ?? session.user.username}
       userRole={session.user.role}
       logoPath={company.logo_path}

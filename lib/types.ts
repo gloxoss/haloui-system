@@ -149,6 +149,7 @@ export type DocumentLineInput = {
 
 export type DocumentRecord = {
   id: number;
+  company_id?: number | null;
   type: DocumentType;
   numero: number;
   date: string;

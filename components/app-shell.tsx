@@ -26,14 +26,17 @@ import {
 } from "lucide-react";
 
 import { CommandPalette } from "@/components/command-palette";
+import { CompanySwitcher } from "@/components/company-switcher";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { useTranslation } from "@/lib/i18n";
-import { type FeatureFlags, type Role, type ThemeSettings } from "@/lib/types";
+import { type CompanyRecord, type FeatureFlags, type Role, type ThemeSettings } from "@/lib/types";
 
 export function AppShell({
   children,
   companyName,
+  companies = [],
+  activeCompanyId = 1,
   userName,
   userRole,
   logoPath,
@@ -42,6 +45,8 @@ export function AppShell({
 }: {
   children: React.ReactNode;
   companyName: string;
+  companies?: CompanyRecord[];
+  activeCompanyId?: number;
   userName: string;
   userRole: Role;
   logoPath: string;
@@ -160,6 +165,7 @@ export function AppShell({
               </Group>
 
               <Group gap="sm" wrap="nowrap">
+                <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />
                 <CommandPalette />
                 <LanguageSwitcher variant="button" size="xs" />
 

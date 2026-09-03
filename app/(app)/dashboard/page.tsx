@@ -35,7 +35,8 @@ import {
   DOCUMENT_TYPE_LABELS,
   getModuleSlugByType,
 } from "@/lib/constants";
-import { getCompany, getDashboardStats, getFeatureFlags, getRevenueGrid } from "@/lib/data";
+import { getDashboardStats, getFeatureFlags, getRevenueGrid } from "@/lib/data";
+import { getActiveCompany } from "@/lib/company";
 import { DOCUMENT_FEATURE_MAP } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { type TranslationDictionary } from "@/lib/i18n/types";
@@ -68,7 +69,7 @@ export default async function DashboardPage() {
   const locale = await getServerLocale();
   const dict = getServerDictionary(locale);
 
-  const company = getCompany();
+  const company = await getActiveCompany();
   const featureFlags = getFeatureFlags();
   const stats = getDashboardStats();
   const latestDocuments = (stats.latestDocuments as Array<{

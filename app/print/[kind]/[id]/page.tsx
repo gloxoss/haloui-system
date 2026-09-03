@@ -18,6 +18,8 @@ import {
   listBranches,
 } from "@/lib/data";
 
+import { getActiveCompanyId } from "@/lib/company";
+
 export const dynamic = "force-dynamic";
 
 const documentKinds = new Map([
@@ -39,14 +41,16 @@ export default async function PrintPage({
 }) {
   const { kind, id } = await params;
   const { paper } = await searchParams;
-  const company = getCompany();
+  const activeCompanyId = await getActiveCompanyId();
   const documentKind = documentKinds.get(kind as PrintDocumentKind);
 
   if (documentKind) {
-    const document = getDocumentById(Number(id)) as PrintableDocument | null;
+    const document = getDocumentById(Number(id)) as (PrintableDocument & { company_id?: number }) | null;
     if (!document) {
       notFound();
     }
+
+    const company = getCompany(document.company_id || activeCompanyId);
 
     const branches = listBranches();
     const branch = branches.find((item) => item.id === document.branch_id) ?? null;
@@ -86,6 +90,7 @@ export default async function PrintPage({
   }
 
   if (kind === "fiche-personnel") {
+    const company = getCompany(activeCompanyId);
     const employee = getEmployeeById(Number(id));
     if (!employee) {
       notFound();
@@ -104,6 +109,7 @@ export default async function PrintPage({
   }
 
   if (kind === "attestation") {
+    const company = getCompany(activeCompanyId);
     const attestation = getAttestationById(Number(id)) as PrintableAttestation | undefined;
     if (!attestation) {
       notFound();

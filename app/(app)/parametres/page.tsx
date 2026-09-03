@@ -23,7 +23,8 @@ import {
   APP_VERSION,
   FEATURE_TOGGLE_DEFINITIONS,
 } from "@/lib/constants";
-import { getCompany, getFeatureFlags, getThemeSettings, listBranches } from "@/lib/data";
+import { getActiveCompany } from "@/lib/company";
+import { getFeatureFlags, getThemeSettings, listBranches } from "@/lib/data";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
@@ -55,7 +56,7 @@ export default async function ParametresPage() {
   const locale = await getServerLocale();
   const dict = getServerDictionary(locale);
 
-  const company = getCompany();
+  const company = await getActiveCompany();
   const branches = listBranches();
   const featureFlags = getFeatureFlags();
   const themeSettings = getThemeSettings();
@@ -75,6 +76,7 @@ export default async function ParametresPage() {
             {dict.settings.companyInfoDesc}
           </p>
           <form action={saveCompanyAction} className="mt-4 grid gap-4">
+            <input type="hidden" name="id" value={company.id} />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label={dict.settings.raisonSociale}>
                 <Input name="name" defaultValue={company.name} required />
