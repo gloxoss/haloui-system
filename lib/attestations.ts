@@ -1,5 +1,11 @@
 import { ATTESTATION_TYPE_TITLES, DEFAULT_ATTESTATION_TEMPLATES } from "@/lib/constants";
-import { type AttestationCustomPayload, type CompanyRecord, type EmployeeAttestationType } from "@/lib/types";
+import {
+  type AttestationCustomPayload,
+  type AttestationTemplateConfigItem,
+  type AttestationTemplatesConfig,
+  type CompanyRecord,
+  type EmployeeAttestationType,
+} from "@/lib/types";
 import { formatDate, formatNumber, todayIso } from "@/lib/utils";
 
 export type AttestationEmployeeLike = {
@@ -21,6 +27,7 @@ type AttestationTemplateSource = Pick<
   | "attestation_template_salary"
   | "attestation_template_visa"
   | "attestation_template_bank"
+  | "attestation_templates_json"
 >;
 
 type BuildAttestationOptions = {
@@ -37,10 +44,71 @@ const TEMPLATE_FIELD_BY_TYPE: Record<string, keyof AttestationTemplateSource> = 
 
 const FALLBACK_COMPANY_NAME = "Entreprise Commerciale";
 
+export function extractCityFromAddress(address?: string): string {
+  if (!address) return "Sefrou";
+  const lower = address.toLowerCase();
+  if (lower.includes("sefrou") || lower.includes("séfrou")) return "Sefrou";
+  if (lower.includes("tanger")) return "Tanger";
+  if (lower.includes("casablanca")) return "Casablanca";
+  if (lower.includes("rabat")) return "Rabat";
+  if (lower.includes("fes") || lower.includes("fès")) return "Fès";
+  const parts = address.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
+  return parts[parts.length - 1] || "Sefrou";
+}
+
+export function getCompanyAttestationConfigs(company?: Partial<CompanyRecord> | null): AttestationTemplatesConfig {
+  let jsonConfig: AttestationTemplatesConfig = {};
+  if (company?.attestation_templates_json) {
+    try {
+      jsonConfig = JSON.parse(company.attestation_templates_json);
+    } catch {}
+  }
+
+  const result: AttestationTemplatesConfig = {};
+  for (const type of Object.keys(DEFAULT_ATTESTATION_TEMPLATES)) {
+    const existing = jsonConfig[type];
+    const defaultBody = getTemplateForType(type, company, false);
+    const defaultTitle = ATTESTATION_TYPE_TITLES[type] || "ATTESTATION";
+    result[type] = {
+      title: existing?.title || defaultTitle,
+      objet: existing?.objet ?? "",
+      body: existing?.body || defaultBody,
+      signataire: existing?.signataire || "La Direction Générale",
+    };
+  }
+
+  return result;
+}
+
+export function getAttestationModelConfig(
+  type: string,
+  company?: Partial<CompanyRecord> | null,
+): AttestationTemplateConfigItem {
+  const configs = getCompanyAttestationConfigs(company);
+  return (
+    configs[type] || {
+      title: ATTESTATION_TYPE_TITLES[type] || "ATTESTATION",
+      objet: "",
+      body: DEFAULT_ATTESTATION_TEMPLATES[type] || DEFAULT_ATTESTATION_TEMPLATES.simple,
+      signataire: "La Direction Générale",
+    }
+  );
+}
+
 export function getTemplateForType(
   type: string,
   company?: Partial<AttestationTemplateSource> | null,
+  checkJson = true,
 ) {
+  if (checkJson && company?.attestation_templates_json) {
+    try {
+      const parsed = JSON.parse(company.attestation_templates_json);
+      if (parsed[type]?.body && typeof parsed[type].body === "string" && parsed[type].body.trim()) {
+        return parsed[type].body;
+      }
+    } catch {}
+  }
+
   const field = TEMPLATE_FIELD_BY_TYPE[type];
   const candidate = field ? company?.[field] : undefined;
   if (typeof candidate === "string" && candidate.trim()) {
@@ -76,7 +144,7 @@ export function buildAttestationContent(
     date_sortie: employee.date_sortie ? formatDate(employee.date_sortie) : "-",
     salaire: `${formatNumber(employee.salaire ?? 0)} MAD`,
     date_du_jour: formatDate(options?.referenceDate || new Date()),
-    ville: options?.ville || "Tanger",
+    ville: options?.ville || extractCityFromAddress(company?.address),
   };
 
   return interpolateTemplate(template, values).trim();
@@ -90,6 +158,7 @@ export function parseAttestationPayload(
   rawContent: string,
   fallbackType = "simple",
   fallbackDate = todayIso(),
+  defaultVille = "Sefrou",
 ): AttestationCustomPayload {
   const trimmed = (rawContent || "").trim();
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
@@ -100,9 +169,9 @@ export function parseAttestationPayload(
           title: parsed.title || ATTESTATION_TYPE_TITLES[fallbackType] || "ATTESTATION DE TRAVAIL",
           objet: parsed.objet || "",
           body: parsed.body || "",
-          ville: parsed.ville || "Tanger",
+          ville: parsed.ville || defaultVille,
           date: parsed.date || fallbackDate,
-          signataire: parsed.signataire || "La Direction",
+          signataire: parsed.signataire || "La Direction Générale",
         };
       }
     } catch {
@@ -114,8 +183,8 @@ export function parseAttestationPayload(
     title: ATTESTATION_TYPE_TITLES[fallbackType] || "ATTESTATION DE TRAVAIL",
     objet: "",
     body: rawContent,
-    ville: "Tanger",
+    ville: defaultVille,
     date: fallbackDate,
-    signataire: "La Direction",
+    signataire: "La Direction Générale",
   };
 }

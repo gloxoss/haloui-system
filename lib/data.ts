@@ -340,11 +340,12 @@ export function saveCompany(input: CompanyRecord, userId: number) {
         attestation_template_salary = @attestation_template_salary,
         attestation_template_visa = @attestation_template_visa,
         attestation_template_bank = @attestation_template_bank,
+        attestation_templates_json = COALESCE(@attestation_templates_json, attestation_templates_json),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1
+      WHERE id = @id
     `,
   ).run(input);
-  logAudit(userId, "update", "company", 1, input);
+  logAudit(userId, "update", "company", input.id || 1, input);
 }
 
 export function saveBranch(input: Partial<BranchRecord> & { id?: number }, userId: number) {

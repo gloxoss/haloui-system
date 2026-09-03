@@ -7,8 +7,8 @@ import { redirect } from "next/navigation";
 import { requireAdmin, requireAuth, requireSuperadmin, updateUserPassword } from "@/lib/auth";
 import { FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
 import { getCompany, getEmployeeById } from "@/lib/data";
-import { interpolateTemplate } from "@/lib/attestations";
-import { ACTIVE_COMPANY_COOKIE, getActiveCompanyId } from "@/lib/company";
+import { extractCityFromAddress, interpolateTemplate } from "@/lib/attestations";
+import { ACTIVE_COMPANY_COOKIE, getActiveCompany, getActiveCompanyId } from "@/lib/company";
 import {
   batchSaveDailyRevenue,
   bulkSaveProducts,
@@ -84,6 +84,11 @@ export async function saveCompanyAction(formData: FormData) {
       ice: String(formData.get("ice") || ""),
       logo_path: String(formData.get("logo_path") || ""),
       legal_notice: String(formData.get("legal_notice") || ""),
+      attestation_template_simple: String(formData.get("attestation_template_simple") || current.attestation_template_simple || ""),
+      attestation_template_salary: String(formData.get("attestation_template_salary") || current.attestation_template_salary || ""),
+      attestation_template_visa: String(formData.get("attestation_template_visa") || current.attestation_template_visa || ""),
+      attestation_template_bank: String(formData.get("attestation_template_bank") || current.attestation_template_bank || ""),
+      attestation_templates_json: String(formData.get("attestation_templates_json") || current.attestation_templates_json || ""),
     },
     session.user.id,
   );
@@ -437,22 +442,22 @@ export async function deleteEmployeeAction(formData: FormData) {
 
 export async function createAttestationAction(formData: FormData) {
   const session = await requireAuth();
-  const employeeId = Number(formData.get("employe_id"));
+  const employeeId = Number(formData.get("employee_id") || formData.get("employe_id"));
   const type = String(formData.get("type") || "simple");
   const date = String(formData.get("date") || todayIso());
-  const customTitle = String(formData.get("custom_title") || "").trim();
-  const customObjet = String(formData.get("custom_objet") || "").trim();
+  const customTitle = String(formData.get("title") || formData.get("custom_title") || "").trim();
+  const customObjet = String(formData.get("objet") || formData.get("custom_objet") || "").trim();
   const customBody = String(formData.get("custom_body") || "").trim();
-  const customVille = String(formData.get("custom_ville") || "").trim();
-  const customSignataire = String(formData.get("custom_signataire") || "").trim();
+  const company = await getActiveCompany();
+  const customVille = String(formData.get("ville") || formData.get("custom_ville") || "").trim() || extractCityFromAddress(company?.address);
+  const customSignataire = String(formData.get("signataire") || formData.get("custom_signataire") || "La Direction Générale").trim();
 
   let customContent: string | undefined = undefined;
   if (customBody) {
     const employee = getEmployeeById(employeeId);
-    const company = getCompany();
     const resolvedBody = employee
       ? interpolateTemplate(customBody, {
-          societe: company?.name?.trim() || "Entreprise Commerciale",
+          societe: company?.name?.trim() || "STE OURIDA STATION SARL",
           employe: `${employee.prenom} ${employee.nom}`.trim(),
           prenom: employee.prenom || "-",
           nom: employee.nom || "-",
@@ -462,7 +467,7 @@ export async function createAttestationAction(formData: FormData) {
           date_sortie: employee.date_sortie ? formatDate(employee.date_sortie) : "-",
           salaire: `${formatNumber(employee.salaire ?? 0)} MAD`,
           date_du_jour: formatDate(date),
-          ville: customVille || "Tanger",
+          ville: customVille,
         })
       : customBody;
 
@@ -470,9 +475,9 @@ export async function createAttestationAction(formData: FormData) {
       title: customTitle || undefined,
       objet: customObjet || undefined,
       body: resolvedBody,
-      ville: customVille || "Tanger",
+      ville: customVille,
       date,
-      signataire: customSignataire || "La Direction Générale",
+      signataire: customSignataire,
     });
   }
 

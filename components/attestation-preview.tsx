@@ -4,12 +4,17 @@ import * as React from "react";
 import { createAttestationAction } from "@/app/actions";
 import { PageHeading } from "@/components/page-heading";
 import { AppDateInput } from "@/components/ui/app-date-input";
-import { buildAttestationContent } from "@/lib/attestations";
+import {
+  buildAttestationContent,
+  extractCityFromAddress,
+  getAttestationModelConfig,
+} from "@/lib/attestations";
 import { ATTESTATION_TYPE_LABELS, ATTESTATION_TYPE_TITLES } from "@/lib/constants";
 import { useTranslation } from "@/lib/i18n";
 import { type CompanyRecord, type EmployeeRecord } from "@/lib/types";
 import { formatDate, todayIso } from "@/lib/utils";
 import {
+  Accordion,
   Badge,
   Button,
   Card,
@@ -27,12 +32,14 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
-  Award,
+  Building2,
+  Calendar,
+  CheckCircle2,
   FileCheck,
   FileText,
-  PenTool,
+  Lock,
   Printer,
-  RotateCcw,
+  ShieldCheck,
   Sparkles,
   User,
 } from "lucide-react";
@@ -55,417 +62,347 @@ const SIGNATAIRE_PRESETS = [
   "La Direction des Ressources Humaines",
   "Le Gérant",
   "Le Responsable Administratif",
+  "Le Chef d'Établissement",
 ];
 
 export function AttestationPreview({
   employees,
   company,
+  initialType = "simple",
 }: {
   employees: EmployeeRecord[];
   company: CompanyRecord;
   initialType?: string;
 }) {
   const { t, locale } = useTranslation();
+  const defaultCity = React.useMemo(() => extractCityFromAddress(company?.address), [company?.address]);
+
   const [employeeId, setEmployeeId] = React.useState<string>(() => String(employees[0]?.id ?? ""));
-  const [type, setType] = React.useState<string>("simple");
+  const [type, setType] = React.useState<string>(initialType);
   const [date, setDate] = React.useState(todayIso());
-  const [ville, setVille] = React.useState("Tanger");
-  const [title, setTitle] = React.useState(() => ATTESTATION_TYPE_TITLES.simple || "ATTESTATION DE TRAVAIL");
-  const [objet, setObjet] = React.useState("");
-  const [signataire, setSignataire] = React.useState("La Direction Générale");
-  const [bodyText, setBodyText] = React.useState("");
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [ville, setVille] = React.useState(defaultCity);
+
+  // Load configured model from company settings
+  const modelConfig = React.useMemo(() => {
+    return getAttestationModelConfig(type, company);
+  }, [type, company]);
+
+  const [title, setTitle] = React.useState(modelConfig.title);
+  const [objet, setObjet] = React.useState(modelConfig.objet || "");
+  const [signataire, setSignataire] = React.useState(modelConfig.signataire || "La Direction Générale");
+  const [customBody, setCustomBody] = React.useState<string | null>(null);
+
+  // Sync when template type changes
+  React.useEffect(() => {
+    setTitle(modelConfig.title);
+    setObjet(modelConfig.objet || "");
+    setSignataire(modelConfig.signataire || "La Direction Générale");
+    setCustomBody(null); // reset one-off customization
+  }, [modelConfig]);
 
   const currentEmployee = React.useMemo(() => {
     return employees.find((item) => String(item.id) === employeeId);
   }, [employees, employeeId]);
 
-  // Generate baseline text when employee, type, or date changes
-  React.useEffect(() => {
-    if (currentEmployee) {
-      const generated = buildAttestationContent(
-        {
-          prenom: currentEmployee.prenom,
-          nom: currentEmployee.nom,
-          cnss: currentEmployee.cnss,
-          date_entree: currentEmployee.date_entree,
-          date_sortie: currentEmployee.date_sortie,
-          salaire: currentEmployee.salaire,
-        },
-        type,
-        company,
-        { referenceDate: date, ville },
-      );
-      setBodyText(generated);
-    }
-  }, [employeeId, type, date, ville, company, currentEmployee]);
+  // Auto-generate interpolated body text using admin configured master template
+  const defaultInterpolatedBody = React.useMemo(() => {
+    if (!currentEmployee) return "";
+    return buildAttestationContent(currentEmployee, type, company, {
+      referenceDate: date,
+      ville,
+    });
+  }, [currentEmployee, type, company, date, ville]);
 
-  // Update default document title when type changes
-  const handleTypeChange = (newType: string | null) => {
-    if (!newType) return;
-    setType(newType);
-    const defaultTitle = ATTESTATION_TYPE_TITLES[newType] || "ATTESTATION OFFICIELLE";
-    setTitle(defaultTitle);
-  };
+  const activeBodyText = customBody !== null ? customBody : defaultInterpolatedBody;
 
-  // Helper to insert a variable chip at cursor position in textarea
-  const insertVariable = (value: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      setBodyText((prev) => prev + " " + value);
-      return;
-    }
+  const employeeOptions = React.useMemo(() => {
+    return employees.map((emp) => ({
+      value: String(emp.id),
+      label: `${emp.nom} ${emp.prenom}${emp.cnss ? ` (CNSS: ${emp.cnss})` : ""}`,
+    }));
+  }, [employees]);
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const current = bodyText;
-    const updated = current.substring(0, start) + value + current.substring(end);
-    setBodyText(updated);
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + value.length, start + value.length);
-    }, 50);
-  };
-
-  // Reset text to default template
-  const handleResetTemplate = () => {
-    if (currentEmployee) {
-      const generated = buildAttestationContent(
-        {
-          prenom: currentEmployee.prenom,
-          nom: currentEmployee.nom,
-          cnss: currentEmployee.cnss,
-          date_entree: currentEmployee.date_entree,
-          date_sortie: currentEmployee.date_sortie,
-          salaire: currentEmployee.salaire,
-        },
-        type,
-        company,
-        { referenceDate: date, ville },
-      );
-      setBodyText(generated);
-    }
-  };
+  const modelOptions = React.useMemo(() => {
+    return Object.entries(ATTESTATION_TYPE_LABELS).map(([key, label]) => ({
+      value: key,
+      label: String(locale === "ar" ? ATTESTATION_TYPE_LABELS_AR[key] || label : label),
+    }));
+  }, [locale]);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <PageHeading
-        eyebrow={t.personnel.attestations}
-        title={locale === "ar" ? "إنشاء وتخصيص الشهادات والوثائق" : "Éditeur d'Attestations & Documents RH"}
-        description={
-          locale === "ar"
-            ? "اختر نوع الشهادة، نسق نص الوثيقة وموضع العناصر، ثم عاين النتيجة مباشرة قبل الطباعة."
-            : "Personnalisez la mise en page, modifiez le texte libre, ajoutez des mentions légales et imprimez directement."
-        }
+        eyebrow="Ressources Humaines"
+        title="Générateur d'Attestations Officielles"
+        description="Émission rapide et impression de documents conformes pour vos collaborateurs."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        {/* Left Column: Interactive Form & Text Area Editor */}
-        <Card className="p-5">
-          <form action={createAttestationAction}>
-            <input type="hidden" name="employe_id" value={employeeId} />
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] items-start">
+        {/* Left Column: Client generator controls */}
+        <Card radius="lg" p="lg" withBorder className="bg-[var(--card)] shadow-sm">
+          <form action={createAttestationAction} className="space-y-5">
+            <input type="hidden" name="employee_id" value={employeeId} />
             <input type="hidden" name="type" value={type} />
             <input type="hidden" name="date" value={date} />
-            <input type="hidden" name="custom_title" value={title} />
-            <input type="hidden" name="custom_objet" value={objet} />
-            <input type="hidden" name="custom_body" value={bodyText} />
-            <input type="hidden" name="custom_ville" value={ville} />
-            <input type="hidden" name="custom_signataire" value={signataire} />
+            <input type="hidden" name="title" value={title} />
+            <input type="hidden" name="objet" value={objet} />
+            <input type="hidden" name="ville" value={ville} />
+            <input type="hidden" name="signataire" value={signataire} />
+            <input type="hidden" name="custom_body" value={activeBodyText} />
 
-            <Stack gap="md">
-              {/* Step 1: Employee and Document Type */}
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                <Select
-                  label={t.attestations.employee}
-                  placeholder={locale === "ar" ? "اختر الموظف" : "Sélectionnez un employé"}
-                  data={employees.map((emp) => ({
-                    value: String(emp.id),
-                    label: `${emp.numero} - ${emp.prenom} ${emp.nom}`,
-                  }))}
-                  value={employeeId}
-                  onChange={(val) => setEmployeeId(val || "")}
-                  required
-                  radius="md"
-                  leftSection={<User size={16} />}
-                />
+            {/* Step 1: Employee selection */}
+            <div>
+              <Group justify="space-between" mb={6}>
+                <Text size="xs" fw={800} tt="uppercase" c="blue.6">
+                  1. Salarié bénéficiaire
+                </Text>
+                {currentEmployee?.cnss ? (
+                  <Badge size="xs" variant="light" color="blue">
+                    CNSS : {currentEmployee.cnss}
+                  </Badge>
+                ) : null}
+              </Group>
+              <Select
+                data={employeeOptions}
+                value={employeeId}
+                onChange={(val) => setEmployeeId(val ?? "")}
+                placeholder="Sélectionnez un salarié..."
+                searchable
+                nothingFoundMessage="Aucun employé trouvé"
+                leftSection={<User size={16} className="text-gray-400" />}
+                size="sm"
+                radius="md"
+              />
+            </div>
 
-                <Select
-                  label={t.attestations.type}
-                  placeholder={locale === "ar" ? "نوع الوثيقة" : "Type de document"}
-                  data={Object.entries(ATTESTATION_TYPE_LABELS).map(([key, label]) => ({
-                    value: key,
-                    label: locale === "ar" && ATTESTATION_TYPE_LABELS_AR[key] ? ATTESTATION_TYPE_LABELS_AR[key] : label,
-                  }))}
-                  value={type}
-                  onChange={handleTypeChange}
-                  required
-                  radius="md"
-                  leftSection={<FileText size={16} />}
-                />
-              </SimpleGrid>
+            {/* Step 2: Model selection */}
+            <div>
+              <Group justify="space-between" mb={6}>
+                <Text size="xs" fw={800} tt="uppercase" c="blue.6">
+                  2. Type de document
+                </Text>
+                <Tooltip label="Modèle conforme configuré dans les Paramètres">
+                  <Badge size="xs" variant="dot" color="teal">
+                    Modèle officiel
+                  </Badge>
+                </Tooltip>
+              </Group>
+              <Select
+                data={modelOptions}
+                value={type}
+                onChange={(val) => setType(val ?? "simple")}
+                leftSection={<FileText size={16} className="text-gray-400" />}
+                size="sm"
+                radius="md"
+              />
+            </div>
 
-              {/* Step 2: Document Elements (Title, Objet, City, Signatory) */}
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                <TextInput
-                  label={locale === "ar" ? "عنوان الوثيقة (بالحجم العريض)" : "Titre officiel du document"}
-                  placeholder="EX: ATTESTATION DE TRAVAIL"
-                  value={title}
-                  onChange={(e) => setTitle(e.currentTarget.value)}
-                  required
-                  radius="md"
-                />
-
-                <TextInput
-                  label={locale === "ar" ? "الموضوع / المرجع (اختياري)" : "Objet ou Référence (optionnel)"}
-                  placeholder="Ex : Objet : Demande de visa touristique"
-                  value={objet}
-                  onChange={(e) => setObjet(e.currentTarget.value)}
-                  radius="md"
-                />
-              </SimpleGrid>
-
-              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-                <TextInput
-                  label={locale === "ar" ? "مدينة التحرير" : "Ville d'émission"}
-                  value={ville}
-                  onChange={(e) => setVille(e.currentTarget.value)}
-                  radius="md"
-                />
-
+            {/* Step 3: Quick document parameters */}
+            <div className="bg-[var(--surface-soft)] p-3 rounded-lg border">
+              <Text size="xs" fw={700} c="dimmed" mb={3} tt="uppercase">
+                3. Informations d'émission
+              </Text>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
                 <div>
-                  <Text size="xs" fw={700} c="dimmed" mb={4}>
-                    {locale === "ar" ? "تاريخ التحرير" : "Date du document"}
+                  <Text size="11px" fw={600} mb={2}>
+                    Date d'émission
                   </Text>
-                  <AppDateInput value={date} onChange={setDate} clearable={false} />
+                  <AppDateInput value={date} onChange={setDate} />
                 </div>
-
-                <Select
-                  label={locale === "ar" ? "الموقع على الوثيقة" : "Signataire habilité"}
-                  data={SIGNATAIRE_PRESETS.map((s) => ({ value: s, label: s }))}
-                  value={signataire}
-                  onChange={(val) => setSignataire(val || "La Direction Générale")}
-                  radius="md"
-                />
-              </SimpleGrid>
-
-              <Divider my="xs" />
-
-              {/* Step 3: Interactive Body Text Editor with Variable Insert Chips */}
-              <div>
-                <Group justify="space-between" align="center" mb={6} wrap="wrap">
-                  <Group gap={6}>
-                    <PenTool size={16} className="text-blue-600" />
-                    <Text size="sm" fw={800}>
-                      {locale === "ar" ? "نص الوثيقة والتنسيق المخصص" : "Texte et mise en forme de l'attestation"}
-                    </Text>
-                  </Group>
-
-                  <Button
-                    variant="subtle"
-                    size="compact-xs"
-                    color="gray"
-                    leftSection={<RotateCcw size={12} />}
-                    onClick={handleResetTemplate}
-                    type="button"
-                  >
-                    {locale === "ar" ? "إعادة تعيين للنموذج" : "Rétablir le modèle"}
-                  </Button>
-                </Group>
-
-                {/* Variable insertion buttons */}
-                <Paper
-                  withBorder
-                  p="xs"
-                  radius="md"
-                  mb="xs"
-                  style={{
-                    background: "var(--surface-soft)",
-                    borderColor: "var(--border)",
-                  }}
-                >
-                  <Text size="11px" fw={700} c="dimmed" mb={4}>
-                    {locale === "ar" ? "إدراج معلومات الموظف بنقرة واحدة :" : "Insérer rapidement une variable :"}
+                <div>
+                  <Text size="11px" fw={600} mb={2}>
+                    Ville d'émission
                   </Text>
-                  <Group gap={6} wrap="wrap">
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="blue"
-                      radius="xl"
-                      onClick={() => insertVariable(currentEmployee ? `${currentEmployee.prenom} ${currentEmployee.nom}` : "{{employe}}")}
-                      type="button"
-                    >
-                      + Nom complet
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="teal"
-                      radius="xl"
-                      onClick={() => insertVariable(currentEmployee?.cnss || "{{cnss}}")}
-                      type="button"
-                    >
-                      + N° CNSS
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="cyan"
-                      radius="xl"
-                      onClick={() => insertVariable(currentEmployee?.date_entree ? formatDate(currentEmployee.date_entree) : "{{date_entree}}")}
-                      type="button"
-                    >
-                      + Date d'embauche
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="indigo"
-                      radius="xl"
-                      onClick={() => insertVariable(currentEmployee?.salaire ? `${currentEmployee.salaire} MAD` : "{{salaire}}")}
-                      type="button"
-                    >
-                      + Salaire
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="grape"
-                      radius="xl"
-                      onClick={() => insertVariable(company.name || "{{societe}}")}
-                      type="button"
-                    >
-                      + Raison sociale
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      color="orange"
-                      radius="xl"
-                      onClick={() => insertVariable(formatDate(date))}
-                      type="button"
-                    >
-                      + Date du jour
-                    </Button>
-                  </Group>
-                </Paper>
+                  <TextInput
+                    value={ville}
+                    onChange={(e) => setVille(e.target.value)}
+                    size="xs"
+                    placeholder="Ville..."
+                  />
+                </div>
+                <div>
+                  <Text size="11px" fw={600} mb={2}>
+                    Objet spécifique (facultatif)
+                  </Text>
+                  <TextInput
+                    value={objet}
+                    onChange={(e) => setObjet(e.target.value)}
+                    placeholder="Ex: Demande de visa Espagne"
+                    size="xs"
+                  />
+                </div>
+                <div>
+                  <Text size="11px" fw={600} mb={2}>
+                    Signataire habilité
+                  </Text>
+                  <Select
+                    data={SIGNATAIRE_PRESETS}
+                    value={signataire}
+                    onChange={(val) => setSignataire(val || "La Direction Générale")}
+                    size="xs"
+                    searchable
+                  />
+                </div>
+              </SimpleGrid>
+            </div>
 
-                {/* Free Textarea */}
-                <textarea
-                  ref={textareaRef}
-                  value={bodyText}
-                  onChange={(e) => setBodyText(e.target.value)}
-                  rows={9}
-                  placeholder="Rédigez ou personnalisez le texte de l'attestation ici..."
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-[14px] leading-relaxed text-[var(--foreground)] focus:border-blue-500 focus:outline-none"
-                  style={{
-                    fontFamily: "inherit",
-                    resize: "vertical",
-                  }}
-                />
-              </div>
+            {/* Optional one-off wording adjustment (collapsed by default) */}
+            <Accordion variant="separated" radius="md">
+              <Accordion.Item value="custom-text">
+                <Accordion.Control icon={<FileCheck size={14} />}>
+                  <Text size="xs" fw={600} c="dimmed">
+                    Ajuster ponctuellement le texte (optionnel)
+                  </Text>
+                </Accordion.Control>
+                <Accordion.Panel>
+                  <Text size="11px" c="dimmed" mb={2}>
+                    Ce texte est déjà automatiquement rempli avec les données du salarié. Vous pouvez ajouter une précision ponctuelle si nécessaire :
+                  </Text>
+                  <Textarea
+                    value={activeBodyText}
+                    onChange={(e) => setCustomBody(e.target.value)}
+                    minRows={5}
+                    autosize
+                    size="xs"
+                  />
+                  {customBody !== null && (
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="xs"
+                      mt="xs"
+                      onClick={() => setCustomBody(null)}
+                    >
+                      Rétablir le texte officiel
+                    </Button>
+                  )}
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
 
-              {/* Submit Action */}
-              <Button
-                type="submit"
-                size="md"
-                radius="xl"
-                color="blue"
-                leftSection={<Printer size={18} />}
-                style={{ fontWeight: 800 }}
-              >
-                {locale === "ar" ? "حفظ وطباعة الوثيقة الرسمية" : "Créer et Imprimer le document"}
-              </Button>
-            </Stack>
+            {/* Primary Action Button */}
+            <Button
+              type="submit"
+              size="md"
+              radius="md"
+              fullWidth
+              color="blue"
+              leftSection={<Printer size={18} />}
+              disabled={!currentEmployee}
+              style={{ fontWeight: 800 }}
+            >
+              Générer et Imprimer le document
+            </Button>
+
+            <Group gap="xs" justify="center">
+              <ShieldCheck size={14} className="text-teal-600" />
+              <Text size="11px" c="dimmed">
+                Modèle certifié et archivé automatiquement dans le dossier du salarié.
+              </Text>
+            </Group>
           </form>
         </Card>
 
-        {/* Right Column: High-Fidelity A4 Paper Live Preview */}
-        <Card className="p-5 flex flex-col justify-between">
-          <div>
-            <Group justify="space-between" align="center" mb="md">
-              <div>
-                <p className="text-xs font-semibold text-[var(--muted)]">{t.attestations.preview}</p>
-                <h3 className="text-lg font-black">{locale === "ar" ? "معاينة الورقة (A4 مباشر)" : "Aperçu A4 en temps réel"}</h3>
-              </div>
-              <Badge variant="light" color="blue" size="md">
-                {locale === "ar" ? "معاينة مطابقة للأصل" : "Conforme à l'impression"}
-              </Badge>
+        {/* Right Column: Live A4 Printable Preview */}
+        <div>
+          <Group justify="space-between" mb="xs">
+            <Group gap="xs">
+              <ThemeIcon size={24} radius="sm" color="teal" variant="light">
+                <FileCheck size={14} />
+              </ThemeIcon>
+              <Text size="xs" fw={800} tt="uppercase" c="dimmed">
+                Aperçu officiel en direct (Format A4)
+              </Text>
             </Group>
+            <Badge size="sm" variant="light" color="teal">
+              Prêt pour impression
+            </Badge>
+          </Group>
 
-            {/* Simulated A4 Paper */}
-            <div
-              className="rounded-2xl border p-8 shadow-sm"
-              style={{
-                background: "#ffffff",
-                borderColor: "var(--border-strong)",
-                color: "#1e293b",
-                minHeight: 520,
-              }}
-            >
-              {/* Paper Header */}
-              <div className="flex items-center justify-between border-b pb-4">
+          <Paper
+            radius="md"
+            p="xl"
+            withBorder
+            className="bg-white text-gray-900 shadow-md min-h-[560px] flex flex-col justify-between"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "13px",
+              lineHeight: 1.8,
+            }}
+          >
+            <div>
+              {/* Header */}
+              <div className="border-b-2 border-gray-200 pb-4 mb-6 flex justify-between items-center">
                 <div>
-                  <div className="text-[14px] font-black uppercase tracking-wider text-slate-900">
-                    {company.name}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    Département des Ressources Humaines
-                  </div>
+                  <Text size="sm" fw={900} tt="uppercase" c="blue.9" style={{ letterSpacing: "-0.01em" }}>
+                    {company?.name || "STE OURIDA STATION SARL"}
+                  </Text>
+                  <Text size="11px" c="dimmed" mt={1}>
+                    {company?.address || "Ourida 4, Station Les Cerises, Route d'El Menzel, Sefrou"}
+                  </Text>
+                  {company?.phone && (
+                    <Text size="11px" c="dimmed">
+                      Tél : {company.phone}
+                    </Text>
+                  )}
                 </div>
-                <div className="text-right text-[12px] font-semibold text-slate-500">
-                  {ville}, le {formatDate(date)}
+                <div className="text-right">
+                  <Badge size="xs" color="gray" variant="outline">
+                    A4 Officiel
+                  </Badge>
                 </div>
               </div>
 
-              {/* Optional Objet */}
+              {/* City and Date */}
+              <div className="text-right text-xs text-gray-600 font-medium mb-6">
+                {ville}, le {formatDate(date)}
+              </div>
+
+              {/* Title */}
+              <div className="text-center my-6">
+                <Text
+                  fw={900}
+                  size="md"
+                  tt="uppercase"
+                  className="tracking-wider inline-block border-b-2 border-gray-800 pb-1"
+                >
+                  {title}
+                </Text>
+              </div>
+
+              {/* Objet */}
               {objet ? (
-                <div className="mt-4 text-[12.5px] font-semibold italic text-slate-600">
+                <div className="italic text-xs font-semibold text-gray-700 mb-6 bg-gray-50 p-2 rounded border">
                   {objet}
                 </div>
               ) : null}
 
-              {/* Centered Document Title */}
-              <div className="my-8 text-center">
-                <h2 className="inline-block text-[19px] font-black uppercase tracking-wider text-slate-900 border-b-2 border-slate-900 pb-1">
-                  {title || "ATTESTATION DE TRAVAIL"}
-                </h2>
-              </div>
-
-              {/* Formatted Body Text */}
-              <div className="my-6">
-                <p className="whitespace-pre-line text-[14px] leading-relaxed text-justify text-slate-800">
-                  {bodyText || (locale === "ar" ? "يرجى كتابة نص الشهادة في الحقل المقابل..." : "Saisissez ou modifiez le texte dans l'éditeur...")}
-                </p>
-              </div>
-
-              {/* Official Closing Mention */}
-              <div className="mt-8 text-[12.5px] italic text-slate-600">
-                La présente attestation est délivrée à l'intéressé(e) pour servir et valoir ce que de droit.
-              </div>
-
-              {/* Signature Box */}
-              <div className="mt-10 flex justify-end">
-                <div className="w-56 rounded-xl border border-dashed border-slate-300 p-3 text-center">
-                  <div className="text-[11.5px] font-bold uppercase tracking-wider text-slate-800">
-                    {signataire}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    Signature & Cachet Officiel
-                  </div>
-                  <div className="h-16" />
-                </div>
+              {/* Document Body */}
+              <div className="whitespace-pre-line text-justify text-sm text-gray-800 font-normal leading-relaxed">
+                {activeBodyText || "Veuillez sélectionner un salarié pour prévisualiser le document."}
               </div>
             </div>
-          </div>
 
-          <div className="mt-4 text-center text-xs text-[var(--muted)]">
-            {locale === "ar"
-              ? "سيتم حفظ هذه الوثيقة في أرشيف الموظف ويمكن إعادة طباعتها في أي وقت."
-              : "Cette attestation sera archivée dans la fiche de l'employé et pourra être réimprimée à tout moment."}
-          </div>
-        </Card>
+            {/* Signature & Legal Footer */}
+            <div className="mt-12">
+              <div className="flex justify-end mb-8">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center w-56 bg-gray-50/70">
+                  <Text size="11px" fw={800} tt="uppercase" c="gray.7">
+                    {signataire}
+                  </Text>
+                  <div className="h-14 flex items-center justify-center text-[10px] text-gray-400">
+                    (Signature & Cachet)
+                  </div>
+                </div>
+              </div>
+
+              {/* Legal Footer */}
+              <div className="border-t pt-3 text-center text-[10px] text-gray-400 leading-tight">
+                {company?.legal_notice || `${company?.name} — ICE : ${company?.ice} — RC : ${company?.rc} — IF : ${company?.if_number} — Patente : ${company?.tp}`}
+              </div>
+            </div>
+          </Paper>
+        </div>
       </div>
     </div>
   );

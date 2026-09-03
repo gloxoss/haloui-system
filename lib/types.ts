@@ -95,8 +95,18 @@ export type CompanyRecord = {
   attestation_template_salary: string;
   attestation_template_visa: string;
   attestation_template_bank: string;
+  attestation_templates_json?: string;
   updated_at: string;
 };
+
+export type AttestationTemplateConfigItem = {
+  title: string;
+  objet?: string;
+  body: string;
+  signataire?: string;
+};
+
+export type AttestationTemplatesConfig = Record<string, AttestationTemplateConfigItem>;
 
 export type BranchRecord = {
   id: number;

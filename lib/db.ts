@@ -344,6 +344,7 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "company", "attestation_template_salary", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_visa", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_bank", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "company", "attestation_templates_json", "TEXT DEFAULT ''");
   ensureColumnExists(db, "users", "is_superadmin", "INTEGER NOT NULL DEFAULT 0");
   ensureColumnExists(db, "users", "hidden_from_admin", "INTEGER NOT NULL DEFAULT 0");
 

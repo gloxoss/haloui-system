@@ -2,222 +2,366 @@
 
 import * as React from "react";
 import {
+  Badge,
+  Button,
+  Card,
+  Group,
+  Paper,
+  Select,
+  Stack,
+  Tabs,
+  Text,
+  TextInput,
+  Textarea,
+  ThemeIcon,
+} from "@mantine/core";
+import {
   Building2,
   Calendar,
+  CheckCircle2,
   Clock,
   Coins,
+  FileCheck,
   FileText,
   Hash,
+  PenTool,
   RotateCcw,
   Sparkles,
   User,
 } from "lucide-react";
-import { DEFAULT_ATTESTATION_TEMPLATES } from "@/lib/constants";
-import { useTranslation } from "@/lib/i18n";
 
-interface TemplateConfig {
-  key: "attestation_template_simple" | "attestation_template_salary" | "attestation_template_visa" | "attestation_template_bank";
-  labelFr: string;
-  labelAr: string;
-  defaultText: string;
-  descFr: string;
-  descAr: string;
-}
+import {
+  ATTESTATION_TYPE_LABELS,
+  ATTESTATION_TYPE_TITLES,
+  DEFAULT_ATTESTATION_TEMPLATES,
+} from "@/lib/constants";
+import { getCompanyAttestationConfigs, interpolateTemplate } from "@/lib/attestations";
+import { type AttestationTemplateConfigItem, type AttestationTemplatesConfig, type CompanyRecord } from "@/lib/types";
 
-const TEMPLATES: TemplateConfig[] = [
-  {
-    key: "attestation_template_simple",
-    labelFr: "Attestation simple",
-    labelAr: "شهادة عمل عادية",
-    defaultText: DEFAULT_ATTESTATION_TEMPLATES.simple,
-    descFr: "Modèle standard d'attestation de travail sans mention financière.",
-    descAr: "النموذج القياسي لشهادة العمل بدون ذكر الأجر الشهري.",
-  },
-  {
-    key: "attestation_template_salary",
-    labelFr: "Attestation avec salaire",
-    labelAr: "شهادة عمل مع تحديد الصولد (الأجر)",
-    defaultText: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
-    descFr: "Attestation certifiant l'emploi et le salaire mensuel brut perçu.",
-    descAr: "شهادة عمل رسمية مع تحديد الأجر الشهري الإجمالي.",
-  },
-  {
-    key: "attestation_template_visa",
-    labelFr: "Attestation pour visa",
-    labelAr: "شهادة عمل لطلب الڤيزا (Visa)",
-    defaultText: DEFAULT_ATTESTATION_TEMPLATES.visa,
-    descFr: "Mention légale pour dossiers de demande de visa ou consulat.",
-    descAr: "صيغة قانونية مخصصة لملفات طلبات التأشيرة والقنصليات.",
-  },
-  {
-    key: "attestation_template_bank",
-    labelFr: "Attestation pour banque",
-    labelAr: "شهادة عمل لفتح حساب أو سلف بنكي",
-    defaultText: DEFAULT_ATTESTATION_TEMPLATES.banque,
-    descFr: "Attestation détaillée pour ouverture de compte ou dossier de crédit.",
-    descAr: "شهادة مفصلة موجهة للأبناك لفتح الحساب أو ملفات التمويل.",
-  },
+const VARIABLE_CHIPS = [
+  { tag: "{{societe}}", label: "Société", icon: Building2 },
+  { tag: "{{employe}}", label: "Salarié", icon: User },
+  { tag: "{{cnss}}", label: "N° CNSS", icon: Hash },
+  { tag: "{{cin}}", label: "N° CIN", icon: Hash },
+  { tag: "{{poste}}", label: "Poste", icon: User },
+  { tag: "{{date_entree}}", label: "Date d'entrée", icon: Calendar },
+  { tag: "{{salaire}}", label: "Salaire", icon: Coins },
+  { tag: "{{date_du_jour}}", label: "Date du jour", icon: Clock },
+  { tag: "{{ville}}", label: "Ville", icon: Building2 },
 ];
 
-const VARIABLE_TAGS = [
-  { tag: "{{societe}}", labelFr: "Société", labelAr: "الشركة", icon: Building2, descFr: "Nom légal de votre entreprise", descAr: "الاسم القانوني للشركة" },
-  { tag: "{{employe}}", labelFr: "Salarié", labelAr: "المستخدم", icon: User, descFr: "Nom et prénom de l'employé", descAr: "الاسم الكامل للمستخدم" },
-  { tag: "{{cnss}}", labelFr: "N° CNSS", labelAr: "رقم CNSS", icon: Hash, descFr: "Numéro d'immatriculation CNSS", descAr: "رقم التسجيل فالضمان الاجتماعي" },
-  { tag: "{{date_entree}}", labelFr: "Date d'entrée", labelAr: "تاريخ الدخول", icon: Calendar, descFr: "Date d'embauche du salarié", descAr: "تاريخ بداية العمل" },
-  { tag: "{{salaire}}", labelFr: "Salaire", labelAr: "الأجر الصافي", icon: Coins, descFr: "Montant du salaire mensuel brut", descAr: "مبلغ الأجر الشهري" },
-  { tag: "{{date_du_jour}}", labelFr: "Date du jour", labelAr: "تاريخ اليوم", icon: Clock, descFr: "Date d'émission de l'attestation", descAr: "تاريخ تحرير الشهادة" },
+const SIGNATAIRE_PRESETS = [
+  "La Direction Générale",
+  "Le Gérant",
+  "La Direction des Ressources Humaines",
+  "Le Responsable Administratif",
+  "Le Chef d'Établissement",
 ];
+
+const SAMPLE_DATA = {
+  societe: "STE OURIDA STATION SARL",
+  employe: "Mohammed Benjelloun",
+  prenom: "Mohammed",
+  nom: "Benjelloun",
+  cnss: "5298204",
+  cin: "C123456",
+  poste: "Chef de Station",
+  date_entree: "15/01/2022",
+  date_sortie: "31/12/2025",
+  salaire: "6 500,00 MAD",
+  date_du_jour: new Date().toLocaleDateString("fr-FR"),
+  ville: "Sefrou",
+};
 
 export function AttestationTemplateEditor({
   initialValues,
 }: {
-  initialValues: {
-    attestation_template_simple?: string;
-    attestation_template_salary?: string;
-    attestation_template_visa?: string;
-    attestation_template_bank?: string;
-  };
+  initialValues: Partial<CompanyRecord>;
 }) {
-  const { t, locale } = useTranslation();
+  const initialConfigs = React.useMemo(() => {
+    return getCompanyAttestationConfigs(initialValues);
+  }, [initialValues]);
 
-  const [values, setValues] = React.useState({
-    attestation_template_simple: initialValues.attestation_template_simple || DEFAULT_ATTESTATION_TEMPLATES.simple,
-    attestation_template_salary: initialValues.attestation_template_salary || DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
-    attestation_template_visa: initialValues.attestation_template_visa || DEFAULT_ATTESTATION_TEMPLATES.visa,
-    attestation_template_bank: initialValues.attestation_template_bank || DEFAULT_ATTESTATION_TEMPLATES.banque,
-  });
+  const [configs, setConfigs] = React.useState<AttestationTemplatesConfig>(initialConfigs);
+  const [activeTab, setActiveTab] = React.useState<string>("simple");
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  const textareaRefs = {
-    attestation_template_simple: React.useRef<HTMLTextAreaElement>(null),
-    attestation_template_salary: React.useRef<HTMLTextAreaElement>(null),
-    attestation_template_visa: React.useRef<HTMLTextAreaElement>(null),
-    attestation_template_bank: React.useRef<HTMLTextAreaElement>(null),
+  const modelKeys = Object.keys(DEFAULT_ATTESTATION_TEMPLATES);
+  const currentModel = configs[activeTab] || {
+    title: ATTESTATION_TYPE_TITLES[activeTab] || "ATTESTATION",
+    objet: "",
+    body: DEFAULT_ATTESTATION_TEMPLATES[activeTab] || "",
+    signataire: "La Direction Générale",
   };
 
-  const handleInsertTag = (
-    key: TemplateConfig["key"],
-    tag: string
-  ) => {
-    const textarea = textareaRefs[key].current;
-    const currentVal = values[key] ?? "";
+  const updateCurrentModel = (patch: Partial<AttestationTemplateConfigItem>) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [activeTab]: {
+        ...currentModel,
+        ...patch,
+      },
+    }));
+  };
 
-    if (!textarea) {
-      setValues((prev) => ({ ...prev, [key]: currentVal + tag }));
+  const handleInsertTag = (tag: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      updateCurrentModel({ body: (currentModel.body || "") + " " + tag });
       return;
     }
-
-    const start = textarea.selectionStart ?? currentVal.length;
-    const end = textarea.selectionEnd ?? currentVal.length;
-
-    const nextVal = currentVal.substring(0, start) + tag + currentVal.substring(end);
-    setValues((prev) => ({ ...prev, [key]: nextVal }));
-
+    const start = el.selectionStart ?? currentModel.body.length;
+    const end = el.selectionEnd ?? currentModel.body.length;
+    const current = currentModel.body || "";
+    const next = current.substring(0, start) + tag + current.substring(end);
+    updateCurrentModel({ body: next });
     requestAnimationFrame(() => {
-      textarea.focus();
-      const nextPos = start + tag.length;
-      textarea.setSelectionRange(nextPos, nextPos);
+      el.focus();
+      el.setSelectionRange(start + tag.length, start + tag.length);
     });
   };
 
-  const handleReset = (key: TemplateConfig["key"], defaultText: string) => {
-    setValues((prev) => ({ ...prev, [key]: defaultText }));
-    const textarea = textareaRefs[key].current;
-    if (textarea) {
-      textarea.focus();
-    }
+  const handleResetCurrent = () => {
+    updateCurrentModel({
+      title: ATTESTATION_TYPE_TITLES[activeTab] || "ATTESTATION",
+      objet: "",
+      body: DEFAULT_ATTESTATION_TEMPLATES[activeTab] || "",
+      signataire: "La Direction Générale",
+    });
   };
 
+  // Preview interpolation
+  const previewText = interpolateTemplate(currentModel.body || "", {
+    ...SAMPLE_DATA,
+    societe: initialValues.name || SAMPLE_DATA.societe,
+  });
+
   return (
-    <div className="grid gap-5 rounded-2xl border border-[var(--border)] bg-[var(--background-alt)] p-4 sm:p-5">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--border)] pb-3.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <FileText size={18} className="text-[var(--accent)]" />
-            <h4 className="text-base font-black text-[var(--foreground)]">{t.attestations.editorTitle}</h4>
+    <Card radius="md" p="md" withBorder className="bg-[var(--surface-soft)]">
+      {/* Hidden inputs to save into database */}
+      <input
+        type="hidden"
+        name="attestation_templates_json"
+        value={JSON.stringify(configs)}
+      />
+      <input
+        type="hidden"
+        name="attestation_template_simple"
+        value={configs.simple?.body || ""}
+      />
+      <input
+        type="hidden"
+        name="attestation_template_salary"
+        value={configs["avec-salaire"]?.body || ""}
+      />
+      <input
+        type="hidden"
+        name="attestation_template_visa"
+        value={configs.visa?.body || ""}
+      />
+      <input
+        type="hidden"
+        name="attestation_template_bank"
+        value={configs.banque?.body || ""}
+      />
+
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start" wrap="wrap">
+          <div>
+            <Group gap="xs">
+              <ThemeIcon size={28} radius="md" color="blue" variant="light">
+                <FileCheck size={16} />
+              </ThemeIcon>
+              <Text fw={800} size="md">
+                Modèles Maîtres d'Attestations (10 Modèles Officiels)
+              </Text>
+            </Group>
+            <Text size="xs" c="dimmed" mt={2}>
+              Configurez ici les textes, titres et objets légaux qui seront utilisés par vos collaborateurs lors de l'émission d'attestations.
+            </Text>
           </div>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">
-            {t.attestations.editorDesc}
-          </p>
-        </div>
-      </div>
+          <Badge variant="light" color="blue">
+            Studio Administrateur
+          </Badge>
+        </Group>
 
-      <div className="grid gap-6">
-        {TEMPLATES.map((tmpl) => {
-          const val = values[tmpl.key];
-          const textareaRef = textareaRefs[tmpl.key];
-          const label = locale === "ar" ? tmpl.labelAr : tmpl.labelFr;
-          const description = locale === "ar" ? tmpl.descAr : tmpl.descFr;
+        {/* Tab selection for the 10 models */}
+        <Tabs value={activeTab} onChange={(val) => val && setActiveTab(val)}>
+          <Tabs.List style={{ flexWrap: "wrap", gap: 4 }}>
+            {modelKeys.map((key) => {
+              const label = ATTESTATION_TYPE_LABELS[key] || key;
+              return (
+                <Tabs.Tab key={key} value={key} style={{ fontSize: "12px", fontWeight: 700 }}>
+                  {label}
+                </Tabs.Tab>
+              );
+            })}
+          </Tabs.List>
+        </Tabs>
 
-          return (
-            <div
-              key={tmpl.key}
-              className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs"
-            >
-              {/* Card Header: Title + Reset Button */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h5 className="text-sm font-extrabold text-[var(--foreground)]">{label}</h5>
-                  <p className="text-[11px] text-[var(--muted)]">{description}</p>
-                </div>
+        {/* Editor for current selected model */}
+        <div className="grid gap-4 lg:grid-cols-2 mt-2">
+          {/* Left: Configuration form */}
+          <Stack gap="xs">
+            <Group grow align="flex-start">
+              <TextInput
+                label="Titre officiel imprimé"
+                description="Titre figurant en haut du document"
+                value={currentModel.title}
+                onChange={(e) => updateCurrentModel({ title: e.target.value })}
+                placeholder="Ex: ATTESTATION DE TRAVAIL"
+                size="xs"
+              />
+              <TextInput
+                label="Objet ou Référence par défaut (facultatif)"
+                description="Ex: Objet : Demande de visa"
+                value={currentModel.objet || ""}
+                onChange={(e) => updateCurrentModel({ objet: e.target.value })}
+                placeholder="Ex: Objet : Dossier d'obtention de visa"
+                size="xs"
+              />
+            </Group>
 
-                <button
-                  type="button"
-                  onClick={() => handleReset(tmpl.key, tmpl.defaultText)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-strong)] hover:bg-[var(--card)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
-                  title={t.attestations.defaultModel}
+            <Group grow align="flex-start">
+              <Select
+                label="Signataire habilité par défaut"
+                description="Mention figurant sous le cadre de signature"
+                data={SIGNATAIRE_PRESETS}
+                value={currentModel.signataire || "La Direction Générale"}
+                onChange={(val) => updateCurrentModel({ signataire: val || "La Direction Générale" })}
+                size="xs"
+                searchable
+              />
+              <div className="flex items-end justify-end h-full pt-5">
+                <Button
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  leftSection={<RotateCcw size={13} />}
+                  onClick={handleResetCurrent}
                 >
-                  <RotateCcw size={12} strokeWidth={2} />
-                  <span>{t.attestations.defaultModel}</span>
-                </button>
+                  Rétablir ce modèle
+                </Button>
               </div>
+            </Group>
 
-              {/* Dynamic Variables Toolbar */}
-              <div className="mt-3 rounded-xl border border-[var(--border)]/60 bg-[var(--surface-soft)]/50 p-2.5">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Sparkles size={13} className="text-[var(--accent)]" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                    {t.attestations.insertVariables}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {VARIABLE_TAGS.map((v) => {
-                    const Icon = v.icon;
-                    const tagLabel = locale === "ar" ? v.labelAr : v.labelFr;
-                    const tagDesc = locale === "ar" ? v.descAr : v.descFr;
-
-                    return (
-                      <button
-                        key={v.tag}
-                        type="button"
-                        onClick={() => handleInsertTag(tmpl.key, v.tag)}
-                        title={`${tagDesc} — ${v.tag}`}
-                        className="group inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-xs font-mono font-medium text-[var(--foreground)] transition-all hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] active:scale-95 shadow-2xs cursor-pointer"
-                      >
-                        <Icon size={12} className="text-[var(--accent)] group-hover:text-inherit" />
-                        <span className="font-bold text-[11px]">{v.tag}</span>
-                        <span className="text-[10px] opacity-75 font-sans">({tagLabel})</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Textarea */}
-              <div className="mt-3">
-                <textarea
-                  ref={textareaRef}
-                  name={tmpl.key}
-                  value={val}
-                  onChange={(e) => setValues((prev) => ({ ...prev, [tmpl.key]: e.target.value }))}
-                  rows={4}
-                  className="w-full rounded-xl border border-[var(--border-strong)] bg-[var(--card)] px-3.5 py-2.5 text-xs sm:text-sm text-[var(--foreground)] leading-relaxed focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 focus:outline-none transition-all resize-y min-h-[90px]"
-                />
-              </div>
+            {/* Variable insertion buttons */}
+            <div>
+              <Text size="11px" fw={700} c="dimmed" mb={4}>
+                Insérer une variable dynamique (un clic insère la balise au curseur) :
+              </Text>
+              <Group gap={4} wrap="wrap">
+                {VARIABLE_CHIPS.map((chip) => {
+                  const Icon = chip.icon;
+                  return (
+                    <Button
+                      key={chip.tag}
+                      type="button"
+                      variant="light"
+                      color="blue"
+                      size="compact-xs"
+                      radius="sm"
+                      leftSection={<Icon size={11} />}
+                      onClick={() => handleInsertTag(chip.tag)}
+                      style={{ fontSize: "11px" }}
+                    >
+                      {chip.label}
+                    </Button>
+                  );
+                })}
+              </Group>
             </div>
-          );
-        })}
-      </div>
-    </div>
+
+            {/* Template Body */}
+            <div>
+              <Text size="xs" fw={700} mb={4}>
+                Corps du texte du modèle :
+              </Text>
+              <Textarea
+                ref={textareaRef}
+                value={currentModel.body}
+                onChange={(e) => updateCurrentModel({ body: e.target.value })}
+                minRows={8}
+                maxRows={14}
+                autosize
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "13px",
+                  lineHeight: 1.6,
+                }}
+              />
+            </div>
+          </Stack>
+
+          {/* Right: Real-time simulation preview */}
+          <div>
+            <Group justify="space-between" mb={4}>
+              <Text size="xs" fw={700} c="dimmed">
+                Aperçu fidèle simulé (avec données exemples) :
+              </Text>
+              <Badge size="xs" color="gray" variant="outline">
+                A4 Simulé
+              </Badge>
+            </Group>
+
+            <Paper
+              p="lg"
+              radius="md"
+              withBorder
+              className="bg-white text-gray-900 shadow-sm min-h-[360px] flex flex-col justify-between"
+              style={{ fontSize: "12px", lineHeight: 1.7 }}
+            >
+              <div>
+                {/* Header preview */}
+                <div className="border-b pb-2 mb-3 text-center">
+                  <Text size="xs" fw={800} tt="uppercase" c="blue.9">
+                    {initialValues.name || "STE OURIDA STATION SARL"}
+                  </Text>
+                  <Text size="10px" c="dimmed">
+                    {initialValues.address || "Ourida 4, Station Les Cerises, Sefrou"}
+                  </Text>
+                </div>
+
+                {/* City & Date */}
+                <div className="text-right text-[11px] text-gray-500 mb-3">
+                  Sefrou, le {SAMPLE_DATA.date_du_jour}
+                </div>
+
+                {/* Title */}
+                <div className="text-center my-3">
+                  <Text fw={900} size="sm" tt="uppercase" className="tracking-wide border-b-2 border-gray-800 pb-1 inline-block">
+                    {currentModel.title || "ATTESTATION DE TRAVAIL"}
+                  </Text>
+                </div>
+
+                {/* Objet */}
+                {currentModel.objet ? (
+                  <div className="italic text-[11px] text-gray-700 mb-3 font-medium">
+                    {currentModel.objet}
+                  </div>
+                ) : null}
+
+                {/* Body */}
+                <div className="whitespace-pre-line text-justify text-[12px] text-gray-800">
+                  {previewText}
+                </div>
+              </div>
+
+              {/* Signature Box */}
+              <div className="mt-6 pt-3 flex justify-end">
+                <div className="border-2 border-dashed border-gray-300 rounded p-2 text-center w-48 bg-gray-50">
+                  <Text size="10px" fw={800} tt="uppercase" c="dimmed">
+                    {currentModel.signataire || "La Direction Générale"}
+                  </Text>
+                  <div className="h-10 text-[9px] text-gray-400 flex items-center justify-center">
+                    (Signature & Cachet)
+                  </div>
+                </div>
+              </div>
+            </Paper>
+          </div>
+        </div>
+      </Stack>
+    </Card>
   );
 }
