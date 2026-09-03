@@ -4,7 +4,6 @@ import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { DailyClosingForm } from "@/components/caisse/daily-closing-form";
 import { SortiesCaisseManager } from "@/components/caisse/sorties-caisse-manager";
-import { QuickDailyEntry } from "@/components/revenue/quick-daily-entry";
 import { RevenueGrid } from "@/components/revenue-grid";
 import { RevenueCharts } from "@/components/revenue-charts";
 import { useTranslation } from "@/lib/i18n";
@@ -19,16 +18,12 @@ import {
   type SortieCaisseRecord,
 } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-import { Badge, Group, Tabs, Text, ThemeIcon } from "@mantine/core";
+import { Badge, Tabs } from "@mantine/core";
 import {
   BarChart3,
-  Coins,
   FileSpreadsheet,
-  Receipt,
   TrendingDown,
-  TrendingUp,
   Wallet,
-  Zap,
 } from "lucide-react";
 
 export function CaisseTabsView({
@@ -75,7 +70,7 @@ export function CaisseTabsView({
       value={activeTab}
       onChange={handleTabChange}
       variant="pills"
-      radius="md"
+      radius="xl"
       className="w-full"
     >
       <Tabs.List className="mb-4 flex-wrap gap-2 border-b border-[var(--border)] pb-3">
@@ -84,15 +79,15 @@ export function CaisseTabsView({
           leftSection={<Wallet size={16} />}
           style={{ fontWeight: 700 }}
         >
-          {t.caisse.journalTab}
+          {locale === "ar" ? "إغلاق الصندوق اليومي" : "Clôture du jour"}
         </Tabs.Tab>
 
         <Tabs.Tab
-          value="express"
-          leftSection={<Zap size={16} />}
+          value="grille"
+          leftSection={<FileSpreadsheet size={16} />}
           style={{ fontWeight: 700 }}
         >
-          {t.caisse.expressTab}
+          {locale === "ar" ? "السجل الشهري" : "Journal mensuel"}
         </Tabs.Tab>
 
         <Tabs.Tab
@@ -101,21 +96,13 @@ export function CaisseTabsView({
           style={{ fontWeight: 700 }}
           rightSection={
             sorties.length > 0 ? (
-              <Badge size="xs" color="red" variant="filled">
+              <Badge size="xs" color="red" variant="filled" radius="xl">
                 {sorties.length}
               </Badge>
             ) : null
           }
         >
-          {t.caisse.sortiesTab}
-        </Tabs.Tab>
-
-        <Tabs.Tab
-          value="grille"
-          leftSection={<FileSpreadsheet size={16} />}
-          style={{ fontWeight: 700 }}
-        >
-          {t.caisse.gridTab}
+          {locale === "ar" ? "المصاريف" : "Dépenses"}
         </Tabs.Tab>
 
         <Tabs.Tab
@@ -123,11 +110,11 @@ export function CaisseTabsView({
           leftSection={<BarChart3 size={16} />}
           style={{ fontWeight: 700 }}
         >
-          {t.caisse.statsTab}
+          {locale === "ar" ? "الإحصائيات" : "Statistiques"}
         </Tabs.Tab>
       </Tabs.List>
 
-      {/* Tab 1: Clôture de caisse détaillée avec modes de règlement et justificatif */}
+      {/* Tab 1: Clôture de caisse du jour */}
       <Tabs.Panel value="cloture">
         <DailyClosingForm
           branches={branches}
@@ -138,9 +125,9 @@ export function CaisseTabsView({
         />
       </Tabs.Panel>
 
-      {/* Tab 2: Saisie Express multi-magasins */}
-      <Tabs.Panel value="express">
-        <QuickDailyEntry branches={branches} table={table} />
+      {/* Tab 2: Grille Mensuelle Consolidée */}
+      <Tabs.Panel value="grille">
+        <RevenueGrid month={month} branches={branches} table={table} />
       </Tabs.Panel>
 
       {/* Tab 3: Registre des Sorties de Caisse */}
@@ -152,12 +139,7 @@ export function CaisseTabsView({
         />
       </Tabs.Panel>
 
-      {/* Tab 4: Grille Mensuelle Consolidée */}
-      <Tabs.Panel value="grille">
-        <RevenueGrid month={month} branches={branches} table={table} />
-      </Tabs.Panel>
-
-      {/* Tab 5: Statistiques, graphiques et historique */}
+      {/* Tab 4: Statistiques et graphiques */}
       <Tabs.Panel value="stats" className="space-y-4">
         <RevenueCharts daily={chartsDaily} monthlyByBranch={chartsMonthlyByBranch} />
 

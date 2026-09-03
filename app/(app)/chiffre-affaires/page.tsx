@@ -52,14 +52,9 @@ export default async function ChiffreAffairesPage({
   return (
     <div className="grid gap-4">
       <PageHeading
-        eyebrow={locale === "ar" ? "المتابعة المالية ومراقبة الصندوق" : "Pilotage & Performance"}
+        eyebrow={locale === "ar" ? "الصندوق" : "Caisse"}
         title={dict.caisse.title}
         description={dict.caisse.subtitle}
-        actions={
-          <Link href={`/api/chiffre-affaires/export?month=${month}`}>
-            <Button variant="secondary">{dict.common.exportExcel}</Button>
-          </Link>
-        }
       />
 
       {/* Month Navigator Toolbar */}
@@ -68,34 +63,28 @@ export default async function ChiffreAffairesPage({
         totalSystemMonth={stats.systemMonthTotal}
       />
 
-      {/* Financial KPIs Banner */}
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="sm">
-        <Card>
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+      {/* Financial KPIs - Simple, Clean 3 Cards */}
+      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+        <Card className="p-4">
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: "0.05em" }}>
             {dict.caisse.totalRecettes}
           </Text>
           <Text size="xl" fw={900} className="mt-1" c="blue">
             {formatCurrency(stats.monthTotal)}
           </Text>
-          <Text size="xs" c="dimmed" mt={4}>
-            {locale === "ar" ? "مجموع مداخيل هاد الشهر" : "Total recettes de caisse"}
-          </Text>
         </Card>
 
-        <Card>
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+        <Card className="p-4">
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: "0.05em" }}>
             {dict.caisse.sortiesCaisse}
           </Text>
           <Text size="xl" fw={900} className="mt-1" c="red">
             - {formatCurrency(totalMonthSorties)}
           </Text>
-          <Text size="xs" c="dimmed" mt={4}>
-            {sorties.length} {locale === "ar" ? "مصاريف موثقة" : (sorties.length > 1 ? "sorties justifiées" : "sortie justifiée")}
-          </Text>
         </Card>
 
-        <Card>
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+        <Card className="p-4">
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: "0.05em" }}>
             {dict.caisse.soldeNet}
           </Text>
           <Text
@@ -107,32 +96,6 @@ export default async function ChiffreAffairesPage({
             }}
           >
             {formatCurrency(netMonthCaisse)}
-          </Text>
-          <Text size="xs" c="dimmed" mt={4}>
-            {locale === "ar" ? "الفلوس الصافية اللي بقات فالصندوق" : "Recettes nettes décaissées"}
-          </Text>
-        </Card>
-
-        <Card>
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">
-            {dict.caisse.systemSales}
-          </Text>
-          <Group gap={6} align="baseline" className="mt-1">
-            <Text size="xl" fw={900} c="indigo">
-              {formatCurrency(stats.systemMonthTotal)}
-            </Text>
-            {stats.diffMonthTotal !== 0 ? (
-              <Badge
-                size="xs"
-                variant="light"
-                color={stats.diffMonthTotal > 0 ? "teal" : "red"}
-              >
-                {stats.diffMonthTotal > 0 ? `+ ${dict.caisse.excess}` : `- ${dict.caisse.shortage}`}
-              </Badge>
-            ) : null}
-          </Group>
-          <Text size="xs" c="dimmed" mt={4}>
-            {locale === "ar" ? "الفواتير وبونات التوصيل" : "Factures & BL validés"}
           </Text>
         </Card>
       </SimpleGrid>

@@ -118,7 +118,7 @@ export default async function DashboardPage() {
               </Group>
 
               <Title order={1} style={{ letterSpacing: "-0.03em", fontSize: "1.85rem", fontWeight: 800 }}>
-                {locale === "ar" && company.arabic_name ? company.arabic_name : company.name}
+                {dict.dashboard.title}
               </Title>
 
               <Group gap="xs" c="dimmed" style={{ fontSize: "13px" }}>
@@ -256,7 +256,14 @@ export default async function DashboardPage() {
                     {dict.dashboard.recentDocuments}
                   </Text>
                   <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
-                    {latestDocuments.length} {locale === "ar" ? "وثائق" : "documents"}
+                    {latestDocuments.length}{" "}
+                    {locale === "ar"
+                      ? latestDocuments.length > 1
+                        ? "وثائق"
+                        : "وثيقة"
+                      : latestDocuments.length > 1
+                      ? "documents"
+                      : "document"}
                   </Text>
                 </Stack>
                 <div
@@ -402,7 +409,7 @@ export default async function DashboardPage() {
                           <Text size="sm" fw={800} style={{ letterSpacing: "-0.01em" }}>
                             {branch.name}
                           </Text>
-                          <Text size="xs" c="dimmed" truncate style={{ maxWidth: 170 }}>
+                          <Text size="xs" c="dimmed" truncate style={{ maxWidth: 220 }}>
                             {branch.address || (locale === "ar" ? "محل نشط" : "Emplacement actif")}
                           </Text>
                         </Stack>
