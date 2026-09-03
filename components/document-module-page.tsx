@@ -1,7 +1,25 @@
 import Link from "next/link";
-import { ActionIcon, Button, Group, Menu, NativeSelect, Paper, Stack, Table, Text, TextInput } from "@mantine/core";
-import { Eye, MoreHorizontal, Printer } from "lucide-react";
+import {
+  ActionIcon,
+  Button,
+  Group,
+  Menu,
+  MenuDropdown,
+  MenuItem,
+  MenuTarget,
+  Paper,
+  Stack,
+  Table,
+  TableTbody,
+  TableTd,
+  TableTh,
+  TableThead,
+  TableTr,
+  Text,
+} from "@mantine/core";
+import { Eye, MoreHorizontal, Plus, Printer } from "lucide-react";
 
+import { DocumentFilterBar } from "@/components/document-filter-bar";
 import { PageHeading } from "@/components/page-heading";
 import {
   DOCUMENT_STATUS_LABELS,
@@ -9,8 +27,9 @@ import {
 } from "@/lib/constants";
 import { listBranches, listDocuments, listEntities } from "@/lib/data";
 import { requireDocumentFeature } from "@/lib/features";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { type DocumentType } from "@/lib/types";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 type DocumentListRow = {
   id: number;
@@ -33,6 +52,9 @@ export async function DocumentModulePage({
   filters: { from?: string; to?: string; branchId?: string; status?: string; partyId?: string };
 }) {
   await requireDocumentFeature(type);
+  const locale = await getServerLocale();
+  const dict = getServerDictionary(locale);
+
   const branches = listBranches({ activeOnly: true });
   const parties = listEntities(type === "bc" ? "fournisseurs" : "clients");
   const documents = listDocuments(type, {
@@ -54,17 +76,57 @@ export async function DocumentModulePage({
             ? "bons-commande"
             : "bons-sortie";
 
+  const getDocTypeName = () => {
+    switch (type) {
+      case "devis": return dict.documents.devisTitle;
+      case "facture": return dict.documents.factureTitle;
+      case "bl": return dict.documents.blTitle;
+      case "bs": return dict.documents.bsTitle;
+      case "bc": return dict.documents.bcTitle;
+      default: return DOCUMENT_TYPE_COMPACT_LABELS[type];
+    }
+  };
+
+  const getStatusLabel = (st: keyof typeof DOCUMENT_STATUS_LABELS) => {
+    switch (st) {
+      case "brouillon": return dict.documents.statusBrouillon;
+      case "valide": return dict.documents.statusValide;
+      case "imprime": return dict.documents.statusImprime;
+      default: return DOCUMENT_STATUS_LABELS[st];
+    }
+  };
+
   return (
     <Stack gap="md">
       <PageHeading
-        eyebrow={type === "bl" || type === "bs" || type === "bc" ? "Bons" : "Documents"}
-        title={DOCUMENT_TYPE_COMPACT_LABELS[type]}
-        description="Retrouvez, filtrez et ouvrez vos documents."
+        eyebrow={
+          type === "bl" || type === "bs" || type === "bc"
+            ? (locale === "ar" ? "البونات" : "Bons")
+            : (locale === "ar" ? "الوثائق التجارية" : "Documents")
+        }
+        title={getDocTypeName()}
+        description={
+          locale === "ar"
+            ? "تصفية وبحث، مراجعة وطباعة الوثائق التجارية الرسمية."
+            : "Retrouvez, filtrez et ouvrez vos documents."
+        }
         actions={
-          <Button component={Link} href={`/${slug}/new`} radius="md">
-            Nouveau
+          <Button
+            component={Link}
+            href={`/${slug}/new`}
+            radius="md"
+            leftSection={<Plus size={15} />}
+          >
+            {locale === "ar" ? `+ إضافة ${getDocTypeName()}` : `Nouveau ${DOCUMENT_TYPE_COMPACT_LABELS[type]}`}
           </Button>
         }
+      />
+
+      <DocumentFilterBar
+        type={type}
+        branches={branches}
+        parties={parties}
+        filters={filters}
       />
 
       <Paper
@@ -74,124 +136,75 @@ export async function DocumentModulePage({
         p="lg"
         style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
       >
-        <form className="grid gap-3 md:grid-cols-5" action="">
-          <TextInput name="from" type="date" defaultValue={filters.from} label="Du" radius="md" />
-          <TextInput name="to" type="date" defaultValue={filters.to} label="Au" radius="md" />
-          <NativeSelect
-            name="branchId"
-            label="Magasin"
-            defaultValue={filters.branchId ?? "all"}
-            radius="md"
-            data={[
-              { value: "all", label: "Tous les magasins" },
-              ...branches.map((branch) => ({ value: String(branch.id), label: branch.name })),
-            ]}
-          />
-          <NativeSelect
-            name="partyId"
-            label={type === "bc" ? "Fournisseur" : "Client"}
-            defaultValue={filters.partyId ?? "all"}
-            radius="md"
-            data={[
-              { value: "all", label: type === "bc" ? "Tous les fournisseurs" : "Tous les clients" },
-              ...parties.map((party) => ({ value: String(party.id), label: party.name })),
-            ]}
-          />
-          <Group align="end" gap="sm" wrap="nowrap">
-            <NativeSelect
-              name="status"
-              label="Etat"
-              defaultValue={filters.status ?? "all"}
-              radius="md"
-              style={{ flex: 1 }}
-              data={[
-                { value: "all", label: "Tous" },
-                { value: "brouillon", label: "A finaliser" },
-                { value: "valide", label: "Pret a imprimer" },
-                { value: "imprime", label: "Termine" },
-              ]}
-            />
-            <Button type="submit" radius="md" variant="default">
-              Filtrer
-            </Button>
-          </Group>
-        </form>
-      </Paper>
-
-      <Paper
-        radius={24}
-        shadow="sm"
-        withBorder
-        p="lg"
-        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
-      >
         <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>No</Table.Th>
-              <Table.Th>Date</Table.Th>
-              <Table.Th>Magasin</Table.Th>
-              <Table.Th>Client / fournisseur</Table.Th>
-              <Table.Th>Total</Table.Th>
-              <Table.Th>Etat</Table.Th>
-              <Table.Th style={{ textAlign: "right" }}>Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+          <TableThead>
+            <TableTr>
+              <TableTh>{dict.documents.number}</TableTh>
+              <TableTh>{dict.documents.date}</TableTh>
+              <TableTh>{dict.documents.magasin}</TableTh>
+              <TableTh>{type === "bc" ? dict.documents.fournisseur : dict.documents.client}</TableTh>
+              <TableTh>{dict.common.total}</TableTh>
+              <TableTh>{dict.common.status}</TableTh>
+              <TableTh style={{ textAlign: locale === "ar" ? "left" : "right" }}>{dict.common.actions}</TableTh>
+            </TableTr>
+          </TableThead>
+          <TableTbody>
             {documents.length === 0 ? (
-              <Table.Tr>
-                <Table.Td colSpan={7} style={{ padding: "28px", textAlign: "center" }}>
+              <TableTr>
+                <TableTd colSpan={7} style={{ padding: "28px", textAlign: "center" }}>
                   <Text c="dimmed" span>
-                    Aucun document pour l&apos;instant.{" "}
+                    {locale === "ar" ? "ما كاينا حتى وثيقة حالياً. " : "Aucun document pour l'instant. "}
                   </Text>
                   <Link href={`/${slug}/new`} style={{ fontWeight: 700, color: "var(--accent)" }}>
-                    Creer le premier
+                    {locale === "ar" ? "إنشاء أول وثيقة دابا" : "Créer le premier"}
                   </Link>
-                </Table.Td>
-              </Table.Tr>
+                </TableTd>
+              </TableTr>
             ) : (
               documents.map((document) => (
-                <Table.Tr key={document.id}>
-                  <Table.Td fw={700}>
-                    <Link href={`/${slug}/${document.id}/edit`}>{document.numero}</Link>
-                  </Table.Td>
-                  <Table.Td>{formatDate(document.date)}</Table.Td>
-                  <Table.Td>{String(document.branch_name ?? document.source_branch_name ?? "-")}</Table.Td>
-                  <Table.Td>{String(document.party_name ?? "-")}</Table.Td>
-                  <Table.Td>{formatCurrency(document.total_ttc)}</Table.Td>
-                  <Table.Td>{DOCUMENT_STATUS_LABELS[document.status]}</Table.Td>
-                  <Table.Td>
-                    <Group justify="flex-end">
-                      <Menu position="bottom-end" shadow="md" width={210}>
-                        <Menu.Target>
+                <TableTr key={document.id}>
+                  <TableTd fw={700}>
+                    <Link href={`/${slug}/${document.id}/edit`}>#{document.numero}</Link>
+                  </TableTd>
+                  <TableTd>{formatDate(document.date)}</TableTd>
+                  <TableTd>{String(document.branch_name ?? document.source_branch_name ?? "-")}</TableTd>
+                  <TableTd>{String(document.party_name ?? "-")}</TableTd>
+                  <TableTd fw={800}>{formatCurrency(document.total_ttc)}</TableTd>
+                  <TableTd>{getStatusLabel(document.status)}</TableTd>
+                  <TableTd>
+                    <Group justify={locale === "ar" ? "flex-start" : "flex-end"}>
+                      <Menu position={locale === "ar" ? "bottom-start" : "bottom-end"} shadow="md" width={210}>
+                        <MenuTarget>
                           <ActionIcon variant="subtle" color="gray" radius="xl" size="lg">
                             <MoreHorizontal size={16} />
                           </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Item
+                        </MenuTarget>
+                        <MenuDropdown>
+                          <MenuItem
                             component={Link}
                             href={`/${slug}/${document.id}/edit`}
                             leftSection={<Eye size={15} />}
                           >
-                            {document.status === "brouillon" ? "Modifier" : "Consulter"}
-                          </Menu.Item>
-                          <Menu.Item
+                            {document.status === "brouillon"
+                              ? dict.common.edit
+                              : (locale === "ar" ? "عرض التفاصيل" : "Consulter")}
+                          </MenuItem>
+                          <MenuItem
                             component={Link}
                             href={`/print/${printKind}/${document.id}`}
                             target="_blank"
                             leftSection={<Printer size={15} />}
                           >
-                            Imprimer / PDF
-                          </Menu.Item>
-                        </Menu.Dropdown>
+                            {locale === "ar" ? "طباعة / PDF" : "Imprimer / PDF"}
+                          </MenuItem>
+                        </MenuDropdown>
                       </Menu>
                     </Group>
-                  </Table.Td>
-                </Table.Tr>
+                  </TableTd>
+                </TableTr>
               ))
             )}
-          </Table.Tbody>
+          </TableTbody>
         </Table>
       </Paper>
     </Stack>

@@ -17,7 +17,18 @@ export type FeatureKey =
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
-export type ThemePreset = "haloui-classic" | "slate-minimal" | "olive-ledger";
+export type ThemePreset =
+  | "slate-minimal"
+  | "corporate-navy"
+  | "emerald-luxe"
+  | "indigo-royal"
+  | "crimson-executive"
+  | "ocean-cyan"
+  | "sunset-amber"
+  | "violet-plum"
+  | "monochrome-black"
+  | "olive-ledger"
+  | "haloui-classic";
 export type ThemeDensity = "compact" | "comfortable";
 
 export type ThemeSettings = {
@@ -181,7 +192,10 @@ export type RevenueCell = {
 export type RevenueGridRow = {
   date: string;
   values: Record<number, number>;
+  systemValues: Record<number, number>;
   total: number;
+  systemTotal: number;
+  diff: number;
 };
 
 export type RevenueDailyPoint = {
@@ -198,10 +212,45 @@ export type RevenueMonthlyBranchPoint = {
 export type RevenueStats = {
   monthTotal: number;
   yearTotal: number;
+  systemMonthTotal: number;
+  diffMonthTotal: number;
   bestBranch: { name?: string; total?: number } | undefined;
   daily: RevenueDailyPoint[];
   monthlyByBranch: RevenueMonthlyBranchPoint[];
   pivot: RevenueMonthlyBranchPoint[];
+};
+
+export type SortieCaisseRecord = {
+  id: number;
+  branch_id: number;
+  branch_name?: string;
+  date: string;
+  montant: number;
+  motif: string;
+  beneficiaire: string;
+  preuve_path: string;
+  notes: string;
+  created_by: number | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CashDaySummary = {
+  date: string;
+  branch_id: number;
+  branch_name?: string;
+  especes: number;
+  carte: number;
+  cheque: number;
+  virement: number;
+  total_recettes: number;
+  total_sorties: number;
+  solde_net_caisse: number;
+  preuve_path: string;
+  statut_cloture: "brouillon" | "cloture";
+  notes: string;
+  sorties: SortieCaisseRecord[];
 };
 
 export type SearchResult = {

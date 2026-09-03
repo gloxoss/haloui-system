@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="haloui-ca-${grid.month}.xlsx"`,
+      "Content-Disposition": `attachment; filename="ca-${grid.month}.xlsx"`,
     },
   });
 }

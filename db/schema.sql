@@ -195,6 +195,12 @@ CREATE TABLE IF NOT EXISTS chiffre_affaires (
   branch_id INTEGER NOT NULL,
   date TEXT NOT NULL,
   montant REAL NOT NULL DEFAULT 0,
+  especes REAL NOT NULL DEFAULT 0,
+  carte REAL NOT NULL DEFAULT 0,
+  cheque REAL NOT NULL DEFAULT 0,
+  virement REAL NOT NULL DEFAULT 0,
+  preuve_path TEXT DEFAULT '',
+  statut_cloture TEXT DEFAULT 'brouillon',
   notes TEXT DEFAULT '',
   created_by INTEGER,
   updated_by INTEGER,
@@ -205,6 +211,27 @@ CREATE TABLE IF NOT EXISTS chiffre_affaires (
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
   UNIQUE (branch_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS sorties_caisse (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  branch_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  montant REAL NOT NULL DEFAULT 0,
+  motif TEXT NOT NULL,
+  beneficiaire TEXT DEFAULT '',
+  preuve_path TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  updated_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sorties_caisse_date ON sorties_caisse(date);
+CREATE INDEX IF NOT EXISTS idx_sorties_caisse_branch ON sorties_caisse(branch_id);
 
 CREATE TABLE IF NOT EXISTS numerotation (
   type TEXT PRIMARY KEY,

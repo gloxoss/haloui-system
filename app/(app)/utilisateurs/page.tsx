@@ -6,17 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SelectDropdown } from "@/components/ui/select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { requireAdmin } from "@/lib/auth";
 import { getAuditLogs, listUsers } from "@/lib/data";
 import { requireFeature } from "@/lib/features";
+import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { formatDateLong } from "@/lib/utils";
 
 export default async function UtilisateursPage() {
   await requireAdmin();
   await requireFeature("utilisateurs");
+
+  const locale = await getServerLocale();
+  const dict = getServerDictionary(locale);
+
   const users = listUsers();
   const auditLogs = getAuditLogs(20) as Array<{
     id: number;
@@ -30,45 +35,53 @@ export default async function UtilisateursPage() {
   return (
     <div className="grid gap-4">
       <PageHeading
-        eyebrow="Administration"
-        title="Utilisateurs"
-        description="Gérez les accès et les changements."
+        eyebrow={dict.users.title}
+        title={dict.users.title}
+        description={dict.users.subtitle}
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card>
-          <h3 className="text-lg font-black">Nouvel utilisateur</h3>
+          <h3 className="text-lg font-black">{dict.users.newUser}</h3>
           <form action={saveUserAction} className="mt-4 grid gap-4">
-            <Field label="Nom complet"><Input name="full_name" required /></Field>
-            <Field label="Nom d'utilisateur"><Input name="username" required /></Field>
+            <Field label={dict.users.fullName}><Input name="full_name" required /></Field>
+            <Field label={dict.users.username}><Input name="username" required /></Field>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Rôle">
-                <Select name="role" defaultValue="user">
-                  <option value="user">Utilisateur</option>
-                  <option value="admin">Administrateur</option>
-                </Select>
+              <Field label={dict.users.role}>
+                <SelectDropdown
+                  name="role"
+                  defaultValue="user"
+                  options={[
+                    { value: "user", label: dict.users.roleUser },
+                    { value: "admin", label: dict.users.roleAdmin },
+                  ]}
+                />
               </Field>
-              <Field label="Actif">
-                <Select name="active" defaultValue="1">
-                  <option value="1">Oui</option>
-                  <option value="0">Non</option>
-                </Select>
+              <Field label={dict.users.active}>
+                <SelectDropdown
+                  name="active"
+                  defaultValue="1"
+                  options={[
+                    { value: "1", label: dict.users.activeYes },
+                    { value: "0", label: dict.users.activeNo },
+                  ]}
+                />
               </Field>
             </div>
-            <Field label="Mot de passe temporaire"><Input name="password" defaultValue="changeme123" required /></Field>
-            <SubmitButton>Créer le compte</SubmitButton>
+            <Field label={dict.users.tempPassword}><Input name="password" defaultValue="changeme123" required /></Field>
+            <SubmitButton>{dict.users.createAccount}</SubmitButton>
           </form>
         </Card>
 
         <Card>
-          <h3 className="text-lg font-black">Comptes existants</h3>
+          <h3 className="text-lg font-black">{dict.users.existingAccounts}</h3>
           <div className="mt-5">
             <Table>
               <THead>
                 <tr>
-                  <TH>Utilisateur</TH>
-                  <TH>Rôle</TH>
-                  <TH>Création</TH>
+                  <TH>{dict.users.user}</TH>
+                  <TH>{dict.users.role}</TH>
+                  <TH>{dict.users.date}</TH>
                 </tr>
               </THead>
               <tbody>
@@ -79,30 +92,42 @@ export default async function UtilisateursPage() {
                         <summary className="cursor-pointer list-none font-semibold">{user.full_name}</summary>
                         <form action={saveUserAction} className="mt-3.5 grid gap-3 rounded-xl border bg-[var(--background)] p-3">
                           <input type="hidden" name="id" value={user.id} />
-                          <Field label="Nom complet"><Input name="full_name" defaultValue={user.full_name} required /></Field>
-                          <Field label="Nom d'utilisateur"><Input name="username" defaultValue={user.username} required /></Field>
+                          <Field label={dict.users.fullName}><Input name="full_name" defaultValue={user.full_name} required /></Field>
+                          <Field label={dict.users.username}><Input name="username" defaultValue={user.username} required /></Field>
                           <div className="grid gap-3 md:grid-cols-2">
-                            <Field label="Rôle">
-                              <Select name="role" defaultValue={user.role}>
-                                <option value="user">Utilisateur</option>
-                                <option value="admin">Administrateur</option>
-                              </Select>
+                            <Field label={dict.users.role}>
+                              <SelectDropdown
+                                name="role"
+                                defaultValue={user.role}
+                                options={[
+                                  { value: "user", label: dict.users.roleUser },
+                                  { value: "admin", label: dict.users.roleAdmin },
+                                ]}
+                              />
                             </Field>
-                            <Field label="Actif">
-                              <Select name="active" defaultValue={String(user.active)}>
-                                <option value="1">Oui</option>
-                                <option value="0">Non</option>
-                              </Select>
+                            <Field label={dict.users.active}>
+                              <SelectDropdown
+                                name="active"
+                                defaultValue={String(user.active)}
+                                options={[
+                                  { value: "1", label: dict.users.activeYes },
+                                  { value: "0", label: dict.users.activeNo },
+                                ]}
+                              />
                             </Field>
                           </div>
-                          <Field label="Nouveau mot de passe (optionnel)">
-                            <Input name="password" placeholder="Laisser vide pour conserver" />
+                          <Field label={dict.users.newPasswordOptional}>
+                            <Input name="password" type="password" placeholder="••••••••" />
                           </Field>
-                          <SubmitButton variant="secondary">Mettre à jour</SubmitButton>
+                          <SubmitButton variant="secondary">{dict.users.updateAccount}</SubmitButton>
                         </form>
                       </details>
                     </TD>
-                    <TD>{user.role}</TD>
+                    <TD>
+                      <span className="inline-flex rounded-md bg-[var(--surface-soft)] px-2 py-0.5 text-xs font-bold">
+                        {user.role === "admin" ? dict.users.roleAdmin : dict.users.roleUser}
+                      </span>
+                    </TD>
                     <TD>{formatDateLong(user.created_at)}</TD>
                   </tr>
                 ))}
@@ -115,27 +140,27 @@ export default async function UtilisateursPage() {
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-[var(--muted)]">Traçabilité</p>
-            <h3 className="mt-1 text-lg font-black">Historique des modifications</h3>
+            <p className="text-xs font-semibold text-[var(--muted)]">{dict.users.traceability}</p>
+            <h3 className="mt-1 text-lg font-black">{dict.users.auditHistory}</h3>
           </div>
           <Link href="/utilisateurs/audit">
-            <Button variant="secondary">Voir l'audit complet</Button>
+            <Button variant="secondary">{dict.users.seeFullAudit}</Button>
           </Link>
         </div>
         <Table>
           <THead>
             <tr>
-              <TH>Date</TH>
-              <TH>Utilisateur</TH>
-              <TH>Action</TH>
-              <TH>Entité</TH>
+              <TH>{dict.users.date}</TH>
+              <TH>{dict.users.user}</TH>
+              <TH>{dict.users.action}</TH>
+              <TH>{dict.users.entity}</TH>
             </tr>
           </THead>
           <tbody>
             {auditLogs.map((log) => (
               <tr key={log.id}>
                 <TD>{formatDateLong(log.timestamp)}</TD>
-                <TD>{String(log.full_name ?? "Système")}</TD>
+                <TD>{String(log.full_name ?? dict.users.systemUser)}</TD>
                 <TD>{String(log.action)}</TD>
                 <TD>{String(log.entity_type)} #{String(log.entity_id ?? "—")}</TD>
               </tr>

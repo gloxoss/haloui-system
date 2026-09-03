@@ -13,7 +13,7 @@ export function UploadField({
   label,
 }: {
   name: string;
-  folder: "logos" | "employees";
+  folder: "logos" | "employees" | "caisse";
   initialValue?: string;
   label: string;
 }) {

@@ -28,21 +28,39 @@ const naskh = Noto_Naskh_Arabic({
 
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: "Gestion locale des devis, factures, personnel et chiffre d'affaires de Pâtisserie Haloui.",
+  description: "Système de gestion commerciale : devis, factures, bons, produits, clients et recettes.",
 };
 
-export default function RootLayout({
+import { cookies } from "next/headers";
+import { getThemeSettings } from "@/lib/data";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const themeSetting = getThemeSettings();
+  const preset = cookieStore.get("app_theme")?.value || themeSetting.preset;
+  const density = cookieStore.get("app_density")?.value || themeSetting.density;
+  const locale = (cookieStore.get("app_locale")?.value as "fr" | "ar") || "fr";
+  const dir = locale === "ar" ? "rtl" : "ltr";
+
   return (
-    <html lang="fr">
+    <html
+      lang={locale}
+      dir={dir}
+      data-mantine-color-scheme="light"
+      data-ui-theme={preset}
+      data-ui-density={density}
+      className={locale === "ar" ? "rtl" : ""}
+      suppressHydrationWarning
+    >
       <head>
         <ColorSchemeScript defaultColorScheme="light" />
       </head>
       <body className={`${manrope.variable} ${lora.variable} ${naskh.variable} bg-[var(--background)] text-[var(--foreground)] antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers initialLocale={locale}>{children}</Providers>
       </body>
     </html>
   );

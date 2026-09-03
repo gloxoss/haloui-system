@@ -29,12 +29,12 @@ export async function GET(request: Request) {
   const dataset = searchParams.get("dataset") || "clients";
 
   if (format === "sqlite") {
-    const backupPath = createDatabaseBackup("haloui-transfer");
+    const backupPath = createDatabaseBackup("data-transfer");
     const buffer = fs.readFileSync(backupPath);
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/x-sqlite3",
-        "Content-Disposition": 'attachment; filename="haloui-data.db"',
+        "Content-Disposition": 'attachment; filename="system-data.db"',
       },
     });
   }
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     return new NextResponse(buildSqlDump(), {
       headers: {
         "Content-Type": "application/sql; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="haloui-export.sql"',
+        "Content-Disposition": 'attachment; filename="data-export.sql"',
       },
     });
   }
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": 'attachment; filename="haloui-export.xlsx"',
+        "Content-Disposition": 'attachment; filename="data-export.xlsx"',
       },
     });
   }
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     return new NextResponse(buildCsv(dataset as ExportDatasetKey), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="haloui-${dataset}.csv"`,
+        "Content-Disposition": `attachment; filename="export-${dataset}.csv"`,
       },
     });
   }

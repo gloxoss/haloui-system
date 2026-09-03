@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { PrintLayout } from "@/components/print/print-layout";
+import { getThemeSettings } from "@/lib/data";
 import {
   type BranchRecord,
   type CompanyRecord,
@@ -46,16 +47,23 @@ export type PrintableAttestation = {
   photo_path: string;
 };
 
-export const ARABIC_ADDRESS = "شارع الإمام مسلم درادب رقم 37 - طنجة";
+export const ARABIC_ADDRESS = "المقر الاجتماعي - المركز التجاري";
 
 export function PrintPage({
   children,
   className,
+  theme,
 }: {
   children: React.ReactNode;
   className?: string;
+  theme?: string;
 }) {
-  return <PrintLayout className={className}>{children}</PrintLayout>;
+  const activeTheme = theme || getThemeSettings().preset;
+  return (
+    <PrintLayout className={className} theme={activeTheme}>
+      {children}
+    </PrintLayout>
+  );
 }
 
 export function PrintLogo({
@@ -67,7 +75,7 @@ export function PrintLogo({
   size?: "small" | "large";
   className?: string;
 }) {
-  const dimensions = size === "large" ? { width: 196, height: 102 } : { width: 150, height: 78 };
+  const dimensions = size === "large" ? { width: 220, height: 90 } : { width: 180, height: 75 };
 
   return (
     <div className={className}>
@@ -76,7 +84,7 @@ export function PrintLogo({
         alt={company.name}
         width={dimensions.width}
         height={dimensions.height}
-        className={size === "large" ? "h-auto w-[156px] object-contain" : "h-auto w-[122px] object-contain"}
+        className={size === "large" ? "h-14 w-auto max-w-[220px] object-contain" : "h-12 w-auto max-w-[180px] object-contain"}
         priority
       />
     </div>
@@ -93,16 +101,20 @@ export function PrintDocumentHeader({
   eyebrow?: string;
 }) {
   return (
-    <div className="border-b border-[#cdb79a] pb-2.5">
-      <div className="flex items-end justify-between gap-5">
-        <div className="space-y-0.5">
-          <div className="text-[8.5px] font-semibold uppercase tracking-[0.16em] text-[#8a6b49]">{eyebrow}</div>
-          <h1 className="font-[var(--font-print-serif)] text-[19px] font-semibold uppercase tracking-[0.03em] text-[#2f2218]">
+    <div className="border-b-2 border-[var(--print-border-strong)] pb-3">
+      <div className="flex items-end justify-between gap-6">
+        <div className="space-y-1">
+          <div className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-[var(--print-text-muted)]">
+            {eyebrow}
+          </div>
+          <h1 className="font-[var(--font-print-serif)] text-[26px] font-black uppercase tracking-[0.04em] text-[var(--print-text)]">
             {title}
           </h1>
-          <div className="text-[10.5px] text-[#6b5a47]">{company.name} · Tanger</div>
+          <div className="text-[12px] font-bold text-[var(--print-text-muted)]">
+            {company.name} · Tanger
+          </div>
         </div>
-        <PrintLogo company={company} size="small" className="shrink-0" />
+        <PrintLogo company={company} size="large" className="shrink-0" />
       </div>
     </div>
   );
@@ -118,9 +130,13 @@ export function InfoCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-[11px] border border-[#d2c1ab] bg-[#f8f4ed] px-3 py-2.5 ${className}`}>
+    <section
+      className={`rounded-xl border border-[var(--print-border-medium)] bg-white px-3.5 py-3 shadow-none ${className}`}
+    >
       {title ? (
-        <div className="mb-1.5 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-[#876947]">{title}</div>
+        <div className="mb-2 text-[9.5px] font-black uppercase tracking-[0.15em] text-[var(--print-text-muted)] border-b border-[var(--print-border-light)] pb-1">
+          {title}
+        </div>
       ) : null}
       {children}
     </section>
@@ -135,7 +151,7 @@ export function InfoGrid({
   columns?: 1 | 2;
 }) {
   return (
-    <div className={columns === 2 ? "grid grid-cols-2 gap-x-3 gap-y-1.5" : "grid gap-y-1.5"}>
+    <div className={columns === 2 ? "grid grid-cols-2 gap-x-4 gap-y-2" : "grid gap-y-2"}>
       {children}
     </div>
   );
@@ -154,8 +170,12 @@ export function InfoField({
 
   return (
     <div className={align === "right" ? "text-right" : ""}>
-      <div className="text-[8px] font-semibold uppercase tracking-[0.1em] text-[#8b6f4f]">{label}</div>
-      <div className="mt-0.5 text-[10.5px] font-semibold leading-[1.25] text-[#241912]">{displayValue}</div>
+      <div className="text-[8.5px] font-bold uppercase tracking-[0.1em] text-[var(--print-text-muted)]">
+        {label}
+      </div>
+      <div className="mt-0.5 text-[12px] font-bold leading-snug text-[var(--print-text)]">
+        {displayValue}
+      </div>
     </div>
   );
 }
@@ -169,11 +189,11 @@ export function PartyCard({
 }) {
   return (
     <InfoCard title={title}>
-      <div className="space-y-0.5 text-[10.5px] leading-[1.3] text-[#2d2118]">
-        <div className="text-[11.5px] font-semibold">{party?.name || "Comptoir"}</div>
-        <div>{party?.address || "-"}</div>
-        <div>Tél: {party?.phone || "-"}</div>
-        <div>ICE: {party?.ice || "-"}</div>
+      <div className="space-y-1 text-[11.5px] leading-snug text-[var(--print-text)]">
+        <div className="text-[13.5px] font-black text-[var(--print-text)]">{party?.name || "Client Comptoir"}</div>
+        <div className="text-[var(--print-text-muted)] font-medium">{party?.address || "Adresse non spécifiée"}</div>
+        <div className="text-[var(--print-text-muted)] font-medium">Tél : <strong className="text-[var(--print-text)]">{party?.phone || "-"}</strong></div>
+        <div className="text-[var(--print-text-muted)] font-mono text-[10.5px]">ICE : <strong className="text-[var(--print-text)] font-sans">{party?.ice || "-"}</strong></div>
       </div>
     </InfoCard>
   );
@@ -186,7 +206,11 @@ export function LedgerTable({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`overflow-hidden rounded-[12px] border border-[#d2c1ab] ${className}`}>{children}</div>;
+  return (
+    <div className={`overflow-hidden rounded-xl border border-[var(--print-border-strong)] bg-white ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 export function TotalsBox({
@@ -195,19 +219,19 @@ export function TotalsBox({
   rows: Array<{ label: string; value: React.ReactNode; strong?: boolean }>;
 }) {
   return (
-    <div className="totals-box overflow-hidden rounded-[12px] border border-[#c7b08f] bg-[#fcfaf6]">
-      <div className="border-b border-[#d8cab8] px-2.5 py-1.5 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-[#876947]">
-        Totaux
+    <div className="totals-box overflow-hidden rounded-xl border border-[var(--print-border-strong)] bg-white">
+      <div className="border-b border-[var(--print-border-strong)] bg-white px-3 py-2 text-[9.5px] font-black uppercase tracking-[0.15em] text-[var(--print-text-muted)]">
+        Totaux du document
       </div>
       {rows.map((row, index) => (
         <div
           key={`${row.label}-${index}`}
-          className={`flex items-center justify-between gap-4 px-2.5 py-1.5 text-[10.5px] ${
-            index < rows.length - 1 ? "border-b border-[#e4d9ca]" : ""
-          } ${row.strong ? "font-semibold text-[#22170f]" : "text-[#3b2b1f]"}`}
+          className={`flex items-center justify-between gap-4 px-3.5 py-2 text-[11.5px] bg-white ${
+            index < rows.length - 1 ? "border-b border-[var(--print-border-light)]" : ""
+          } ${row.strong ? "text-[13.5px] font-black text-[var(--print-text)]" : "text-[var(--print-text)] font-semibold"}`}
         >
-          <span>{row.label}</span>
-          <span>{row.value}</span>
+          <span className="font-semibold">{row.label}</span>
+          <span className="font-bold">{row.value}</span>
         </div>
       ))}
     </div>
@@ -222,14 +246,14 @@ export function SignatureStrip({
   right: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-6 pt-0.5 text-[10.5px]">
-      <div>
-        <div className="font-semibold text-[#2d2118]">{left}</div>
-        <div className="mt-1 h-[9mm] border-b border-dashed border-[#baa487]" />
+    <div className="grid grid-cols-2 gap-8 text-[11px]">
+      <div className="rounded-xl border border-[var(--print-border-medium)] p-3 min-h-[22mm] flex flex-col justify-between">
+        <div className="font-bold text-[var(--print-text)]">{left}</div>
+        <div className="border-b border-dashed border-[var(--print-border-light)]" />
       </div>
-      <div className="text-right">
-        <div className="font-semibold text-[#2d2118]">{right}</div>
-        <div className="mt-1 h-[9mm] border-b border-dashed border-[#baa487]" />
+      <div className="rounded-xl border border-[var(--print-border-medium)] p-3 min-h-[22mm] flex flex-col justify-between text-right">
+        <div className="font-bold text-[var(--print-text)]">{right}</div>
+        <div className="border-b border-dashed border-[var(--print-border-light)]" />
       </div>
     </div>
   );
@@ -237,20 +261,26 @@ export function SignatureStrip({
 
 export function AddressBar({ company }: { company: CompanyRecord }) {
   return (
-    <div className="rounded-[12px] border border-[#d2c1ab] px-3 py-1.5 text-center text-[9px] leading-[1.35] text-[#4a3829]">
-      <div>Siège social: {company.address}</div>
-      <div>Tel: {company.phone} · GSM: {company.gsm}</div>
-      <div>RC: {company.rc} · IF: {company.if_number} · TP: {company.tp} · ICE: {company.ice}</div>
+    <div className="rounded-xl border border-[var(--print-border-medium)] bg-white px-4 py-2.5 text-center text-[10px] leading-relaxed text-[var(--print-text)]">
+      <div className="font-extrabold text-[11.5px] uppercase tracking-wider text-[var(--print-accent-dark)]">
+        {company.name}
+      </div>
+      <div className="text-[var(--print-text-muted)] mt-0.5">
+        Siège social : {company.address} · Tél : {company.phone || "-"} · GSM : {company.gsm || "-"}
+      </div>
+      <div className="text-[var(--print-text-muted)] font-mono text-[9px] mt-0.5">
+        RC : {company.rc || "-"} · IF : {company.if_number || "-"} · TP : {company.tp || "-"} · ICE : {company.ice || "-"}
+      </div>
     </div>
   );
 }
 
 export function BilingualAddressBar({ company }: { company: CompanyRecord }) {
   return (
-    <div className="mt-auto flex items-end justify-between gap-6 text-[11px] leading-5">
-      <div className="flex-1">@ {company.address} - Tel: {company.phone} - GSM: {company.gsm}</div>
+    <div className="mt-auto flex items-end justify-between gap-6 text-[11px] leading-5 text-[var(--print-text)]">
+      <div className="flex-1">@ {company.address} - Tel: {company.phone || "-"} - GSM: {company.gsm || "-"}</div>
       <div className="flex-1 text-right font-[var(--font-arabic)]">
-        {ARABIC_ADDRESS} - {company.gsm} - {company.phone}
+        {company.arabic_name ? `${company.arabic_name} - ` : ""}{company.address}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { startTransition, useState, useTransition } from "react";
+import { Building2, Check, Package, Plus, Search, UserPlus } from "lucide-react";
 
 import {
   convertDocumentAction,
@@ -11,6 +12,7 @@ import {
 } from "@/app/actions";
 import { PageHeading } from "@/components/page-heading";
 import { Button } from "@/components/ui/button";
+import { AppDateInput } from "@/components/ui/app-date-input";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -26,6 +28,7 @@ import {
 } from "@/lib/constants";
 import { computeDocumentTotals } from "@/lib/totals";
 import { type DocumentLineInput, type PartyType } from "@/lib/types";
+import { useTranslation } from "@/lib/i18n";
 import { cn, formatCurrency, formatDateLong, toInputDate } from "@/lib/utils";
 
 type LookupItem = {
@@ -69,13 +72,17 @@ export function DocumentForm({
   fournisseurs: LookupItem[];
   products: LookupItem[];
 }) {
+  const { t, locale, isRtl } = useTranslation();
   const initialLines = document?.lines?.length ? document.lines : [EMPTY_LINE()];
   const isWizard = !document;
   const locked = Boolean(document && document.status !== "brouillon");
   const partyOptions = type === "bc" ? fournisseurs : clients;
   const partyType: PartyType = type === "bc" ? "fournisseurs" : "clients";
-  const partyLabel = type === "bc" ? "Fournisseur" : "Client";
-  const wizardSteps = getWizardSteps(type);
+  const partyLabel =
+    type === "bc"
+      ? (locale === "ar" ? "الفورنيسور (المورد)" : "Fournisseur")
+      : (locale === "ar" ? "الكليان (الزبون)" : "Client");
+  const wizardSteps = getWizardSteps(type, locale);
 
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [date, setDate] = useState(toInputDate(document?.date));
@@ -929,103 +936,141 @@ export function DocumentForm({
     >
       <SheetContent
         side="right"
-        className="left-auto right-0 w-full border-l p-0 sm:max-w-none md:w-[min(980px,calc(100vw-32px))]"
+        className="w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl bg-[var(--card)]"
       >
         <div className="flex h-full flex-col">
-          <div className="border-b px-4 py-4 sm:px-5">
-            <div className="pr-10">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Catalogue produits
-              </p>
-              <h3 className="mt-1 text-lg font-black">Choisir un article</h3>
-              <p className="mt-1 text-[13px] text-[var(--muted)]">
-                Recherchez un produit, indiquez la quantite, puis ajoutez-le au document.
-              </p>
+          {/* Header */}
+          <div className="border-b border-[var(--border)] px-6 py-5 bg-[var(--surface-soft)]/50">
+            <div className="flex items-center gap-3.5 pr-8">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+                <Package size={20} strokeWidth={1.8} className="text-[var(--accent)]" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                    Catalogue d&apos;articles
+                  </span>
+                  <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted-strong)]">
+                    {filteredProducts.length} {filteredProducts.length > 1 ? "articles" : "article"}
+                  </span>
+                </div>
+                <h3 className="text-lg font-extrabold tracking-tight text-[var(--foreground)]">
+                  Choisir un article
+                </h3>
+                <p className="text-xs text-[var(--muted)]">
+                  {catalogTargetLineIndex === null
+                    ? "Ajout rapide : cliquez pour insérer un nouvel article dans le document."
+                    : `Remplacement direct de la ligne #${catalogTargetLineIndex + 1}.`}
+                </p>
+              </div>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+
+            {/* Search Bar */}
+            <div className="mt-4">
               <Input
                 value={productSearch}
                 onChange={(event) => setProductSearch(event.target.value)}
-                placeholder="Rechercher par reference ou designation"
+                placeholder="Rechercher par référence, désignation..."
+                className="h-11 rounded-xl"
+                autoFocus
               />
-              <Button type="button" variant="ghost" onClick={closeProductPicker}>
-                Fermer
-              </Button>
-            </div>
-            <div className="mt-3 rounded-xl border bg-[var(--background-alt)] px-3 py-2.5 text-sm text-[var(--muted)]">
-              {catalogTargetLineIndex === null
-                ? "Ajout rapide: chaque clic ajoute un nouvel article dans le devis."
-                : `Remplacement de la ligne ${catalogTargetLineIndex + 1}.`}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          {/* Catalog Grid */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
             {filteredProducts.length ? (
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 {filteredProducts.map((product) => {
                   const quantityValue = productQuantities[product.id] ?? "1";
 
                   return (
-                    <div key={product.id} className="rounded-[20px] border bg-[var(--card)] p-4 shadow-[var(--shadow-md)]">
+                    <div
+                      key={product.id}
+                      className="group flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-xs transition-all duration-200 hover:border-[var(--accent)] hover:shadow-sm"
+                    >
+                      {/* Top Row: Ref Badge, Name, Price */}
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                            {product.ref || "Produit"}
-                          </p>
-                          <p className="mt-1 text-sm font-bold">{product.designation ?? product.name}</p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            Unite: {product.unite || "u"} {isPricingDocument ? `â€¢ PU ${formatCurrency(Number(product.prix_ht ?? 0))}` : ""}
-                          </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-md border border-[var(--border)] bg-[var(--surface-soft)] px-2 py-0.5 text-[11px] font-bold font-mono text-[var(--muted-strong)]">
+                              {product.ref || "ART"}
+                            </span>
+                            <span className="text-xs text-[var(--muted)]">
+                              Unité : <strong className="text-[var(--foreground)] font-semibold">{product.unite || "u"}</strong>
+                            </span>
+                          </div>
+                          <h4 className="mt-1.5 text-sm font-extrabold text-[var(--foreground)] group-hover:text-[var(--accent)] transition-colors leading-snug">
+                            {product.designation ?? product.name}
+                          </h4>
                         </div>
+
                         {isPricingDocument ? (
-                          <div className="rounded-xl border bg-[var(--background-alt)] px-3 py-2 text-right">
-                            <p className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Prix</p>
-                            <p className="mt-1 text-sm font-bold">{formatCurrency(Number(product.prix_ht ?? 0))}</p>
+                          <div className="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-1.5 text-right">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">Prix HT</span>
+                            <p className="text-sm font-black text-[var(--foreground)]">
+                              {formatCurrency(Number(product.prix_ht ?? 0))}
+                            </p>
                           </div>
                         ) : null}
                       </div>
 
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                        <Field label="Quantite" className="sm:max-w-[188px]">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="min-h-10 w-10 px-0"
-                              onClick={() => adjustCatalogQuantity(product.id, -1)}
-                            >
-                              -
-                            </Button>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="1"
-                              value={quantityValue}
-                              onChange={(event) => setCatalogQuantity(product.id, event.target.value)}
-                              className="text-center"
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="min-h-10 w-10 px-0"
-                              onClick={() => adjustCatalogQuantity(product.id, 1)}
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </Field>
+                      {/* Bottom Row: Stepper & Action Button (No collision or overflow) */}
+                      <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-[var(--muted)] font-medium hidden sm:inline">Qté:</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustCatalogQuantity(product.id, -1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] text-sm font-bold text-[var(--foreground)] hover:bg-[var(--card)] transition-colors cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="1"
+                            value={quantityValue}
+                            onChange={(event) => setCatalogQuantity(product.id, event.target.value)}
+                            className="h-8 w-14 rounded-lg border border-[var(--border)] bg-[var(--card)] text-center text-xs font-bold text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => adjustCatalogQuantity(product.id, 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] text-sm font-bold text-[var(--foreground)] hover:bg-[var(--card)] transition-colors cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
 
-                        <Button type="button" className="w-full sm:w-auto" onClick={() => addProductFromCatalog(product, quantityValue)}>
-                          Ajouter au document
-                        </Button>
+                        {/* Add Button */}
+                        <button
+                          type="button"
+                          onClick={() => addProductFromCatalog(product, quantityValue)}
+                          className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold shadow-xs transition-all hover:opacity-90 active:scale-95 cursor-pointer"
+                          style={{
+                            backgroundColor: "var(--accent)",
+                            color: "var(--accent-foreground)",
+                          }}
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                          <span>Ajouter</span>
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="rounded-[20px] border border-dashed px-4 py-8 text-center text-sm text-[var(--muted)]">
-                Aucun produit ne correspond a votre recherche.
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border-strong)] p-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] text-[var(--muted)]">
+                  <Package size={24} strokeWidth={1.6} />
+                </div>
+                <p className="mt-3 text-sm font-bold text-[var(--foreground)]">Aucun article trouvé</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Aucun produit ne correspond à votre recherche &quot;{productSearch}&quot;.
+                </p>
               </div>
             )}
           </div>
@@ -1048,44 +1093,61 @@ export function DocumentForm({
     >
       <SheetContent
         side="right"
-        className="left-auto right-0 w-full border-l p-0 sm:max-w-none md:w-[min(560px,calc(100vw-32px))]"
+        className="w-full sm:max-w-[480px] md:max-w-[520px] bg-[var(--card)]"
       >
         <div className="flex h-full flex-col">
-          <div className="border-b px-4 py-4 sm:px-5">
-            <div className="pr-10">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Ajout rapide
-              </p>
-              <h3 className="mt-1 text-lg font-black">
-                {type === "bc" ? "Nouveau fournisseur" : "Nouveau client"}
-              </h3>
-              <p className="mt-1 text-[13px] text-[var(--muted)]">
-                Ajoutez-le ici, il sera choisi automatiquement dans le document.
-              </p>
+          {/* Header */}
+          <div className="border-b border-[var(--border)] px-6 py-5 bg-[var(--surface-soft)]/50">
+            <div className="flex items-center gap-3.5 pr-8">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xs">
+                {type === "bc" ? (
+                  <Building2 size={20} strokeWidth={1.8} className="text-[var(--accent)]" />
+                ) : (
+                  <UserPlus size={20} strokeWidth={1.8} className="text-[var(--accent)]" />
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                  Ajout express
+                </span>
+                <h3 className="text-lg font-extrabold tracking-tight text-[var(--foreground)]">
+                  {type === "bc" ? "Nouveau fournisseur" : "Nouveau client"}
+                </h3>
+                <p className="text-xs text-[var(--muted)]">
+                  Enregistré dans la base et sélectionné immédiatement dans ce document.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-            <div className="grid gap-3">
-              <Field label="Nom">
+          {/* Form Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid gap-4">
+              <Field label={type === "bc" ? "Raison sociale ou Nom du fournisseur *" : "Nom complet ou Raison sociale *"}>
                 <Input
                   value={partyDraft.name}
                   onChange={(event) => updatePartyDraft("name", event.target.value)}
-                  placeholder={type === "bc" ? "Nom du fournisseur" : "Nom du client"}
+                  placeholder={type === "bc" ? "Ex: Société Atlas SARL..." : "Ex: Société Moderne ou M. Bennani"}
+                  className="h-11 rounded-xl"
+                  autoFocus
                 />
               </Field>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Telephone">
+                <Field label="Téléphone">
                   <Input
                     value={partyDraft.phone}
                     onChange={(event) => updatePartyDraft("phone", event.target.value)}
+                    placeholder="Ex: 0539 00 00 00"
+                    className="h-11 rounded-xl"
                   />
                 </Field>
-                <Field label="ICE">
+                <Field label="ICE (Identifiant)">
                   <Input
                     value={partyDraft.ice}
                     onChange={(event) => updatePartyDraft("ice", event.target.value)}
+                    placeholder="Ex: 001234567800000"
+                    className="h-11 rounded-xl font-mono text-xs"
                   />
                 </Field>
               </div>
@@ -1094,41 +1156,65 @@ export function DocumentForm({
                 <Textarea
                   value={partyDraft.address}
                   onChange={(event) => updatePartyDraft("address", event.target.value)}
-                  className="min-h-24"
+                  placeholder="Adresse complète, quartier, ville..."
+                  className="min-h-[76px] rounded-xl resize-none"
                 />
               </Field>
 
-              <Field label="Email">
+              <Field label="Adresse email">
                 <Input
                   type="email"
                   value={partyDraft.email}
                   onChange={(event) => updatePartyDraft("email", event.target.value)}
+                  placeholder="contact@domaine.ma"
+                  className="h-11 rounded-xl"
                 />
               </Field>
 
-              <Field label="Notes">
+              <Field label="Remarques / Observations">
                 <Textarea
                   value={partyDraft.notes}
                   onChange={(event) => updatePartyDraft("notes", event.target.value)}
-                  className="min-h-20"
+                  placeholder="Conditions particulières, contact principal..."
+                  className="min-h-[72px] rounded-xl resize-none"
                 />
               </Field>
 
               {partyCreateError ? (
-                <div className="rounded-xl border border-[var(--danger)]/30 bg-[color-mix(in_oklch,var(--danger)_10%,white)] px-3 py-2 text-sm text-[var(--danger)]">
+                <div className="rounded-xl border border-[var(--danger)]/30 bg-red-50/50 p-3 text-sm text-[var(--danger)]">
                   {partyCreateError}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className="border-t px-4 py-4 sm:px-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="ghost" onClick={closePartySheet} disabled={isCreatingParty}>
+          {/* Footer */}
+          <div className="border-t border-[var(--border)] px-6 py-4 bg-[var(--surface-soft)]/40 flex items-center justify-between gap-3">
+            <span className="text-xs text-[var(--muted)] hidden sm:inline">
+              * Champ obligatoire
+            </span>
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={closePartySheet}
+                disabled={isCreatingParty}
+                className="rounded-xl h-10 px-4 font-medium"
+              >
                 Annuler
               </Button>
-              <Button type="button" onClick={submitQuickParty} disabled={isCreatingParty}>
-                {isCreatingParty ? "Enregistrement..." : "Enregistrer et choisir"}
+              <Button
+                type="button"
+                onClick={submitQuickParty}
+                disabled={isCreatingParty}
+                className="rounded-xl h-10 px-5 font-bold shadow-xs flex items-center gap-2"
+                style={{
+                  backgroundColor: "var(--accent)",
+                  color: "var(--accent-foreground)",
+                }}
+              >
+                <Check size={16} strokeWidth={2.2} />
+                <span>{isCreatingParty ? "Enregistrement..." : "Enregistrer et choisir"}</span>
               </Button>
             </div>
           </div>
@@ -1285,7 +1371,7 @@ export function DocumentForm({
                     <Input value="Attribué à l'enregistrement" readOnly />
                   </Field>
                   <Field label="Date">
-                    <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+                    <AppDateInput value={date} onChange={setDate} />
                   </Field>
                   {type === "bs" ? null : (
                     <Field label="Magasin">
@@ -1447,12 +1533,11 @@ export function DocumentForm({
                   <Input value={document?.numero ? String(document.numero) : "Attribué à l'enregistrement"} readOnly />
                 </Field>
                 <Field label="Date">
-                  <Input
+                  <AppDateInput
                     name="date"
-                    type="date"
                     value={date}
                     disabled={locked}
-                    onChange={(event) => setDate(event.target.value)}
+                    onChange={setDate}
                   />
                 </Field>
               </div>
@@ -1556,7 +1641,29 @@ function stringValue(value: number | string | null | undefined) {
   return value == null ? "" : String(value);
 }
 
-function getWizardSteps(type: DocumentKind) {
+function getWizardSteps(type: DocumentKind, locale: "fr" | "ar" = "fr") {
+  if (locale === "ar") {
+    if (type === "bs") {
+      return [
+        { id: 1 as const, title: "المحل الأصل والوجهة", description: "اختر الماڭازات اللي غاتحول السلعة بيناتهم." },
+        { id: 2 as const, title: "السلعة والمنتوجات", description: "حدد السلعة والكميات اللي غاتخرج." },
+        { id: 3 as const, title: "المراجعة والتأكيد", description: "تأكد من الحساب وسجل الوثيقة." },
+      ];
+    }
+    if (type === "bc") {
+      return [
+        { id: 1 as const, title: "الماڭازا والفورنيسور", description: "حدد المحل والمورد." },
+        { id: 2 as const, title: "السلعة المطلوبة", description: "حدد السلعة والكميات المراد طلبها." },
+        { id: 3 as const, title: "المراجعة والتأكيد", description: "تأكد من الحساب وسجل الطلب." },
+      ];
+    }
+    return [
+      { id: 1 as const, title: "الماڭازا والكليان", description: "حدد المحل والزبون المعني بالوثيقة." },
+      { id: 2 as const, title: "السلعة والكميات", description: "حدد السلعة، الأثمنة، والتخفيضات." },
+      { id: 3 as const, title: "المراجعة والتأكيد", description: "تأكد من الحساب وسجل الوثيقة." },
+    ];
+  }
+
   if (type === "bs") {
     return [
       { id: 1 as const, title: "Départ & arrivée", description: "Choisissez les deux magasins." },

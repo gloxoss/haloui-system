@@ -5,9 +5,11 @@ import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import { Button, Kbd, Modal, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import { Search } from "lucide-react";
 
+import { useTranslation } from "@/lib/i18n";
 import { type SearchResult } from "@/lib/types";
 
 export function CommandPalette() {
+  const { t, locale } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -61,13 +63,13 @@ export function CommandPalette() {
         className="hidden md:inline-flex"
         onClick={() => setOpen(true)}
       >
-        Recherche globale
+        {t.commandPalette.triggerButton}
       </Button>
 
       <Modal
         opened={open}
         onClose={() => setOpen(false)}
-        title="Recherche globale"
+        title={t.commandPalette.modalTitle}
         centered
         radius="xl"
         size="lg"
@@ -77,15 +79,16 @@ export function CommandPalette() {
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="Rechercher un document, un produit, un client..."
+            placeholder={t.commandPalette.placeholder}
             leftSection={<Search size={16} />}
             radius="md"
+            dir={locale === "ar" ? "rtl" : "ltr"}
           />
 
           <Stack gap="xs">
             {results.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                {query.trim() ? "Aucun resultat." : "Commencez a taper pour lancer la recherche."}
+              <Text c="dimmed" size="sm" ta={locale === "ar" ? "right" : "left"}>
+                {query.trim() ? t.commandPalette.noResults : t.commandPalette.startTyping}
               </Text>
             ) : (
               results.map((result) => (
@@ -99,7 +102,7 @@ export function CommandPalette() {
                     background: "var(--surface-soft)",
                     borderRadius: 16,
                     padding: "12px 14px",
-                    textAlign: "left",
+                    textAlign: locale === "ar" ? "right" : "left",
                   }}
                 >
                   <Text fw={700}>{result.label}</Text>

@@ -49,7 +49,7 @@ function timestampLabel() {
   return new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
 }
 
-export function createDatabaseBackup(prefix = "haloui-backup") {
+export function createDatabaseBackup(prefix = "backup") {
   ensureDataDirectories();
   const backupPath = path.join(BACKUP_DIR, `${prefix}-${timestampLabel()}.db`);
   const db = getDb();
@@ -59,7 +59,7 @@ export function createDatabaseBackup(prefix = "haloui-backup") {
 
 function backupDatabase(db: Database.Database) {
   const date = new Date().toISOString().slice(0, 10);
-  const backupPath = path.join(BACKUP_DIR, `haloui-${date}.db`);
+  const backupPath = path.join(BACKUP_DIR, `backup-${date}.db`);
 
   if (fs.existsSync(backupPath) || !fs.existsSync(DB_PATH)) {
     return;
@@ -94,9 +94,24 @@ function seedFeatureFlags(db: Database.Database) {
 
 function getSuperadminConfig() {
   return {
-    username: (process.env.HALOUI_SUPERADMIN_USERNAME || DEFAULT_SUPERADMIN_USERNAME).trim(),
-    password: (process.env.HALOUI_SUPERADMIN_PASSWORD || DEFAULT_SUPERADMIN_PASSWORD).trim(),
-    fullName: (process.env.HALOUI_SUPERADMIN_NAME || DEFAULT_SUPERADMIN_NAME).trim(),
+    username: (
+      process.env.APP_SUPERADMIN_USERNAME ||
+      process.env.SUPERADMIN_USERNAME ||
+      process.env.HALOUI_SUPERADMIN_USERNAME ||
+      DEFAULT_SUPERADMIN_USERNAME
+    ).trim(),
+    password: (
+      process.env.APP_SUPERADMIN_PASSWORD ||
+      process.env.SUPERADMIN_PASSWORD ||
+      process.env.HALOUI_SUPERADMIN_PASSWORD ||
+      DEFAULT_SUPERADMIN_PASSWORD
+    ).trim(),
+    fullName: (
+      process.env.APP_SUPERADMIN_NAME ||
+      process.env.SUPERADMIN_NAME ||
+      process.env.HALOUI_SUPERADMIN_NAME ||
+      DEFAULT_SUPERADMIN_NAME
+    ).trim(),
   };
 }
 
@@ -300,6 +315,35 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "company", "attestation_template_bank", "TEXT DEFAULT ''");
   ensureColumnExists(db, "users", "is_superadmin", "INTEGER NOT NULL DEFAULT 0");
   ensureColumnExists(db, "users", "hidden_from_admin", "INTEGER NOT NULL DEFAULT 0");
+
+  ensureColumnExists(db, "chiffre_affaires", "especes", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "chiffre_affaires", "carte", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "chiffre_affaires", "cheque", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "chiffre_affaires", "virement", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "chiffre_affaires", "preuve_path", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "chiffre_affaires", "statut_cloture", "TEXT DEFAULT 'brouillon'");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sorties_caisse (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      branch_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      montant REAL NOT NULL DEFAULT 0,
+      motif TEXT NOT NULL,
+      beneficiaire TEXT DEFAULT '',
+      preuve_path TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      updated_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sorties_caisse_date ON sorties_caisse(date);
+    CREATE INDEX IF NOT EXISTS idx_sorties_caisse_branch ON sorties_caisse(branch_id);
+  `);
 
   createSettingsTable(db);
   seedFeatureFlags(db);

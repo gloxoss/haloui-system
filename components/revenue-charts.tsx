@@ -14,6 +14,7 @@ import {
 } from "recharts";
 
 import { Card } from "@/components/ui/card";
+import { useTranslation } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/utils";
 
 const PALETTE = ["#C98C2D", "#6F8F4E", "#A85F3A", "#6B7D8F", "#B8A054", "#7D6759"];
@@ -25,6 +26,7 @@ export function RevenueCharts({
   daily: Array<{ date: string; total: number }>;
   monthlyByBranch: Array<{ month: string; name: string; total: number }>;
 }) {
+  const { locale } = useTranslation();
   const monthlyMap = new Map<string, Record<string, string | number>>();
   for (const row of monthlyByBranch) {
     if (!monthlyMap.has(row.month)) {
@@ -38,8 +40,12 @@ export function RevenueCharts({
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Card>
-        <p className="text-xs font-semibold text-[var(--muted)]">Tendance quotidienne</p>
-        <h3 className="mt-1 text-lg font-black">CA journalier du mois</h3>
+        <p className="text-xs font-semibold text-[var(--muted)]">
+          {locale === "ar" ? "تطور المداخيل اليومية" : "Tendance quotidienne"}
+        </p>
+        <h3 className="mt-1 text-lg font-black">
+          {locale === "ar" ? "المداخيل اليومية لهاد الشهر" : "CA journalier du mois"}
+        </h3>
         <div className="mt-3.5 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={daily}>
@@ -54,8 +60,12 @@ export function RevenueCharts({
       </Card>
 
       <Card>
-        <p className="text-xs font-semibold text-[var(--muted)]">Par magasin</p>
-        <h3 className="mt-1 text-lg font-black">12 derniers mois</h3>
+        <p className="text-xs font-semibold text-[var(--muted)]">
+          {locale === "ar" ? "حسب كل فرع" : "Par magasin"}
+        </p>
+        <h3 className="mt-1 text-lg font-black">
+          {locale === "ar" ? "آخر 12 شهر" : "12 derniers mois"}
+        </h3>
         <div className="mt-3.5 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={monthlyData}>

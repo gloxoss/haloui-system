@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { createAttestationAction } from "@/app/actions";
 import { PageHeading } from "@/components/page-heading";
+import { AppDateInput } from "@/components/ui/app-date-input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -11,12 +12,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SubmitButton } from "@/components/ui/submit-button";
 import { buildAttestationContent } from "@/lib/attestations";
 import { ATTESTATION_TYPE_LABELS } from "@/lib/constants";
+import { useTranslation } from "@/lib/i18n";
 import {
   type CompanyRecord,
   type EmployeeAttestationType,
   type EmployeeRecord,
 } from "@/lib/types";
 import { formatDate, todayIso } from "@/lib/utils";
+
+const ATTESTATION_TYPE_LABELS_AR: Record<string, string> = {
+  simple: "شهادة عمل عادية",
+  "avec-salaire": "شهادة عمل مع تحديد الصولد",
+  visa: "شهادة عمل لطلب الڤيزا (Visa)",
+  banque: "شهادة عمل للبنك",
+};
 
 export function AttestationPreview({
   employees,
@@ -25,6 +34,7 @@ export function AttestationPreview({
   employees: EmployeeRecord[];
   company: CompanyRecord;
 }) {
+  const { t, locale } = useTranslation();
   const [employeeId, setEmployeeId] = useState<number>(employees[0]?.id ?? 0);
   const [type, setType] = useState<EmployeeAttestationType>("simple");
   const [date, setDate] = useState(todayIso());
@@ -37,22 +47,22 @@ export function AttestationPreview({
   return (
     <div className="grid gap-4">
       <PageHeading
-        eyebrow="Attestations"
-        title="Generateur d'attestation de travail"
-        description="Choisissez un salarie puis imprimez l'attestation."
+        eyebrow={t.personnel.attestations}
+        title={t.attestations.title}
+        description={t.attestations.subtitle}
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
         <Card>
           <form action={createAttestationAction} className="grid gap-4">
-            <Field label="Salarie">
+            <Field label={t.attestations.employee}>
               <Select
                 name="employe_id"
                 value={String(employeeId)}
                 onValueChange={(value) => setEmployeeId(Number(value))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Salarie" />
+                  <SelectValue placeholder={t.attestations.employee} />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((item) => (
@@ -63,63 +73,75 @@ export function AttestationPreview({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Type">
+            <Field label={t.attestations.type}>
               <Select
                 name="type"
                 value={type}
                 onValueChange={(value) => setType(value as EmployeeAttestationType)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Type" />
+                  <SelectValue placeholder={t.attestations.type} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ATTESTATION_TYPE_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                  {Object.entries(ATTESTATION_TYPE_LABELS).map(([key, label]) => {
+                    const localizedLabel = locale === "ar" && ATTESTATION_TYPE_LABELS_AR[key]
+                      ? ATTESTATION_TYPE_LABELS_AR[key]
+                      : label;
+
+                    return (
+                      <SelectItem key={key} value={key}>
+                        {localizedLabel}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Date">
-              <input
-                className="min-h-10 rounded-xl border bg-[var(--card)] px-3 py-2 text-[13px]"
+            <Field label={t.attestations.date}>
+              <AppDateInput
                 name="date"
-                type="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={setDate}
               />
             </Field>
-            <SubmitButton>Creer et imprimer</SubmitButton>
+            <SubmitButton>{t.attestations.createAndPrint}</SubmitButton>
           </form>
 
           <div className="mt-3.5 rounded-xl border bg-[var(--background-alt)] px-3 py-3 text-[13px] leading-5 text-[var(--muted)]">
-            Les attestations sont archivees automatiquement et consultables depuis le module Personnel.
+            {locale === "ar"
+              ? "الشهادات كيتأرشيفاو أوتوماتيك وكتلقاهم فملف المستخدم المعني فالبرسونيل."
+              : "Les attestations sont archivées automatiquement et consultables depuis le module Personnel."}
           </div>
 
           <div className="mt-3 rounded-xl border bg-[var(--background)] px-3 py-3 text-[12px] leading-5 text-[var(--muted)]">
-            Ce texte vient de Parametres. Variables disponibles: {"{{societe}}"}, {"{{employe}}"}, {"{{cnss}}"}, {"{{date_entree}}"}, {"{{salaire}}"}, {"{{date_du_jour}}"}.
+            {locale === "ar"
+              ? "هاد النص كيجي من الإعدادات. المتغيرات المتاحة: {{societe}}، {{employe}}، {{cnss}}، {{date_entree}}، {{salaire}}، {{date_du_jour}}."
+              : "Ce texte vient de Paramètres. Variables disponibles: {{societe}}, {{employe}}, {{cnss}}, {{date_entree}}, {{salaire}}, {{date_du_jour}}."}
           </div>
         </Card>
 
         <Card className="grid gap-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-[var(--muted)]">Apercu</p>
-              <h3 className="mt-1 text-xl font-black">Texte genere</h3>
+              <p className="text-xs font-semibold text-[var(--muted)]">{t.attestations.preview}</p>
+              <h3 className="mt-1 text-xl font-black">{t.attestations.generatedText}</h3>
             </div>
             <Button type="button" variant="secondary" onClick={() => window.print()}>
-              Tester l'impression
+              {t.attestations.testPrint}
             </Button>
           </div>
 
           <div className="rounded-[20px] border bg-[var(--background)] p-6 shadow-sm">
-            <p className="text-right text-[13px]">Tanger, le {formatDate(date)}</p>
-            <h4 className="mt-8 text-center text-xl font-black uppercase">Attestation de travail</h4>
-            <p className="mt-8 whitespace-pre-line text-[15px] leading-7">
-              {preview || "Selectionnez un salarie pour generer le texte."}
+            <p className="text-right text-[13px]">
+              {locale === "ar" ? `طنجة، في ${formatDate(date)}` : `Tanger, le ${formatDate(date)}`}
             </p>
-            <p className="mt-12 text-right text-sm font-semibold">La direction</p>
+            <h4 className="mt-8 text-center text-xl font-black uppercase">
+              {locale === "ar" ? "شهادة عمل" : "Attestation de travail"}
+            </h4>
+            <p className="mt-8 whitespace-pre-line text-[15px] leading-7">
+              {preview || t.attestations.selectEmployeePrompt}
+            </p>
+            <p className="mt-12 text-right text-sm font-semibold">{t.attestations.managementSignature}</p>
           </div>
         </Card>
       </div>

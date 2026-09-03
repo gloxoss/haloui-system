@@ -42,12 +42,14 @@ import {
   type FeatureFlags,
   type FeatureKey,
   type ManagedRole,
+  type CashDaySummary,
   type PartyType,
   type ProductRecord,
   type RevenueDailyPoint,
   type RevenueMonthlyBranchPoint,
   type RevenueStats,
   type SearchResult,
+  type SortieCaisseRecord,
   type ThemeSettings,
   type UserRecord,
 } from "@/lib/types";
@@ -356,6 +358,37 @@ export function saveBranch(input: Partial<BranchRecord> & { id?: number }, userI
 
   logAudit(userId, "create", "branch", Number(result.lastInsertRowid), input);
   return Number(result.lastInsertRowid);
+}
+
+export function deleteBranch(id: number, userId: number) {
+  const db = getDb();
+
+  const docCount = (
+    db.prepare(`
+      SELECT COUNT(*) as count FROM documents 
+      WHERE branch_id = ? OR source_branch_id = ? OR destination_branch_id = ?
+    `).get(id, id, id) as { count: number }
+  ).count;
+
+  const caCount = (
+    db.prepare(`
+      SELECT COUNT(*) as count FROM chiffre_affaires WHERE branch_id = ?
+    `).get(id) as { count: number }
+  ).count;
+
+  if (docCount > 0 || caCount > 0) {
+    db.prepare(`
+      UPDATE branches 
+      SET active = 0, updated_by = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `).run(userId, id);
+    logAudit(userId, "deactivate", "branch", id, { reason: "has_references" });
+    return { deleted: false, deactivated: true };
+  }
+
+  db.prepare("DELETE FROM branches WHERE id = ?").run(id);
+  logAudit(userId, "delete", "branch", id, {});
+  return { deleted: true, deactivated: false };
 }
 
 export function listUsers() {
@@ -1133,11 +1166,277 @@ export function getAttestationById(id: number) {
   ).get(id) as (AttestationRecord & EmployeeRecord) | undefined;
 }
 
+export function getSystemSalesByDayAndBranch(selectedMonth = monthKey()) {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT branch_id, date, COALESCE(SUM(total_ttc), 0) AS total
+    FROM documents
+    WHERE substr(date, 1, 7) = ?
+      AND type IN ('facture', 'bl')
+      AND branch_id IS NOT NULL
+    GROUP BY branch_id, date
+  `).all(selectedMonth) as Array<{ branch_id: number; date: string; total: number }>;
+
+  return rows;
+}
+
+export function getSystemSalesForDate(date: string) {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT branch_id, COALESCE(SUM(total_ttc), 0) AS total
+    FROM documents
+    WHERE date = ?
+      AND type IN ('facture', 'bl')
+      AND branch_id IS NOT NULL
+    GROUP BY branch_id
+  `).all(date) as Array<{ branch_id: number; total: number }>;
+
+  const map: Record<number, number> = {};
+  for (const row of rows) {
+    map[row.branch_id] = row.total;
+  }
+  return map;
+}
+
+export function syncRevenueFromSystemSales(selectedMonth: string, userId: number) {
+  const db = getDb();
+  const sales = getSystemSalesByDayAndBranch(selectedMonth);
+
+  const statement = db.prepare(`
+    INSERT INTO chiffre_affaires (branch_id, date, montant, notes, created_by, updated_by)
+    VALUES (?, ?, ?, 'Synchronisé automatiquement depuis les factures et BL', ?, ?)
+    ON CONFLICT(branch_id, date) DO UPDATE SET
+      montant = excluded.montant,
+      notes = excluded.notes,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const transaction = db.transaction(() => {
+    for (const sale of sales) {
+      statement.run(sale.branch_id, sale.date, sale.total, userId, userId);
+    }
+  });
+
+  transaction();
+  logAudit(userId, "sync", "revenue_system_sales", null, { month: selectedMonth, syncedRows: sales.length });
+  return sales.length;
+}
+
+export function batchSaveDailyRevenue(
+  date: string,
+  entries: Array<{ branchId: number; montant: number; notes?: string }>,
+  userId: number,
+) {
+  const db = getDb();
+  const statement = db.prepare(`
+    INSERT INTO chiffre_affaires (branch_id, date, montant, notes, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(branch_id, date) DO UPDATE SET
+      montant = excluded.montant,
+      notes = excluded.notes,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const transaction = db.transaction(() => {
+    for (const entry of entries) {
+      statement.run(entry.branchId, date, entry.montant, entry.notes || "", userId, userId);
+    }
+  });
+
+  transaction();
+  logAudit(userId, "batch_upsert", "daily_revenue", null, { date, entriesCount: entries.length });
+}
+
+export function listSortiesCaisse(options?: { month?: string; branchId?: number; date?: string }): SortieCaisseRecord[] {
+  const db = getDb();
+  let query = `
+    SELECT s.*, b.name as branch_name
+    FROM sorties_caisse s
+    JOIN branches b ON b.id = s.branch_id
+    WHERE 1=1
+  `;
+  const params: unknown[] = [];
+
+  if (options?.date) {
+    query += " AND s.date = ?";
+    params.push(options.date);
+  } else if (options?.month) {
+    query += " AND substr(s.date, 1, 7) = ?";
+    params.push(options.month);
+  }
+
+  if (options?.branchId) {
+    query += " AND s.branch_id = ?";
+    params.push(options.branchId);
+  }
+
+  query += " ORDER BY s.date DESC, s.id DESC";
+  return db.prepare(query).all(...params) as SortieCaisseRecord[];
+}
+
+export function saveSortieCaisse(
+  input: {
+    id?: number;
+    branch_id: number;
+    date: string;
+    montant: number;
+    motif: string;
+    beneficiaire?: string;
+    preuve_path?: string;
+    notes?: string;
+  },
+  userId: number,
+) {
+  const db = getDb();
+  if (input.id) {
+    db.prepare(`
+      UPDATE sorties_caisse
+      SET branch_id = @branch_id,
+          date = @date,
+          montant = @montant,
+          motif = @motif,
+          beneficiaire = @beneficiaire,
+          preuve_path = COALESCE(NULLIF(@preuve_path, ''), preuve_path),
+          notes = @notes,
+          updated_by = @userId,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = @id
+    `).run({
+      id: input.id,
+      branch_id: input.branch_id,
+      date: input.date,
+      montant: input.montant,
+      motif: input.motif,
+      beneficiaire: input.beneficiaire || "",
+      preuve_path: input.preuve_path || "",
+      notes: input.notes || "",
+      userId,
+    });
+    logAudit(userId, "update", "sortie_caisse", input.id, input);
+    return input.id;
+  }
+
+  const result = db.prepare(`
+    INSERT INTO sorties_caisse (branch_id, date, montant, motif, beneficiaire, preuve_path, notes, created_by, updated_by)
+    VALUES (@branch_id, @date, @montant, @motif, @beneficiaire, @preuve_path, @notes, @userId, @userId)
+  `).run({
+    branch_id: input.branch_id,
+    date: input.date,
+    montant: input.montant,
+    motif: input.motif,
+    beneficiaire: input.beneficiaire || "",
+    preuve_path: input.preuve_path || "",
+    notes: input.notes || "",
+    userId,
+  });
+
+  const newId = Number(result.lastInsertRowid);
+  logAudit(userId, "create", "sortie_caisse", newId, input);
+  return newId;
+}
+
+export function deleteSortieCaisse(id: number, userId: number) {
+  const db = getDb();
+  db.prepare("DELETE FROM sorties_caisse WHERE id = ?").run(id);
+  logAudit(userId, "delete", "sortie_caisse", id, { id });
+}
+
+export function getCashDaySummary(date: string, branchId: number): CashDaySummary {
+  const db = getDb();
+  const branch = db.prepare("SELECT name FROM branches WHERE id = ?").get(branchId) as { name: string } | undefined;
+
+  const ca = db.prepare(`
+    SELECT * FROM chiffre_affaires WHERE branch_id = ? AND date = ?
+  `).get(branchId, date) as any;
+
+  const sorties = listSortiesCaisse({ date, branchId });
+  const total_sorties = sorties.reduce((sum, s) => sum + Number(s.montant), 0);
+
+  const especes = Number(ca?.especes ?? ca?.montant ?? 0);
+  const carte = Number(ca?.carte ?? 0);
+  const cheque = Number(ca?.cheque ?? 0);
+  const virement = Number(ca?.virement ?? 0);
+  const total_recettes = Number(ca?.montant ?? (especes + carte + cheque + virement));
+  const solde_net_caisse = especes - total_sorties;
+
+  return {
+    date,
+    branch_id: branchId,
+    branch_name: branch?.name,
+    especes,
+    carte,
+    cheque,
+    virement,
+    total_recettes,
+    total_sorties,
+    solde_net_caisse,
+    preuve_path: ca?.preuve_path || "",
+    statut_cloture: ca?.statut_cloture || "brouillon",
+    notes: ca?.notes || "",
+    sorties,
+  };
+}
+
+export function saveCashDayClosing(
+  input: {
+    branch_id: number;
+    date: string;
+    especes: number;
+    carte: number;
+    cheque: number;
+    virement: number;
+    preuve_path?: string;
+    notes?: string;
+    statut_cloture?: "brouillon" | "cloture";
+  },
+  userId: number,
+) {
+  const db = getDb();
+  const total = Number(input.especes) + Number(input.carte) + Number(input.cheque) + Number(input.virement);
+
+  db.prepare(`
+    INSERT INTO chiffre_affaires (
+      branch_id, date, montant, especes, carte, cheque, virement, preuve_path, statut_cloture, notes, created_by, updated_by
+    )
+    VALUES (
+      @branch_id, @date, @montant, @especes, @carte, @cheque, @virement, @preuve_path, @statut_cloture, @notes, @userId, @userId
+    )
+    ON CONFLICT(branch_id, date) DO UPDATE SET
+      montant = excluded.montant,
+      especes = excluded.especes,
+      carte = excluded.carte,
+      cheque = excluded.cheque,
+      virement = excluded.virement,
+      preuve_path = COALESCE(NULLIF(excluded.preuve_path, ''), chiffre_affaires.preuve_path),
+      statut_cloture = excluded.statut_cloture,
+      notes = excluded.notes,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `).run({
+    branch_id: input.branch_id,
+    date: input.date,
+    montant: total,
+    especes: input.especes,
+    carte: input.carte,
+    cheque: input.cheque,
+    virement: input.virement,
+    preuve_path: input.preuve_path || "",
+    statut_cloture: input.statut_cloture || "cloture",
+    notes: input.notes || "",
+    userId,
+  });
+
+  logAudit(userId, "closing", "cash_day_closing", input.branch_id, { ...input, total });
+}
+
 export function getRevenueGrid(selectedMonth = monthKey()) {
   const db = getDb();
   const branches = listBranches({ activeOnly: true });
   const days = listDaysInMonth(selectedMonth);
 
+  // Manual CA rows
   const rows = db.prepare(
     `
       SELECT branch_id, date, montant
@@ -1145,15 +1444,25 @@ export function getRevenueGrid(selectedMonth = monthKey()) {
       WHERE substr(date, 1, 7) = ?
     `,
   ).all(selectedMonth) as Array<{ branch_id: number; date: string; montant: number }>;
-
   const lookup = new Map(rows.map((row) => [`${row.date}:${row.branch_id}`, row.montant]));
+
+  // Auto System sales rows from documents
+  const systemSales = getSystemSalesByDayAndBranch(selectedMonth);
+  const systemLookup = new Map(systemSales.map((s) => [`${s.date}:${s.branch_id}`, s.total]));
 
   const table = days.map((date) => {
     const values = Object.fromEntries(
       branches.map((branch) => [branch.id, lookup.get(`${date}:${branch.id}`) ?? 0]),
     );
+    const systemValues = Object.fromEntries(
+      branches.map((branch) => [branch.id, systemLookup.get(`${date}:${branch.id}`) ?? 0]),
+    );
+
     const total = Object.values(values).reduce((sum, amount) => sum + Number(amount), 0);
-    return { date, values, total };
+    const systemTotal = Object.values(systemValues).reduce((sum, amount) => sum + Number(amount), 0);
+    const diff = total - systemTotal;
+
+    return { date, values, systemValues, total, systemTotal, diff };
   });
 
   return { month: selectedMonth, branches, table };
@@ -1185,6 +1494,19 @@ export function getRevenueStats(selectedMonth = monthKey()): RevenueStats {
   const yearTotal = db
     .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 4) = ?")
     .get(year) as { total: number };
+
+  const systemMonthTotalRow = db
+    .prepare(`
+      SELECT COALESCE(SUM(total_ttc), 0) AS total
+      FROM documents
+      WHERE substr(date, 1, 7) = ?
+        AND type IN ('facture', 'bl')
+        AND branch_id IS NOT NULL
+    `)
+    .get(selectedMonth) as { total: number };
+
+  const systemMonthTotal = systemMonthTotalRow.total;
+  const diffMonthTotal = monthTotal.total - systemMonthTotal;
 
   const bestBranch = db
     .prepare(
@@ -1234,6 +1556,8 @@ export function getRevenueStats(selectedMonth = monthKey()): RevenueStats {
   return {
     monthTotal: monthTotal.total,
     yearTotal: yearTotal.total,
+    systemMonthTotal,
+    diffMonthTotal,
     bestBranch,
     daily,
     monthlyByBranch,

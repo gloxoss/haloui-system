@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
@@ -22,7 +23,11 @@ export default async function ProtectedLayout({
 
   const company = getCompany();
   const featureFlags = getFeatureFlags();
+  const cookieStore = await cookies();
   const themeSettings = getThemeSettings();
+  const activePreset = (cookieStore.get("app_theme")?.value as typeof themeSettings.preset) || themeSettings.preset;
+  const activeDensity = (cookieStore.get("app_density")?.value as typeof themeSettings.density) || themeSettings.density;
+  const activeThemeSettings = { preset: activePreset, density: activeDensity };
 
   return (
     <AppShell
@@ -31,7 +36,7 @@ export default async function ProtectedLayout({
       userRole={session.user.role}
       logoPath={company.logo_path}
       featureFlags={featureFlags}
-      themeSettings={themeSettings}
+      themeSettings={activeThemeSettings}
     >
       {children}
     </AppShell>

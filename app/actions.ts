@@ -1,20 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { requireAdmin, requireAuth, requireSuperadmin, updateUserPassword } from "@/lib/auth";
 import { FEATURE_TOGGLE_DEFINITIONS } from "@/lib/constants";
 import { getCompany } from "@/lib/data";
 import {
+  batchSaveDailyRevenue,
   bulkSaveProducts,
   convertDocument,
   createAttestation,
   deleteEmployee,
   deleteEntity,
   deleteProduct,
+  deleteBranch,
+  deleteSortieCaisse,
   resetBusinessData,
   saveBranch,
+  saveCashDayClosing,
   saveCompany,
   saveDocument,
   saveEmployee,
@@ -22,12 +27,14 @@ import {
   saveFeatureFlags,
   saveThemeSettings,
   saveProduct,
+  saveSortieCaisse,
   saveUser,
+  syncRevenueFromSystemSales,
   updateDocumentStatus,
   upsertRevenueEntry,
 } from "@/lib/data";
 import { createDatabaseBackup } from "@/lib/db";
-import { safeJsonParse, todayIso, toNumber } from "@/lib/utils";
+import { monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
 import {
   type DocumentLineInput,
   type DocumentStatus,
@@ -45,7 +52,7 @@ function refresh(paths: string[]) {
 }
 
 export async function saveCompanyAction(formData: FormData) {
-  const session = await requireAuth();
+  const session = await requireSuperadmin();
   const current = getCompany();
 
   saveCompany(
@@ -70,7 +77,7 @@ export async function saveCompanyAction(formData: FormData) {
 }
 
 export async function saveBranchAction(formData: FormData) {
-  const session = await requireAuth();
+  const session = await requireSuperadmin();
   saveBranch(
     {
       id: Number(formData.get("id")) || undefined,
@@ -81,7 +88,16 @@ export async function saveBranchAction(formData: FormData) {
     },
     session.user.id,
   );
-  refresh(["/parametres", "/dashboard"]);
+  refresh(["/parametres", "/dashboard", "/chiffre-affaires"]);
+}
+
+export async function deleteBranchAction(formData: FormData) {
+  const session = await requireSuperadmin();
+  const id = Number(formData.get("id"));
+  if (id) {
+    deleteBranch(id, session.user.id);
+  }
+  refresh(["/parametres", "/dashboard", "/chiffre-affaires"]);
 }
 
 export async function saveUserAction(formData: FormData) {
@@ -132,41 +148,37 @@ export async function saveFeatureFlagsAction(formData: FormData) {
 export async function saveThemeSettingsAction(formData: FormData) {
   const session = await requireSuperadmin();
 
+  const preset = String(formData.get("theme_preset") || "") as ThemePreset;
+  const density = String(formData.get("theme_density") || "") as ThemeDensity;
+
   saveThemeSettings(
     {
-      preset: String(formData.get("theme_preset") || "") as ThemePreset,
-      density: String(formData.get("theme_density") || "") as ThemeDensity,
+      preset,
+      density,
     },
     session.user.id,
   );
 
-  refresh([
-    "/dashboard",
-    "/devis",
-    "/factures",
-    "/bons-livraison",
-    "/bons-sortie",
-    "/bons-commande",
-    "/produits",
-    "/clients",
-    "/fournisseurs",
-    "/personnel",
-    "/personnel/attestation",
-    "/chiffre-affaires",
-    "/utilisateurs",
-    "/parametres",
-  ]);
+  const cookieStore = await cookies();
+  if (preset) {
+    cookieStore.set("app_theme", preset, { path: "/", maxAge: 31536000 });
+  }
+  if (density) {
+    cookieStore.set("app_density", density, { path: "/", maxAge: 31536000 });
+  }
+
+  revalidatePath("/", "layout");
 }
 
 export async function manualBackupAction() {
   await requireSuperadmin();
-  createDatabaseBackup("haloui-manual");
+  createDatabaseBackup("backup-manual");
   refresh(["/parametres"]);
 }
 
 export async function resetBusinessDataAction() {
   await requireSuperadmin();
-  createDatabaseBackup("haloui-before-reset");
+  createDatabaseBackup("backup-before-reset");
   resetBusinessData();
   refresh([
     "/dashboard",
@@ -430,6 +442,116 @@ export async function saveRevenueCellAction(formData: FormData) {
   refresh(["/dashboard", "/chiffre-affaires"]);
 }
 
+export async function syncRevenueAction(formData: FormData) {
+  const session = await requireAuth();
+  const month = String(formData.get("month") || monthKey());
+  syncRevenueFromSystemSales(month, session.user.id);
+  refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
+export async function saveDailyRevenueAction(formData: FormData) {
+  const session = await requireAuth();
+  const date = String(formData.get("date") || todayIso());
+  const entries: Array<{ branchId: number; montant: number; notes?: string }> = [];
+
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("montant_")) {
+      const branchId = Number(key.replace("montant_", ""));
+      if (branchId > 0) {
+        entries.push({
+          branchId,
+          montant: toNumber(value),
+          notes: String(formData.get(`notes_${branchId}`) || ""),
+        });
+      }
+    }
+  }
+
+  if (entries.length > 0) {
+    batchSaveDailyRevenue(date, entries, session.user.id);
+  }
+  refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
+export async function saveBatchRevenueCellsAction(
+  entries: Array<{ branchId: number; date: string; montant: number }>,
+) {
+  const session = await requireAuth();
+  for (const entry of entries) {
+    upsertRevenueEntry(entry.branchId, entry.date, entry.montant, session.user.id);
+  }
+  refresh(["/dashboard", "/chiffre-affaires"]);
+  return { success: true };
+}
+
+export async function saveCashDayClosingAction(formData: FormData) {
+  const session = await requireAuth();
+  const branch_id = Number(formData.get("branch_id"));
+  const date = String(formData.get("date") || todayIso());
+  const especes = toNumber(formData.get("especes"));
+  const carte = toNumber(formData.get("carte"));
+  const cheque = toNumber(formData.get("cheque"));
+  const virement = toNumber(formData.get("virement"));
+  const preuve_path = String(formData.get("preuve_path") || "");
+  const notes = String(formData.get("notes") || "");
+  const statut_cloture = (formData.get("statut_cloture") as "brouillon" | "cloture") || "cloture";
+
+  saveCashDayClosing(
+    {
+      branch_id,
+      date,
+      especes,
+      carte,
+      cheque,
+      virement,
+      preuve_path,
+      notes,
+      statut_cloture,
+    },
+    session.user.id,
+  );
+
+  refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
+export async function saveSortieCaisseAction(formData: FormData) {
+  const session = await requireAuth();
+  const idRaw = formData.get("id");
+  const id = idRaw ? Number(idRaw) : undefined;
+  const branch_id = Number(formData.get("branch_id"));
+  const date = String(formData.get("date") || todayIso());
+  const montant = toNumber(formData.get("montant"));
+  const motif = String(formData.get("motif") || "Dépense courante");
+  const beneficiaire = String(formData.get("beneficiaire") || "");
+  const preuve_path = String(formData.get("preuve_path") || "");
+  const notes = String(formData.get("notes") || "");
+
+  saveSortieCaisse(
+    {
+      id,
+      branch_id,
+      date,
+      montant,
+      motif,
+      beneficiaire,
+      preuve_path,
+      notes,
+    },
+    session.user.id,
+  );
+
+  refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
+export async function deleteSortieCaisseAction(formData: FormData) {
+  const session = await requireAuth();
+  const id = Number(formData.get("id"));
+  if (id > 0) {
+    deleteSortieCaisse(id, session.user.id);
+  }
+  refresh(["/dashboard", "/chiffre-affaires"]);
+}
+
 export async function changeOwnPasswordAction(formData: FormData) {
   const session = await requireAuth();
   const password = String(formData.get("password") || "");
@@ -441,4 +563,14 @@ export async function changeOwnPasswordAction(formData: FormData) {
 
   updateUserPassword(session.user.id, password);
   redirect("/dashboard");
+}
+
+export async function setLocaleAction(locale: "fr" | "ar") {
+  const cookieStore = await cookies();
+  cookieStore.set("app_locale", locale === "ar" ? "ar" : "fr", {
+    path: "/",
+    maxAge: 31536000,
+    sameSite: "lax",
+  });
+  revalidatePath("/", "layout");
 }

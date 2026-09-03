@@ -1,12 +1,14 @@
 import {
+  deleteBranchAction,
   manualBackupAction,
   resetBusinessDataAction,
   saveBranchAction,
   saveCompanyAction,
   saveFeatureFlagsAction,
-  saveThemeSettingsAction,
 } from "@/app/actions";
+import { AttestationTemplateEditor } from "@/components/attestation-template-editor";
 import { PageHeading } from "@/components/page-heading";
+import { ThemeSelectorForm } from "@/components/theme-selector-form";
 import { UploadField } from "@/components/upload-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,15 +22,11 @@ import { requireSuperadmin } from "@/lib/auth";
 import {
   APP_VERSION,
   FEATURE_TOGGLE_DEFINITIONS,
-  THEME_DENSITY_DEFINITIONS,
-  THEME_PRESET_DEFINITIONS,
 } from "@/lib/constants";
 import { getCompany, getFeatureFlags, getThemeSettings, listBranches } from "@/lib/data";
+import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
-
-const templateHint =
-  "Variables: {{societe}}, {{employe}}, {{cnss}}, {{date_entree}}, {{salaire}}, {{date_du_jour}}";
 
 function downloadLinkClass() {
   return cn(
@@ -36,8 +34,27 @@ function downloadLinkClass() {
   );
 }
 
+const FEATURE_LOCALES_AR: Record<string, { label: string; description: string }> = {
+  devis: { label: "الدوڤيات (Devis)", description: "تفعيل إنشاء وعرض عروض الأسعار والدوڤيات." },
+  factures: { label: "الفواتير (Factures)", description: "تفعيل إنشاء وعرض الفواتير التجارية الرسمية." },
+  bons_livraison: { label: "بونات التوصيل (BL)", description: "تفعيل بونات التسليم وخروج السلعة للكليان." },
+  bons_sortie: { label: "بونات الخروج (BS)", description: "تفعيل بونات خروج السلعة وتحويلها بين المحلات." },
+  bons_commande: { label: "بونات الكوموند (BC)", description: "تفعيل بونات الطلب وشراء السلعة من الفورنيسور." },
+  produits: { label: "السلعة والمنتوجات", description: "تفعيل كتالوج السلعة، الأثمنة والتعديل الجماعي." },
+  clients: { label: "الكليان والزبناء", description: "تفعيل دليل وحسابات الكليان وأرقام ICE." },
+  fournisseurs: { label: "الفورنيسور والموردين", description: "تفعيل دليل الموردين وحسابات الشراء." },
+  personnel: { label: "المستخدمين والعمال", description: "تفعيل ملفات المستخدمين، الأجور والتتبع." },
+  attestations: { label: "شهادات العمل", description: "تفعيل إصدار وطباعة شهادات العمل الرسمية." },
+  chiffre_affaires: { label: "المداخيل ولاكيس", description: "تفعيل تتبع ومقارنة مداخيل الصندوق والمبيعات." },
+  utilisateurs: { label: "حسابات المستخدمين", description: "تفعيل إدارة الحسابات، الصلاحيات وسجل العمليات." },
+};
+
 export default async function ParametresPage() {
   await requireSuperadmin();
+
+  const locale = await getServerLocale();
+  const dict = getServerDictionary(locale);
+
   const company = getCompany();
   const branches = listBranches();
   const featureFlags = getFeatureFlags();
@@ -46,20 +63,23 @@ export default async function ParametresPage() {
   return (
     <div className="grid gap-4">
       <PageHeading
-        eyebrow="Superadmin"
-        title="Parametres avances"
-        description="Pilotez les services, les sauvegardes et les exports."
+        eyebrow={dict.settings.superadminSection}
+        title={dict.settings.title}
+        description={dict.settings.subtitle}
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <h3 className="text-lg font-black">Informations societe</h3>
+          <h3 className="text-lg font-black">{dict.settings.companyInfo}</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {dict.settings.companyInfoDesc}
+          </p>
           <form action={saveCompanyAction} className="mt-4 grid gap-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Raison sociale">
+              <Field label={dict.settings.raisonSociale}>
                 <Input name="name" defaultValue={company.name} required />
               </Field>
-              <Field label="Nom arabe">
+              <Field label={dict.settings.arabicName}>
                 <Input
                   name="arabic_name"
                   defaultValue={company.arabic_name}
@@ -69,35 +89,35 @@ export default async function ParametresPage() {
               </Field>
             </div>
 
-            <Field label="Adresse">
+            <Field label={dict.settings.address}>
               <Textarea name="address" defaultValue={company.address} className="min-h-24" />
             </Field>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Telephone">
+              <Field label={dict.settings.phone}>
                 <Input name="phone" defaultValue={company.phone} />
               </Field>
-              <Field label="GSM">
+              <Field label={dict.settings.gsm}>
                 <Input name="gsm" defaultValue={company.gsm} />
               </Field>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Field label="RC">
+              <Field label={dict.settings.rc}>
                 <Input name="rc" defaultValue={company.rc} />
               </Field>
-              <Field label="IF">
+              <Field label={dict.settings.ifNumber}>
                 <Input name="if_number" defaultValue={company.if_number} />
               </Field>
-              <Field label="TP">
+              <Field label={dict.settings.tp}>
                 <Input name="tp" defaultValue={company.tp} />
               </Field>
-              <Field label="ICE">
+              <Field label={dict.settings.ice}>
                 <Input name="ice" defaultValue={company.ice} />
               </Field>
             </div>
 
-            <Field label="Mention legale">
+            <Field label={dict.settings.legalNotice}>
               <Textarea
                 name="legal_notice"
                 defaultValue={company.legal_notice}
@@ -105,222 +125,147 @@ export default async function ParametresPage() {
               />
             </Field>
 
-            <div className="grid gap-3 rounded-[20px] border bg-[var(--background-alt)] p-3.5">
-              <div className="grid gap-1">
-                <h4 className="text-base font-black">Textes des attestations</h4>
-                <p className="text-xs text-[var(--muted)]">{templateHint}</p>
-              </div>
-
-              <Field label="Attestation simple" hint={templateHint}>
-                <Textarea
-                  name="attestation_template_simple"
-                  defaultValue={company.attestation_template_simple}
-                  className="min-h-28"
-                />
-              </Field>
-
-              <Field label="Attestation avec salaire" hint={templateHint}>
-                <Textarea
-                  name="attestation_template_salary"
-                  defaultValue={company.attestation_template_salary}
-                  className="min-h-28"
-                />
-              </Field>
-
-              <Field label="Attestation pour visa" hint={templateHint}>
-                <Textarea
-                  name="attestation_template_visa"
-                  defaultValue={company.attestation_template_visa}
-                  className="min-h-28"
-                />
-              </Field>
-
-              <Field label="Attestation pour banque" hint={templateHint}>
-                <Textarea
-                  name="attestation_template_bank"
-                  defaultValue={company.attestation_template_bank}
-                  className="min-h-28"
-                />
-              </Field>
-            </div>
+            <AttestationTemplateEditor initialValues={company} />
 
             <UploadField
               name="logo_path"
               folder="logos"
               initialValue={company.logo_path}
-              label="Logo"
+              label={dict.settings.logo}
             />
 
-            <SubmitButton>Enregistrer les parametres</SubmitButton>
+            <SubmitButton>{dict.settings.saveCompanyInfo}</SubmitButton>
           </form>
         </Card>
 
         <div className="grid gap-4">
           <Card>
             <div className="mb-4">
-              <h3 className="text-lg font-black">Theme et densite</h3>
+              <h3 className="text-lg font-black">{dict.settings.themes}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Choisissez un rendu plus professionnel selon le client ou le contexte.
+                {dict.settings.themesDesc}
               </p>
             </div>
 
-            <form action={saveThemeSettingsAction} className="grid gap-4">
-              <div className="grid gap-3">
-                {THEME_PRESET_DEFINITIONS.map((theme) => (
-                  <label
-                    key={theme.key}
-                    className="flex items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3"
-                  >
-                    <input
-                      type="radio"
-                      name="theme_preset"
-                      value={theme.key}
-                      defaultChecked={themeSettings.preset === theme.key}
-                      className="mt-1 h-4 w-4 accent-[var(--accent)]"
-                    />
-                    <span className="grid gap-0.5">
-                      <span className="text-sm font-semibold">{theme.label}</span>
-                      <span className="text-xs text-[var(--muted)]">{theme.description}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {THEME_DENSITY_DEFINITIONS.map((density) => (
-                  <label
-                    key={density.key}
-                    className="flex items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3"
-                  >
-                    <input
-                      type="radio"
-                      name="theme_density"
-                      value={density.key}
-                      defaultChecked={themeSettings.density === density.key}
-                      className="mt-1 h-4 w-4 accent-[var(--accent)]"
-                    />
-                    <span className="grid gap-0.5">
-                      <span className="text-sm font-semibold">{density.label}</span>
-                      <span className="text-xs text-[var(--muted)]">{density.description}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <SubmitButton>Enregistrer le theme</SubmitButton>
-            </form>
+            <ThemeSelectorForm initialSettings={themeSettings} />
           </Card>
 
           <Card>
             <div className="mb-4">
-              <h3 className="text-lg font-black">Services actives</h3>
+              <h3 className="text-lg font-black">{dict.settings.modules}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Cochez ce que l'utilisateur voit dans l'application.
+                {dict.settings.modulesDesc}
               </p>
             </div>
 
             <form action={saveFeatureFlagsAction} className="grid gap-3">
-              <div className="grid gap-3">
-                {FEATURE_TOGGLE_DEFINITIONS.map((feature) => (
-                  <label
-                    key={feature.key}
-                    className="flex items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3"
-                  >
-                    <input
-                      type="checkbox"
-                      name={feature.key}
-                      value="1"
-                      defaultChecked={featureFlags[feature.key]}
-                      className="mt-1 h-4 w-4 accent-[var(--accent)]"
-                    />
-                    <span className="grid gap-0.5">
-                      <span className="text-sm font-semibold">{feature.label}</span>
-                      <span className="text-xs text-[var(--muted)]">{feature.description}</span>
-                    </span>
-                  </label>
-                ))}
+              <div className="grid gap-2.5">
+                {FEATURE_TOGGLE_DEFINITIONS.map((feature) => {
+                  const localizedMeta = locale === "ar" && FEATURE_LOCALES_AR[feature.key]
+                    ? FEATURE_LOCALES_AR[feature.key]
+                    : { label: feature.label, description: feature.description };
+
+                  return (
+                    <label
+                      key={feature.key}
+                      className="flex cursor-pointer items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 transition hover:border-[var(--accent)]"
+                    >
+                      <input
+                        type="checkbox"
+                        name={feature.key}
+                        value="1"
+                        defaultChecked={featureFlags[feature.key]}
+                        className="mt-1 h-4 w-4 accent-[var(--accent)]"
+                      />
+                      <span className="grid gap-0.5">
+                        <span className="text-sm font-semibold">{localizedMeta.label}</span>
+                        <span className="text-xs text-[var(--muted)]">{localizedMeta.description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
-              <SubmitButton>Enregistrer les services</SubmitButton>
+              <SubmitButton>{dict.settings.saveModules}</SubmitButton>
             </form>
           </Card>
 
           <Card>
             <div className="mb-4">
-              <h3 className="text-lg font-black">Sauvegarde et export</h3>
+              <h3 className="text-lg font-black">{dict.settings.backups}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Exportez les donnees pour sauvegarder ou migrer vers une autre app.
+                {dict.settings.backupsDesc}
               </p>
             </div>
 
             <div className="grid gap-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <a href="/api/export?format=sqlite" className={downloadLinkClass()}>
-                  Export base SQLite
+                  {dict.settings.sqliteExport}
                 </a>
                 <a href="/api/export?format=sql" className={downloadLinkClass()}>
-                  Export SQL complet
+                  {dict.settings.sqlExport}
                 </a>
                 <a href="/api/export?format=xlsx" className={downloadLinkClass()}>
-                  Export Excel complet
+                  {dict.settings.excelExport}
                 </a>
                 <form action={manualBackupAction}>
                   <Button type="submit" variant="secondary" className="w-full">
-                    Sauvegarder maintenant
+                    {dict.settings.backupNow}
                   </Button>
                 </form>
               </div>
 
               <div className="grid gap-2">
-                <p className="text-xs font-semibold text-[var(--muted)]">Exports CSV rapides</p>
+                <p className="text-xs font-semibold text-[var(--muted)]">{dict.settings.quickCsv}</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <a href="/api/export?format=csv&dataset=clients" className={downloadLinkClass()}>
-                    CSV clients
+                    {dict.settings.csvClients}
                   </a>
                   <a href="/api/export?format=csv&dataset=produits" className={downloadLinkClass()}>
-                    CSV produits
+                    {dict.settings.csvProducts}
                   </a>
                   <a href="/api/export?format=csv&dataset=documents" className={downloadLinkClass()}>
-                    CSV documents
+                    {dict.settings.csvDocuments}
                   </a>
                   <a href="/api/export?format=csv&dataset=document_lignes" className={downloadLinkClass()}>
-                    CSV lignes documents
+                    {dict.settings.csvLines}
                   </a>
                   <a href="/api/export?format=csv&dataset=employes" className={downloadLinkClass()}>
-                    CSV personnel
+                    {dict.settings.csvPersonnel}
                   </a>
                   <a href="/api/export?format=csv&dataset=chiffre_affaires" className={downloadLinkClass()}>
-                    CSV recettes
+                    {dict.settings.csvRevenue}
                   </a>
                 </div>
               </div>
 
               <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-xs text-[var(--muted)]">
-                <div>Base actuelle: {DB_PATH}</div>
-                <div className="mt-1">Dossier des sauvegardes: {BACKUP_DIR}</div>
+                <div>{dict.settings.currentDb} {DB_PATH}</div>
+                <div className="mt-1">{dict.settings.backupFolder} {BACKUP_DIR}</div>
               </div>
             </div>
           </Card>
 
           <Card>
             <div className="mb-4">
-              <h3 className="text-lg font-black">Reinitialiser les donnees</h3>
+              <h3 className="text-lg font-black text-[var(--danger)]">{dict.settings.dangerZone}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Efface tous les documents, clients, produits, personnel, recettes et reglages metier.
+                {dict.settings.dangerZoneDesc}
               </p>
             </div>
 
             <div className="grid gap-3 rounded-[18px] border border-[var(--danger)] bg-[var(--danger-soft)] px-3.5 py-3">
               <div className="text-sm text-[var(--danger)]">
-                Les comptes utilisateurs sont conserves. Une sauvegarde locale est creee juste avant la reinitialisation.
+                {dict.settings.dangerWarning}
               </div>
               <form action={resetBusinessDataAction}>
                 <ConfirmSubmitButton
                   type="submit"
                   variant="danger"
                   className="w-full"
-                  message="Reinitialiser toutes les donnees metier ? Les utilisateurs seront conserves, mais les clients, produits, documents, personnel, recettes et parametres seront remis a zero. Une sauvegarde sera creee juste avant."
+                  message={dict.settings.confirmResetMessage}
                 >
-                  Reinitialiser la base metier
+                  {dict.settings.resetDatabase}
                 </ConfirmSubmitButton>
               </form>
             </div>
@@ -328,80 +273,97 @@ export default async function ParametresPage() {
 
           <Card>
             <div className="mb-4">
-              <h3 className="text-lg font-black">Mise a jour de l'application</h3>
+              <h3 className="text-lg font-black">{dict.settings.systemInfo}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Gardez les donnees et remplacez seulement le code quand vous publiez une nouvelle version.
+                {dict.settings.systemInfoDesc}
               </p>
             </div>
 
             <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-sm">
-              <p className="font-semibold">Version actuelle: {APP_VERSION}</p>
-              <ol className="mt-3 grid gap-2 text-[13px] text-[var(--muted)]">
-                <li>1. Telechargez d'abord la base SQLite ou faites une sauvegarde locale.</li>
-                <li>2. Remplacez les fichiers de l'app par la nouvelle version.</li>
-                <li>3. Conservez le dossier data et relancez l'application.</li>
-                <li>4. Si besoin, importez les CSV ou le SQL dans un autre systeme.</li>
-              </ol>
+              <p className="font-semibold">{dict.settings.currentVersion} {APP_VERSION}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {dict.settings.systemPurpose}
+              </p>
             </div>
           </Card>
         </div>
       </div>
 
+      {/* Magasins / Emplacements Management Card */}
       <Card>
-        <h3 className="text-lg font-black">Magasins</h3>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-black">{dict.settings.storesTitle} ({branches.length})</h3>
+            <p className="text-sm text-[var(--muted)]">
+              {dict.settings.storesDesc}
+            </p>
+          </div>
+        </div>
+
+        {/* Add Branch Form */}
         <form
           action={saveBranchAction}
-          className="mt-4 grid gap-4 rounded-[20px] border bg-[var(--background-alt)] p-3.5"
+          className="mt-4 grid gap-3.5 rounded-[20px] border border-[var(--border)] bg-[var(--background-alt)] p-4"
         >
+          <div className="text-sm font-bold text-[var(--foreground)]">{dict.settings.addNewStore}</div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Nom">
-              <Input name="name" required />
+            <Field label={dict.settings.storeName}>
+              <Input name="name" placeholder={locale === "ar" ? "مثال: محل المدينة / Centre-Ville" : "Ex: Boutique Centre-Ville"} required />
             </Field>
-            <Field label="Telephone">
-              <Input name="phone" />
+            <Field label={dict.settings.storePhone}>
+              <Input name="phone" placeholder="Ex: 0539 00 00 00" />
             </Field>
           </div>
-          <Field label="Adresse">
-            <Input name="address" />
+          <Field label={dict.settings.storeAddress}>
+            <Input name="address" placeholder={locale === "ar" ? "مثال: شارع الحسن الثاني، طنجة" : "Ex: Angle Boulevard Hassan II, Tanger"} />
           </Field>
           <input type="hidden" name="active" value="1" />
-          <SubmitButton>Ajouter un magasin</SubmitButton>
+          <div>
+            <SubmitButton>{dict.settings.createStore}</SubmitButton>
+          </div>
         </form>
 
+        {/* Existing Branches List */}
         <div className="mt-5">
           <Table>
             <THead>
               <tr>
-                <TH>Magasin</TH>
-                <TH>Coordonnees</TH>
-                <TH>Statut</TH>
+                <TH>{dict.settings.storeCol}</TH>
+                <TH>{dict.settings.coordsCol}</TH>
+                <TH>{dict.settings.statusCol}</TH>
+                <TH className={locale === "ar" ? "text-left" : "text-right"}>{dict.settings.actionsCol}</TH>
               </tr>
             </THead>
             <tbody>
               {branches.map((branch) => (
-                <tr key={branch.id}>
-                  <TD className="w-64">
-                    <details>
-                      <summary className="cursor-pointer list-none font-semibold">
-                        {branch.name}
+                <tr key={branch.id} className="border-b border-[var(--border)]">
+                  <TD className="w-72">
+                    <details className="group">
+                      <summary className="cursor-pointer list-none font-bold text-[var(--foreground)] transition hover:text-[var(--accent)]">
+                        <span className="inline-flex items-center gap-2">
+                          <span>{branch.name}</span>
+                          <span className="text-xs text-[var(--muted)] underline group-open:hidden">
+                            {dict.settings.editStore}
+                          </span>
+                        </span>
                       </summary>
                       <form
                         action={saveBranchAction}
-                        className="mt-3.5 grid gap-3 rounded-xl border bg-[var(--background)] p-3"
+                        className="mt-3.5 grid gap-3 rounded-xl border border-[var(--border-strong)] bg-[var(--card)] p-3.5 shadow-sm"
                       >
                         <input type="hidden" name="id" value={branch.id} />
                         <div className="grid gap-3 md:grid-cols-2">
-                          <Field label="Nom">
+                          <Field label={dict.settings.storeName}>
                             <Input name="name" defaultValue={branch.name} required />
                           </Field>
-                          <Field label="Telephone">
+                          <Field label={dict.settings.storePhone}>
                             <Input name="phone" defaultValue={branch.phone} />
                           </Field>
                         </div>
-                        <Field label="Adresse">
+                        <Field label={dict.settings.storeAddress}>
                           <Input name="address" defaultValue={branch.address} />
                         </Field>
-                        <label className="flex items-center gap-2 text-sm font-medium">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
                           <input
                             type="checkbox"
                             name="active"
@@ -409,17 +371,44 @@ export default async function ParametresPage() {
                             defaultChecked={Boolean(branch.active)}
                             className="h-4 w-4 accent-[var(--accent)]"
                           />
-                          Magasin actif
+                          {dict.settings.storeActiveLabel}
                         </label>
-                        <SubmitButton variant="secondary">Mettre a jour</SubmitButton>
+                        <div className="flex items-center gap-2 pt-1">
+                          <SubmitButton variant="secondary">{dict.settings.updateStore}</SubmitButton>
+                        </div>
                       </form>
                     </details>
                   </TD>
                   <TD>
-                    <div>{branch.address || "-"}</div>
-                    <div className="text-xs text-[var(--muted)]">{branch.phone || "-"}</div>
+                    <div className="font-medium">{branch.address || (locale === "ar" ? "لا يوجد عنوان" : "Aucune adresse")}</div>
+                    <div className="text-xs text-[var(--muted)]">{branch.phone || (locale === "ar" ? "لا يوجد هاتف" : "Aucun téléphone")}</div>
                   </TD>
-                  <TD>{branch.active ? "Active" : "Inactive"}</TD>
+                  <TD>
+                    {branch.active ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        {dict.settings.activeStatus}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold text-zinc-500">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                        {dict.settings.inactiveStatus}
+                      </span>
+                    )}
+                  </TD>
+                  <TD className={locale === "ar" ? "text-left" : "text-right"}>
+                    <form action={deleteBranchAction} className="inline-block">
+                      <input type="hidden" name="id" value={branch.id} />
+                      <ConfirmSubmitButton
+                        type="submit"
+                        variant="ghost"
+                        className="text-xs text-rose-600 hover:bg-rose-50"
+                        message={`${dict.settings.deleteStoreConfirm} (${branch.name})`}
+                      >
+                        {dict.settings.deleteStore}
+                      </ConfirmSubmitButton>
+                    </form>
+                  </TD>
                 </tr>
               ))}
             </tbody>

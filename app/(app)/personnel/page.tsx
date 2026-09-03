@@ -6,47 +6,57 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { listAttestations, listEmployees } from "@/lib/data";
+import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { formatCurrency, formatDateLong } from "@/lib/utils";
 
 export default async function PersonnelPage() {
   await requireFeature("personnel");
+  const locale = await getServerLocale();
+  const dict = getServerDictionary(locale);
+
   const employees = listEmployees();
   const attestations = listAttestations();
 
   return (
     <div className="grid gap-4">
       <PageHeading
-        eyebrow="Ressources humaines"
-        title="Personnel"
-        description="Gerez les salaries et leurs documents."
+        eyebrow={locale === "ar" ? "الموارد البشرية والمستخدمين" : "Ressources humaines"}
+        title={dict.personnel.title}
+        description={dict.personnel.subtitle}
         actions={
           <>
-            <Link href="/personnel/new"><Button>Nouveau dossier</Button></Link>
-            <Link href="/personnel/attestation"><Button variant="secondary">Nouvelle attestation</Button></Link>
+            <Link href="/personnel/new">
+              <Button>+ {dict.personnel.newEmployee}</Button>
+            </Link>
+            <Link href="/personnel/attestation">
+              <Button variant="secondary">+ {dict.personnel.newAttestation}</Button>
+            </Link>
           </>
         }
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <h3 className="mb-3.5 text-lg font-black">Dossiers salaries</h3>
+          <h3 className="mb-3.5 text-lg font-black">
+            {locale === "ar" ? "ملفات المستخدمين والعمال" : "Dossiers salariés"}
+          </h3>
           <Table>
             <THead>
               <tr>
-                <TH>N</TH>
-                <TH>Nom</TH>
-                <TH>Entree</TH>
-                <TH>Salaire</TH>
-                <TH className="text-right">Actions</TH>
+                <TH>{locale === "ar" ? "الرقم" : "N°"}</TH>
+                <TH>{dict.personnel.nom}</TH>
+                <TH>{dict.personnel.dateEntree}</TH>
+                <TH>{dict.personnel.salaire}</TH>
+                <TH className={locale === "ar" ? "text-left" : "text-right"}>{dict.common.actions}</TH>
               </tr>
             </THead>
             <tbody>
               {employees.length === 0 ? (
                 <tr>
                   <TD colSpan={5} className="py-8 text-center text-[var(--muted)]">
-                    Aucun dossier pour l&apos;instant.{" "}
+                    {locale === "ar" ? "ما كاين حتى مستخدم مسجل حالياً. " : "Aucun dossier pour l'instant. "}
                     <Link href="/personnel/new" className="font-semibold text-[var(--accent)] hover:underline">
-                      Creer le premier
+                      {locale === "ar" ? "إضافة أول مستخدم" : "Créer le premier"}
                     </Link>
                   </TD>
                 </tr>
@@ -61,13 +71,13 @@ export default async function PersonnelPage() {
                     <TD>{employee.prenom} {employee.nom}</TD>
                     <TD>{employee.date_entree ? formatDateLong(employee.date_entree) : "-"}</TD>
                     <TD>{formatCurrency(employee.salaire)}</TD>
-                    <TD className="text-right">
-                      <div className="flex justify-end gap-2">
+                    <TD className={locale === "ar" ? "text-left" : "text-right"}>
+                      <div className={`flex gap-2 ${locale === "ar" ? "justify-start" : "justify-end"}`}>
                         <Link href={`/personnel/${employee.id}/edit`}>
-                          <Button variant="ghost">Ouvrir</Button>
+                          <Button variant="ghost">{dict.common.edit}</Button>
                         </Link>
                         <Link href={`/print/fiche-personnel/${employee.id}`} target="_blank" rel="noreferrer">
-                          <Button variant="secondary">Imprimer</Button>
+                          <Button variant="secondary">{dict.common.print}</Button>
                         </Link>
                       </div>
                     </TD>
@@ -79,11 +89,13 @@ export default async function PersonnelPage() {
         </Card>
 
         <Card>
-          <h3 className="mb-3.5 text-lg font-black">Attestations recentes</h3>
+          <h3 className="mb-3.5 text-lg font-black">
+            {locale === "ar" ? "شواهد العمل الأخيرة" : "Attestations récentes"}
+          </h3>
           <div className="grid gap-3">
             {attestations.length === 0 ? (
               <div className="rounded-xl border bg-[var(--background-alt)] px-3 py-4 text-[13px] text-[var(--muted)]">
-                Aucune attestation generee.
+                {locale === "ar" ? "ما كاينا حتى شهادة منشأة حالياً." : "Aucune attestation générée."}
               </div>
             ) : (
               attestations.slice(0, 8).map((attestation: any) => (

@@ -7,7 +7,7 @@ import { getAuthSession } from "@/lib/auth";
 import { UPLOADS_DIR } from "@/lib/runtime-paths";
 import { slugifyFilename } from "@/lib/utils";
 
-const ALLOWED_FOLDERS = new Set(["logos", "employees"]);
+const ALLOWED_FOLDERS = new Set(["logos", "employees", "caisse"]);
 
 export async function POST(request: Request) {
   const session = await getAuthSession();

@@ -7,15 +7,15 @@ import {
   type ThemeSettings,
 } from "@/lib/types";
 
-export const APP_NAME = "Haloui System";
+export const APP_NAME = "Système de Gestion Commerciale";
 export const APP_VERSION = "0.1.0";
 export const DEFAULT_LOCALE = "fr-MA";
 export const DEFAULT_CURRENCY = "MAD";
 export const DEFAULT_TVA_RATE = 0;
 export const ADMIN_TEMP_PASSWORD = "admin123";
-export const DEFAULT_SUPERADMIN_USERNAME = "haloui-dev";
-export const DEFAULT_SUPERADMIN_PASSWORD = "HalouiDev@2026";
-export const DEFAULT_SUPERADMIN_NAME = "Superadmin Haloui";
+export const DEFAULT_SUPERADMIN_USERNAME = "dev-admin";
+export const DEFAULT_SUPERADMIN_PASSWORD = "DevAdmin@2026";
+export const DEFAULT_SUPERADMIN_NAME = "Super Administrateur";
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   devis: "Devis",
@@ -112,17 +112,68 @@ export const THEME_PRESET_DEFINITIONS = [
   {
     key: "slate-minimal",
     label: "Ardoise minimaliste",
-    description: "Le rendu le plus net: fond clair, gris bleute et accent profond.",
+    description: "Le rendu le plus net: fond clair, gris bleuté et accent ardoise moderne.",
+    swatches: ["#334155", "#64748b", "#f1f5f9"],
   },
   {
-    key: "haloui-classic",
-    label: "Haloui classique",
-    description: "Une version plus propre et plus stable de la palette chaude actuelle.",
+    key: "corporate-navy",
+    label: "Bleu corporatif",
+    description: "Bleu roi d'affaires puissant et contrastes éclatants.",
+    swatches: ["#1e40af", "#3b82f6", "#dbeafe"],
+  },
+  {
+    key: "emerald-luxe",
+    label: "Émeraude moderne",
+    description: "Vert finance prestigieux, dynamique et rassurant.",
+    swatches: ["#065f46", "#059669", "#d1fae5"],
+  },
+  {
+    key: "indigo-royal",
+    label: "Indigo royal",
+    description: "Palette tech moderne aux teintes violettes profondes.",
+    swatches: ["#4338ca", "#6366f1", "#e0e7ff"],
+  },
+  {
+    key: "crimson-executive",
+    label: "Bordeaux & Carmin",
+    description: "Rouge noble et chaleureux, style direction et prestige.",
+    swatches: ["#991b1b", "#dc2626", "#fee2e2"],
+  },
+  {
+    key: "ocean-cyan",
+    label: "Océan Pacifique",
+    description: "Bleu canard et cyan contemporain, frais et énergique.",
+    swatches: ["#0e7490", "#06b6d4", "#cffafe"],
+  },
+  {
+    key: "sunset-amber",
+    label: "Cuivre & Terre de Sienne",
+    description: "Tons chauds cuivrés et ambrés d'inspiration atelier artisanal.",
+    swatches: ["#c2410c", "#f97316", "#ffedd5"],
+  },
+  {
+    key: "violet-plum",
+    label: "Pourpre & Violet",
+    description: "Nuances créatives haut de gamme et distinctives.",
+    swatches: ["#6b21a8", "#a855f7", "#f3e8ff"],
+  },
+  {
+    key: "monochrome-black",
+    label: "Noir & Blanc exécutif",
+    description: "Style épuré, typographique et contrasté: noir et blanc absolu.",
+    swatches: ["#18181b", "#71717a", "#f4f4f5"],
   },
   {
     key: "olive-ledger",
     label: "Olive comptoir",
-    description: "Un theme plus institutionnel, calme et comptable pour d'autres clients.",
+    description: "Ambiance institutionnelle, comptable et sobre.",
+    swatches: ["#3f4a36", "#51653d", "#e1e8d9"],
+  },
+  {
+    key: "haloui-classic",
+    label: "Ambre chaleureux",
+    description: "Palette artisanale aux tons dorés et ambrés.",
+    swatches: ["#7c2d12", "#b45309", "#fef3c7"],
   },
 ] as const;
 
@@ -141,18 +192,18 @@ export const THEME_DENSITY_DEFINITIONS = [
 
 export const SEED_COMPANY = {
   id: 1 as const,
-  name: "Patisserie Haloui",
-  arabic_name: "حلويات الحلوي",
-  address: "37, av imam mouslim Dradeb - Tanger",
-  phone: "05 39 93 49 87",
-  gsm: "06 68 70 69 38",
-  rc: "53570",
-  if_number: "81062511",
-  tp: "50227788",
-  ice: "001894660000040",
+  name: "Entreprise Commerciale",
+  arabic_name: "الشركة التجارية",
+  address: "Boulevard Mohammed V, Tanger",
+  phone: "05 39 00 00 00",
+  gsm: "06 61 00 00 00",
+  rc: "12345",
+  if_number: "12345678",
+  tp: "12345678",
+  ice: "000000000000000",
   logo_path: "/assets/logo.svg",
   legal_notice:
-    "Patisserie Haloui - RC 53570 - IF 81062511 - TP 50227788 - ICE 001894660000040",
+    "Entreprise Commerciale - RC 12345 - IF 12345678 - TP 12345678 - ICE 000000000000000",
   attestation_template_simple: DEFAULT_ATTESTATION_TEMPLATES.simple,
   attestation_template_salary: DEFAULT_ATTESTATION_TEMPLATES["avec-salaire"],
   attestation_template_visa: DEFAULT_ATTESTATION_TEMPLATES.visa,
@@ -165,145 +216,35 @@ export const SEED_PRODUCTS: Array<{
   prix_ht: number;
   unite?: string;
 }> = [
-  { ref: "SALE-001", designation: "LES NAIMES POISSON", prix_ht: 8 },
-  { ref: "SALE-002", designation: "MINI PASTILLA L.MER", prix_ht: 144 },
-  { ref: "SALE-003", designation: "MINI PASTILLA F.MER", prix_ht: 12 },
-  { ref: "SALE-004", designation: "MINI PASTILLA POULET (grand)", prix_ht: 120 },
-  { ref: "SALE-005", designation: "MINI PASTILLA POULET (1pc)", prix_ht: 10 },
-  { ref: "SALE-006", designation: "PASTILLA F.MER", prix_ht: 25 },
-  { ref: "SALE-007", designation: "PASTILLA POULET", prix_ht: 20 },
-  { ref: "SALE-008", designation: "SIGAR FROMAGE 12pc", prix_ht: 54 },
-  { ref: "SALE-009", designation: "SIGAR FROMAGE 1pc", prix_ht: 4.5 },
-  { ref: "SALE-010", designation: "SIGAR FROMAGE D.FU (grand)", prix_ht: 66 },
-  { ref: "SALE-011", designation: "SIGAR FROMAGE D.FU (1pc)", prix_ht: 5.5 },
-  { ref: "SALE-012", designation: "BRIWAT CREVETTE", prix_ht: 96 },
-  { ref: "SALE-013", designation: "BRIWAT CREVETTE 1pc", prix_ht: 8 },
-  { ref: "SALE-014", designation: "BRIWAT POULET 12pc", prix_ht: 72 },
-  { ref: "SALE-015", designation: "BRIWAT POULET 1pc", prix_ht: 6 },
-  { ref: "SALE-016", designation: "BRIWATE V.HACHEE", prix_ht: 90 },
-  { ref: "SALE-017", designation: "BRIWATE V.HACHEE 1pc", prix_ht: 7.5 },
-  { ref: "SALE-018", designation: "CARRE POULET", prix_ht: 78 },
-  { ref: "SALE-019", designation: "CARRE POULET 1pc", prix_ht: 6.5 },
-  { ref: "SALE-020", designation: "CROQUETTE CREVETTE", prix_ht: 96 },
-  { ref: "SALE-021", designation: "CROQUETTE CREVETTE 1pc", prix_ht: 8 },
-  { ref: "SALE-022", designation: "CROQUETTE POULET", prix_ht: 84 },
-  { ref: "SALE-023", designation: "CROQUETTE POULET 1pc", prix_ht: 7 },
-  { ref: "SALE-024", designation: "LES NAIMES POISSON (grand)", prix_ht: 96 },
-
-  { ref: "STIKS-001", designation: "MACARON SPECIAL", prix_ht: 12 },
-  { ref: "STIKS-002", designation: "BOITE MACARON", prix_ht: 50 },
-  { ref: "STIKS-003", designation: "BRAWNIESE", prix_ht: 40 },
-  { ref: "STIKS-004", designation: "BROWNIESE", prix_ht: 40 },
-  { ref: "STIKS-005", designation: "CAKE AHMAD", prix_ht: 40 },
-  { ref: "STIKS-006", designation: "CAKE CHOCO", prix_ht: 40 },
-  { ref: "STIKS-007", designation: "CAKE CITRON", prix_ht: 120 },
-  { ref: "STIKS-008", designation: "CAKE GRAND", prix_ht: 50 },
-  { ref: "STIKS-009", designation: "CAKE MOYANE", prix_ht: 40 },
-  { ref: "STIKS-010", designation: "CAKE PETITE", prix_ht: 20 },
-  { ref: "STIKS-011", designation: "CHOCOLAT DUBAI 100", prix_ht: 100 },
-  { ref: "STIKS-012", designation: "CHOCOLAT DUBAI 20", prix_ht: 20 },
-  { ref: "STIKS-013", designation: "CHOCOLAT DUBAI 30", prix_ht: 30 },
-  { ref: "STIKS-014", designation: "CHOCOLAT DUBAI 80", prix_ht: 80 },
-  { ref: "STIKS-015", designation: "CONFLEX", prix_ht: 50 },
-  { ref: "STIKS-016", designation: "FINGRZ", prix_ht: 50 },
-  { ref: "STIKS-017", designation: "KACHTOTA NORMAL", prix_ht: 40 },
-  { ref: "STIKS-018", designation: "KACHTOTA PISTACHE", prix_ht: 50 },
-  { ref: "STIKS-019", designation: "MINI MACARON", prix_ht: 70 },
-  { ref: "STIKS-020", designation: "SAN SEBASTIAN (petit)", prix_ht: 40 },
-  { ref: "STIKS-021", designation: "SAN SEBASTIAN (grand)", prix_ht: 60 },
-  { ref: "STIKS-022", designation: "STIKS CHOCOLAT", prix_ht: 40 },
-  { ref: "STIKS-023", designation: "TARTE AU LAIT GRAND", prix_ht: 120 },
-  { ref: "STIKS-024", designation: "TARTE AU LAIT PETIT", prix_ht: 20 },
-  { ref: "STIKS-025", designation: "TIRAMISU COFEE", prix_ht: 60 },
-  { ref: "STIKS-026", designation: "TIRAMISU PISTACHE", prix_ht: 80 },
-
-  { ref: "CCHE-001", designation: "COOKIES (boite)", prix_ht: 40 },
-  { ref: "CCHE-002", designation: "COOKIES (1pc)", prix_ht: 7 },
-  { ref: "CCHE-003", designation: "COOKIES PISTACHE", prix_ht: 8 },
-  { ref: "CCHE-004", designation: "MADELAINE", prix_ht: 7 },
-  { ref: "CCHE-005", designation: "MINI MADELINE", prix_ht: 20 },
-  { ref: "CCHE-006", designation: "STIKS PISTACHE", prix_ht: 60 },
-
-  { ref: "GATEAU-001", designation: "GATEAUX ACAJOU", prix_ht: 130 },
-  { ref: "GATEAU-002", designation: "GATEAUX NOISETTE", prix_ht: 130 },
-  { ref: "GATEAU-003", designation: "GATEAUX NOIX", prix_ht: 130 },
-  { ref: "GATEAU-004", designation: "GATEAUX AMANDE", prix_ht: 130 },
-
-  { ref: "BOITES-001", designation: "Boite Sables", prix_ht: 25 },
-  { ref: "BOITES-002", designation: "Pack 10 Boite Sables", prix_ht: 200 },
-  { ref: "BOITES-003", designation: "Pack 5 Boite Sables", prix_ht: 100 },
-
-  { ref: "PLATEAU-001", designation: "PLATEAU G.T", prix_ht: 200 },
-  { ref: "PLATEAU-002", designation: "PLATEAU M.T", prix_ht: 150 },
-  { ref: "PLATEAU-003", designation: "PLATEAU P.T", prix_ht: 130 },
-
-  { ref: "RAMA-001", designation: "BRIWAT", prix_ht: 160 },
-  { ref: "RAMA-002", designation: "CHBAKIA", prix_ht: 70 },
-  { ref: "RAMA-003", designation: "MHANCHA", prix_ht: 160 },
-  { ref: "RAMA-004", designation: "SFOUF E.G", prix_ht: 140 },
-
-  { ref: "SACHET-001", designation: "BOITE SALE", prix_ht: 100 },
-  { ref: "SACHET-002", designation: "FEKAS DIN OL FOMI", prix_ht: 25 },
-  { ref: "SACHET-003", designation: "GRAINE AUX SAUCE", prix_ht: 25 },
-  { ref: "SACHET-004", designation: "NOUGAT CHOCOLAT", prix_ht: 50 },
-  { ref: "SACHET-005", designation: "RONDELLE FROMAGE", prix_ht: 25 },
-  { ref: "SACHET-006", designation: "RONDELLE OLIVE", prix_ht: 25 },
-  { ref: "SACHET-007", designation: "SACHET BATONNETS", prix_ht: 25 },
-  { ref: "SACHET-008", designation: "SACHET FKAS OLIVE", prix_ht: 25 },
-  { ref: "SACHET-009", designation: "SACHET FKS AMANDE", prix_ht: 25 },
-  { ref: "SACHET-010", designation: "SACHET FKS FROMAGE", prix_ht: 25 },
-  { ref: "SACHET-011", designation: "SACHET FKS PAPRIKA", prix_ht: 25 },
-  { ref: "SACHET-012", designation: "SACHET GRAINE (sucre)", prix_ht: 25 },
-  { ref: "SACHET-013", designation: "SACHET GRAINE (sale)", prix_ht: 25 },
-  { ref: "SACHET-014", designation: "SACHET PALMIER FROMAGE", prix_ht: 25 },
-
-  { ref: "GMAR-KG-001", designation: "GATEAUX AMANDE (KG)", prix_ht: 140, unite: "kg" },
-  { ref: "GMAR-KG-002", designation: "GATEAUX NOIX (KG)", prix_ht: 140, unite: "kg" },
-  { ref: "GMAR-KG-003", designation: "GATEAUX NOISETTE (KG)", prix_ht: 140, unite: "kg" },
-  { ref: "GMAR-KG-004", designation: "GATEAUX ACAJOU (KG)", prix_ht: 140, unite: "kg" },
-  { ref: "GMAR-KG-005", designation: "GATEAUX MAROCAIN", prix_ht: 1, unite: "kg" },
-  { ref: "GMAR-KG-006", designation: "BRIWAT AMANDE (KG)", prix_ht: 160, unite: "kg" },
-  { ref: "GMAR-KG-007", designation: "MHANCHA AMANDE (KG)", prix_ht: 160, unite: "kg" },
-  { ref: "GMAR-KG-008", designation: "CORNE DE GAZELLE (KG)", prix_ht: 160, unite: "kg" },
-
-  { ref: "GMAR-U-001", designation: "GATEAUX AMANDE Unité", prix_ht: 3.5, unite: "pièce" },
-  { ref: "GMAR-U-002", designation: "GATEAUX NOIX Unité", prix_ht: 3.5, unite: "pièce" },
-  { ref: "GMAR-U-003", designation: "GATEAUX NOISETTE Unité", prix_ht: 3.5, unite: "pièce" },
-  { ref: "GMAR-U-004", designation: "GATEAUX ACAJOU Unité", prix_ht: 3.5, unite: "pièce" },
-  { ref: "GMAR-U-005", designation: "CORNE DE GAZELLE Unité", prix_ht: 4, unite: "pièce" },
-  { ref: "GMAR-U-006", designation: "MHANCHA AMANDE Unité", prix_ht: 4, unite: "pièce" },
-
-  { ref: "RAMA-005", designation: "SEFOUF AUX AMANDES SPECIAL", prix_ht: 160 },
-  { ref: "RAMA-006", designation: "CHBAKIA AMANDE", prix_ht: 140 },
-
-  { ref: "PLATEAU-004", designation: "PLATEAU P.F", prix_ht: 130 },
-  { ref: "PLATEAU-005", designation: "PLATEAU M.F", prix_ht: 150 },
-  { ref: "PLATEAU-006", designation: "PLATEAU G.F", prix_ht: 200 },
+  { ref: "ART-001", designation: "Article Standard A", prix_ht: 120, unite: "u" },
+  { ref: "ART-002", designation: "Produit Finition B", prix_ht: 250, unite: "u" },
+  { ref: "ART-003", designation: "Pack Fourniture C", prix_ht: 450, unite: "lot" },
+  { ref: "ART-004", designation: "Matière Première D", prix_ht: 85, unite: "kg" },
+  { ref: "SRV-001", designation: "Prestation Technique E", prix_ht: 350, unite: "h" },
+  { ref: "ART-005", designation: "Équipement Modulaire F", prix_ht: 850, unite: "u" },
+  { ref: "ART-006", designation: "Consommable Atelier G", prix_ht: 45, unite: "boite" },
+  { ref: "SRV-002", designation: "Maintenance & Support H", prix_ht: 600, unite: "forfait" },
 ];
 
-// Refs added in batch v2 (3 extra images). Used by the one-shot DB migration
-// to ensure existing installs receive these products on next launch.
-export const SEED_PRODUCTS_BATCH_V2_REFS = new Set<string>([
-  "GMAR-KG-001", "GMAR-KG-002", "GMAR-KG-003", "GMAR-KG-004",
-  "GMAR-KG-005", "GMAR-KG-006", "GMAR-KG-007", "GMAR-KG-008",
-  "GMAR-U-001", "GMAR-U-002", "GMAR-U-003", "GMAR-U-004",
-  "GMAR-U-005", "GMAR-U-006",
-  "RAMA-005", "RAMA-006",
-  "PLATEAU-004", "PLATEAU-005", "PLATEAU-006",
-]);
+export const SEED_PRODUCTS_BATCH_V2_REFS = new Set<string>([]);
 
 export const SEED_BRANCHES = [
-  "Sahat Al Madina",
-  "37 Imam Mouslim (Dradeb)",
-  "Mesnana",
-  "Nador",
-  "34 Imam Mouslim (Dradeb)",
-  "Ain Hayani",
-].map((name) => ({
-  name,
-  address: "Tanger",
-  phone: "",
-}));
+  {
+    name: "Magasin Principal (Centre)",
+    address: "Boulevard Mohammed V, Tanger",
+    phone: "05 39 00 00 01",
+  },
+  {
+    name: "Succursale 2",
+    address: "Avenue Hassan II, Tanger",
+    phone: "05 39 00 00 02",
+  },
+  {
+    name: "Dépôt Central",
+    address: "Zone Industrielle, Tanger",
+    phone: "05 39 00 00 03",
+  },
+];
 
 export const PRIMARY_NAV_ITEMS = [
   { href: "/dashboard", label: "Tableau de bord" },
@@ -324,7 +265,7 @@ export const MORE_NAV_ITEMS = [
   { href: "/clients", label: "Clients", feature: "clients" as const },
   { href: "/fournisseurs", label: "Fournisseurs", feature: "fournisseurs" as const },
   { href: "/utilisateurs", label: "Utilisateurs", feature: "utilisateurs" as const },
-  { href: "/parametres", label: "Parametres", superadminOnly: true as const },
+  { href: "/parametres", label: "Paramètres", superadminOnly: true as const },
 ] as const;
 
 export function getDocumentModule(slug: string) {
