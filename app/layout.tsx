@@ -58,6 +58,18 @@ export default async function RootLayout({
     >
       <head>
         <ColorSchemeScript defaultColorScheme="light" />
+        {preset === "custom" && themeSetting.customColors ? (
+          <style id="custom-theme-vars" dangerouslySetInnerHTML={{ __html: `
+            :root, [data-ui-theme="custom"] {
+              --accent: ${themeSetting.customColors.accent} !important;
+              --accent-soft: ${themeSetting.customColors.accentSoft || themeSetting.customColors.accent + "22"} !important;
+              --accent-foreground: #ffffff !important;
+              --ring: ${themeSetting.customColors.accent}33 !important;
+              ${themeSetting.customColors.sidebarBg ? `--sidebar-bg: ${themeSetting.customColors.sidebarBg} !important;` : ""}
+              ${themeSetting.customColors.background ? `--background: ${themeSetting.customColors.background} !important;` : ""}
+            }
+          ` }} />
+        ) : null}
       </head>
       <body className={`${manrope.variable} ${lora.variable} ${naskh.variable} bg-[var(--background)] text-[var(--foreground)] antialiased`}>
         <Providers initialLocale={locale}>{children}</Providers>

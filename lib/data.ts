@@ -175,7 +175,7 @@ export function getThemeSettings(): ThemeSettings {
   const rows = db.prepare(`
     SELECT key, value
     FROM app_settings
-    WHERE key IN ('theme.preset', 'theme.density')
+    WHERE key IN ('theme.preset', 'theme.density', 'theme.custom_colors')
   `).all() as Array<{ key: string; value: string }>;
 
   const allowedPresets = new Set(THEME_PRESET_DEFINITIONS.map((item) => item.key));
@@ -189,6 +189,12 @@ export function getThemeSettings(): ThemeSettings {
 
     if (row.key === "theme.density" && allowedDensities.has(row.value as ThemeSettings["density"])) {
       theme.density = row.value as ThemeSettings["density"];
+    }
+
+    if (row.key === "theme.custom_colors" && row.value) {
+      try {
+        theme.customColors = JSON.parse(row.value);
+      } catch {}
     }
   }
 
@@ -235,6 +241,10 @@ export function saveThemeSettings(input: Partial<ThemeSettings>, userId: number)
 
     if (allowedDensities.has(nextTheme.density)) {
       statement.run("theme.density", nextTheme.density);
+    }
+
+    if (nextTheme.customColors) {
+      statement.run("theme.custom_colors", JSON.stringify(nextTheme.customColors));
     }
   });
 
@@ -1943,7 +1953,7 @@ export function getRevenueStats(selectedMonth = monthKey(), companyId?: number):
   const sortiesTotal = sortiesTotalRow.total;
   const netCaisse = monthTotal.total - sortiesTotal;
 
-  let paymentMethods = {
+  const paymentMethods = {
     especes: payments.especes,
     carte: payments.carte,
     cheque: payments.cheque,

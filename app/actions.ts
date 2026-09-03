@@ -189,11 +189,25 @@ export async function saveThemeSettingsAction(formData: FormData) {
 
   const preset = String(formData.get("theme_preset") || "") as ThemePreset;
   const density = String(formData.get("theme_density") || "") as ThemeDensity;
+  const customAccent = String(formData.get("custom_accent") || "").trim();
+  const customAccentSoft = String(formData.get("custom_accent_soft") || "").trim();
+  const customSidebarBg = String(formData.get("custom_sidebar_bg") || "").trim();
+  const customBg = String(formData.get("custom_bg") || "").trim();
+
+  const customColors = customAccent
+    ? {
+        accent: customAccent,
+        accentSoft: customAccentSoft || `${customAccent}20`,
+        sidebarBg: customSidebarBg || "#ffffff",
+        background: customBg || "#f8fafc",
+      }
+    : undefined;
 
   saveThemeSettings(
     {
       preset,
       density,
+      customColors,
     },
     session.user.id,
   );
