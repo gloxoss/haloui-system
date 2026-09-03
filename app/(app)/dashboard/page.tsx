@@ -27,6 +27,7 @@ import {
   Receipt,
   Store,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 import {
@@ -81,7 +82,7 @@ export default async function DashboardPage() {
     branch_name?: string | null;
   }>)
     .filter((document) => featureFlags[DOCUMENT_FEATURE_MAP[document.type]])
-    .slice(0, 5);
+    .slice(0, 6);
 
   const today = todayIso();
   const revenue = featureFlags.chiffre_affaires ? getRevenueGrid(monthKey()) : null;
@@ -89,9 +90,18 @@ export default async function DashboardPage() {
   const totalDayRevenue = todayRow?.total ?? 0;
   const branchesCount = revenue?.branches.length ?? 0;
 
+  const formattedDate = new Intl.DateTimeFormat(locale === "ar" ? "ar-MA" : "fr-MA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
+
+  const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+
   return (
     <Stack gap="xl">
-      {/* Hero Welcome Banner */}
+      {/* Executive Hero Banner */}
       <Paper
         radius={24}
         withBorder
@@ -99,41 +109,44 @@ export default async function DashboardPage() {
         style={{
           background: "var(--card)",
           borderColor: "var(--border-strong)",
-          boxShadow: "var(--shadow-sm)",
-          position: "relative",
-          overflow: "hidden",
+          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.03)",
         }}
       >
         <Stack gap="lg">
+          {/* Header Row: Title on Left, Actions on Right */}
           <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
             <Stack gap={4}>
               <Group gap="xs" align="center">
-                <span className="relative flex h-2 w-2">
+                <span className="relative flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
                 </span>
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.1em" }}>
                   {locale === "ar" ? "النظام نشط • مباشر" : "Système actif • En direct"}
                 </Text>
               </Group>
 
-              <Title order={1} style={{ letterSpacing: "-0.03em", fontSize: "1.85rem", fontWeight: 800 }}>
+              <Title
+                order={1}
+                style={{
+                  letterSpacing: "-0.03em",
+                  fontSize: "1.85rem",
+                  fontWeight: 900,
+                  color: "var(--foreground)",
+                }}
+              >
                 {dict.dashboard.title}
               </Title>
 
               <Group gap="xs" c="dimmed" style={{ fontSize: "13px" }}>
-                <Calendar size={14} strokeWidth={1.6} />
-                <Text size="sm">
-                  {new Intl.DateTimeFormat(locale === "ar" ? "ar-MA" : "fr-MA", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  }).format(new Date())}
+                <Calendar size={14} strokeWidth={1.8} className="text-[var(--accent)]" />
+                <Text size="sm" fw={500}>
+                  {capitalizedDate} · {dict.dashboard.subtitle}
                 </Text>
               </Group>
             </Stack>
 
+            {/* Action Buttons */}
             <Group gap="sm" wrap="wrap">
               {featureFlags.devis ? (
                 <Button
@@ -141,11 +154,12 @@ export default async function DashboardPage() {
                   href="/devis/new"
                   radius="xl"
                   size="sm"
-                  leftSection={<Plus size={15} strokeWidth={2} />}
+                  leftSection={<Plus size={15} strokeWidth={2.2} />}
                   style={{
                     backgroundColor: "var(--accent)",
                     color: "var(--accent-foreground)",
-                    fontWeight: 600,
+                    fontWeight: 700,
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
                   }}
                 >
                   {dict.dashboard.newDevis}
@@ -167,8 +181,9 @@ export default async function DashboardPage() {
             </Group>
           </Group>
 
-          {/* Quick Metrics Strip */}
+          {/* 3 Executive Stat Cards with Tinted Accents */}
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+            {/* Card 1: Recettes du jour */}
             <Paper
               radius="xl"
               withBorder
@@ -176,35 +191,42 @@ export default async function DashboardPage() {
               style={{
                 background: "var(--surface-soft)",
                 borderColor: "var(--border)",
+                transition: "all 200ms ease",
               }}
+              className="hover:-translate-y-0.5 hover:shadow-xs"
             >
               <Group justify="space-between" align="center">
-                <Stack gap={2}>
+                <Stack gap={3}>
                   <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
                     {locale === "ar" ? "مداخيل اليوم" : "Recettes du jour"}
                   </Text>
                   <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
                     {formatCurrency(totalDayRevenue)}
                   </Text>
+                  <Text size="11px" c="dimmed">
+                    {totalDayRevenue > 0
+                      ? (locale === "ar" ? "مجموع المداخيل المسجلة" : "Encaissements enregistrés")
+                      : (locale === "ar" ? "في انتظار التسجيل اليومي" : "En attente de clôture")}
+                  </Text>
                 </Stack>
                 <div
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "var(--card)",
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    background: "rgba(16, 185, 129, 0.12)",
+                    color: "#059669",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "var(--foreground)",
                   }}
                 >
-                  <CircleDollarSign size={20} strokeWidth={1.6} />
+                  <CircleDollarSign size={22} strokeWidth={1.8} />
                 </div>
               </Group>
             </Paper>
 
+            {/* Card 2: Magasins actifs */}
             <Paper
               radius="xl"
               withBorder
@@ -212,35 +234,40 @@ export default async function DashboardPage() {
               style={{
                 background: "var(--surface-soft)",
                 borderColor: "var(--border)",
+                transition: "all 200ms ease",
               }}
+              className="hover:-translate-y-0.5 hover:shadow-xs"
             >
               <Group justify="space-between" align="center">
-                <Stack gap={2}>
+                <Stack gap={3}>
                   <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
                     {locale === "ar" ? "المحلات والماڭازات النشطة" : "Magasins actifs"}
                   </Text>
                   <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
                     {branchesCount} {locale === "ar" ? "محل" : (branchesCount > 1 ? "emplacements" : "emplacement")}
                   </Text>
+                  <Text size="11px" c="dimmed">
+                    {locale === "ar" ? "نقاط بيع متصلة" : "Points de vente opérationnels"}
+                  </Text>
                 </Stack>
                 <div
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "var(--card)",
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    background: "rgba(99, 102, 241, 0.12)",
+                    color: "#4f46e5",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "var(--foreground)",
                   }}
                 >
-                  <Store size={19} strokeWidth={1.6} />
+                  <Store size={22} strokeWidth={1.8} />
                 </div>
               </Group>
             </Paper>
 
+            {/* Card 3: Documents récents */}
             <Paper
               radius="xl"
               withBorder
@@ -248,38 +275,38 @@ export default async function DashboardPage() {
               style={{
                 background: "var(--surface-soft)",
                 borderColor: "var(--border)",
+                transition: "all 200ms ease",
               }}
+              className="hover:-translate-y-0.5 hover:shadow-xs"
             >
               <Group justify="space-between" align="center">
-                <Stack gap={2}>
+                <Stack gap={3}>
                   <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
                     {dict.dashboard.recentDocuments}
                   </Text>
                   <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
                     {latestDocuments.length}{" "}
                     {locale === "ar"
-                      ? latestDocuments.length > 1
-                        ? "وثائق"
-                        : "وثيقة"
-                      : latestDocuments.length > 1
-                      ? "documents"
-                      : "document"}
+                      ? latestDocuments.length > 1 ? "وثائق" : "وثيقة"
+                      : latestDocuments.length > 1 ? "documents" : "document"}
+                  </Text>
+                  <Text size="11px" c="dimmed">
+                    {locale === "ar" ? "فواتير، دوڤيات وبونات" : "Devis, factures & bons"}
                   </Text>
                 </Stack>
                 <div
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "var(--card)",
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    background: "rgba(14, 165, 233, 0.12)",
+                    color: "#0284c7",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "var(--foreground)",
                   }}
                 >
-                  <FileText size={19} strokeWidth={1.6} />
+                  <FileText size={22} strokeWidth={1.8} />
                 </div>
               </Group>
             </Paper>
@@ -296,29 +323,28 @@ export default async function DashboardPage() {
           style={{
             background: "var(--card)",
             borderColor: "var(--border-strong)",
-            boxShadow: "var(--shadow-sm)",
+            boxShadow: "0 2px 12px rgba(0, 0, 0, 0.03)",
           }}
         >
           <Group justify="space-between" align="center" mb="lg" wrap="wrap" gap="md">
             <Group gap="sm">
               <div
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "var(--surface-soft)",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  background: "rgba(16, 185, 129, 0.12)",
+                  color: "#059669",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "var(--foreground)",
                 }}
               >
-                <TrendingUp size={18} strokeWidth={1.8} />
+                <TrendingUp size={20} strokeWidth={2} />
               </div>
               <Stack gap={1}>
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.1em" }}>
-                  {locale === "ar" ? "متابعة مداخيل الصندوق يومياً" : "Suivi financier quotidien"}
+                  {locale === "ar" ? "التتبع المالي اليومي" : "Suivi financier quotidien"}
                 </Text>
                 <Title order={2} style={{ letterSpacing: "-0.03em", fontWeight: 800, fontSize: "1.35rem" }}>
                   {dict.dashboard.storeRevenues}
@@ -382,18 +408,18 @@ export default async function DashboardPage() {
                   style={{
                     background: hasSales ? "var(--card)" : "var(--surface-soft)",
                     borderColor: hasSales ? "var(--border-strong)" : "var(--border)",
-                    boxShadow: hasSales ? "0 2px 8px rgba(0,0,0,0.02)" : "none",
+                    boxShadow: hasSales ? "0 2px 8px rgba(0,0,0,0.03)" : "none",
                     transition: "all 200ms ease",
                   }}
                   className="group hover:-translate-y-0.5 hover:border-[var(--accent)]"
                 >
                   <Stack gap="md">
                     <Group justify="space-between" align="flex-start" wrap="nowrap">
-                      <Group gap="xs" wrap="nowrap">
+                      <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
                         <div
                           style={{
-                            width: 34,
-                            height: 34,
+                            width: 36,
+                            height: 36,
                             borderRadius: 10,
                             border: "1px solid var(--border)",
                             background: "var(--card)",
@@ -401,15 +427,16 @@ export default async function DashboardPage() {
                             alignItems: "center",
                             justifyContent: "center",
                             color: "var(--foreground)",
+                            flexShrink: 0,
                           }}
                         >
-                          <MapPin size={15} strokeWidth={1.8} />
+                          <MapPin size={16} strokeWidth={1.8} />
                         </div>
-                        <Stack gap={1}>
-                          <Text size="sm" fw={800} style={{ letterSpacing: "-0.01em" }}>
+                        <Stack gap={1} style={{ minWidth: 0 }}>
+                          <Text size="sm" fw={800} style={{ letterSpacing: "-0.01em" }} truncate>
                             {branch.name}
                           </Text>
-                          <Text size="xs" c="dimmed" truncate style={{ maxWidth: 220 }}>
+                          <Text size="xs" c="dimmed" truncate>
                             {branch.address || (locale === "ar" ? "محل نشط" : "Emplacement actif")}
                           </Text>
                         </Stack>
@@ -420,8 +447,8 @@ export default async function DashboardPage() {
                           color="green"
                           variant="light"
                           radius="xl"
-                          size="xs"
-                          leftSection={<CheckCircle2 size={11} strokeWidth={2} />}
+                          size="sm"
+                          leftSection={<CheckCircle2 size={12} strokeWidth={2} />}
                           style={{ fontWeight: 700 }}
                         >
                           {locale === "ar" ? "مسجل" : "Enregistré"}
@@ -431,8 +458,8 @@ export default async function DashboardPage() {
                           color="gray"
                           variant="light"
                           radius="xl"
-                          size="xs"
-                          leftSection={<Clock size={11} strokeWidth={2} />}
+                          size="sm"
+                          leftSection={<Clock size={12} strokeWidth={2} />}
                           style={{ fontWeight: 600 }}
                         >
                           {locale === "ar" ? "في الانتظار" : "En attente"}
@@ -442,22 +469,22 @@ export default async function DashboardPage() {
 
                     <div
                       style={{
-                        padding: "10px 14px",
-                        borderRadius: "12px",
-                        background: "var(--card)",
-                        border: "1px solid var(--border)",
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        background: hasSales ? "rgba(16, 185, 129, 0.05)" : "var(--card)",
+                        border: hasSales ? "1px solid rgba(16, 185, 129, 0.15)" : "1px solid var(--border)",
                       }}
                     >
-                      <Group justify="space-between" align="baseline">
+                      <Group justify="space-between" align="center">
                         <Text size="xs" c="dimmed" fw={600}>
-                          {locale === "ar" ? "مداخيل اليوم" : "Chiffre d'affaires"}
+                          {locale === "ar" ? "المداخيل اليومية" : "Chiffre d'affaires"}
                         </Text>
                         <Text
+                          size="md"
                           fw={900}
-                          size="lg"
                           style={{
                             letterSpacing: "-0.02em",
-                            color: hasSales ? "var(--foreground)" : "var(--muted)",
+                            color: hasSales ? "#059669" : "var(--foreground)",
                           }}
                         >
                           {formatCurrency(amount)}
@@ -467,18 +494,16 @@ export default async function DashboardPage() {
 
                     <Button
                       component={Link}
-                      href="/chiffre-affaires"
+                      href={`/chiffre-affaires?tab=cloture&branch=${branch.id}&date=${today}`}
                       variant="subtle"
-                      color="gray"
                       size="xs"
-                      radius="md"
-                      fullWidth
+                      color="blue"
                       rightSection={<ArrowRight size={13} strokeWidth={1.8} />}
-                      style={{ fontWeight: 600 }}
+                      style={{ justifyContent: "space-between", paddingLeft: 0, paddingRight: 0 }}
                     >
                       {hasSales
-                        ? (locale === "ar" ? "عرض التفاصيل" : "Consulter la fiche")
-                        : (locale === "ar" ? "تسجيل مداخيل هاد المحل" : "Saisir pour ce magasin")}
+                        ? (locale === "ar" ? "عرض التفاصيل" : "Consulter la clôture")
+                        : (locale === "ar" ? "تسجيل مداخيل هاد المحل" : "Pointer la caisse du jour")}
                     </Button>
                   </Stack>
                 </Paper>
@@ -496,25 +521,24 @@ export default async function DashboardPage() {
         style={{
           background: "var(--card)",
           borderColor: "var(--border-strong)",
-          boxShadow: "var(--shadow-sm)",
+          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.03)",
         }}
       >
         <Group justify="space-between" align="center" mb="lg" wrap="wrap" gap="md">
           <Group gap="sm">
             <div
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                border: "1px solid var(--border)",
-                background: "var(--surface-soft)",
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: "rgba(2, 132, 199, 0.12)",
+                color: "#0284c7",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--foreground)",
               }}
             >
-              <Receipt size={18} strokeWidth={1.8} />
+              <Receipt size={20} strokeWidth={1.8} />
             </div>
             <Stack gap={1}>
               <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.1em" }}>
@@ -563,7 +587,7 @@ export default async function DashboardPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   color: "var(--muted)",
-                  boxShadow: "var(--shadow-sm)",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
                 }}
               >
                 <FileText size={22} strokeWidth={1.6} />
@@ -610,7 +634,7 @@ export default async function DashboardPage() {
             </Stack>
           </Paper>
         ) : (
-          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="md" striped>
+          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="md">
             <TableThead>
               <TableTr>
                 <TableTh>{dict.documents.number}</TableTh>
