@@ -1,41 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 180" role="img" aria-labelledby="title desc">
-  <title id="title">Logo Entreprise</title>
-  <desc id="desc">Emblème d'entreprise moderne et épuré avec typographie bilingue.</desc>
-  <style>
-    .ink-dark { fill: #0f172a; }
-    .ink-muted { fill: #475569; }
-    .ink-accent { fill: #1e40af; }
-    .fr-title {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-    .fr-sub {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .ar-title {
-      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-      font-size: 26px;
-      font-weight: 700;
-    }
-  </style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="420" height="120" role="img" aria-label="Logo Entreprise">
+  <defs>
+    <linearGradient id="logo-bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#1e40af" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="logo-accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#60a5fa" />
+    </linearGradient>
+    <filter id="logo-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.15" />
+    </filter>
+  </defs>
 
-  <g transform="translate(24, 30)">
-    <rect width="120" height="120" rx="28" fill="#1e40af"/>
-    <path d="M38 84V36H82M38 60H74" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="82" cy="84" r="8" fill="#60a5fa"/>
+  <!-- Modern Geometric Emblem -->
+  <g transform="translate(10, 10)" filter="url(#logo-shadow)">
+    <rect width="100" height="100" rx="24" fill="url(#logo-bg-grad)" />
+    <!-- Luxury Architectural Monogram H & Diamond -->
+    <path d="M28 26 V74 M72 26 V74" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M28 50 H72" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+    <!-- Center Diamond Accent -->
+    <polygon points="50,42 58,50 50,58 42,50" fill="url(#logo-accent-grad)" />
+    <!-- Precision Corner Accent -->
+    <circle cx="72" cy="74" r="5" fill="#38bdf8" />
   </g>
 
-  <!-- French Text -->
-  <text class="fr-title ink-dark" x="170" y="82">ENTREPRISE</text>
-  <text class="fr-sub ink-muted" x="170" y="112">Gestion &amp; Commerce</text>
-
-  <!-- Arabic Text -->
-  <text class="ar-title ink-dark" x="496" y="86" text-anchor="end">الشركة التجارية</text>
-  <text class="ink-muted" x="496" y="112" text-anchor="end" font-size="14" font-family="sans-serif">نظام التسيير التجاري</text>
+  <!-- Clean Corporate Typography (No overlapping text) -->
+  <g transform="translate(130, 22)">
+    <text x="0" y="38" fill="#0f172a" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" font-weight="900" letter-spacing="-0.03em">
+      ENTREPRISE
+    </text>
+    <text x="0" y="66" fill="#475569" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="0.18em">
+      GESTION &amp; COMMERCE
+    </text>
+  </g>
 </svg>

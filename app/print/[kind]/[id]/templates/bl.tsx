@@ -31,8 +31,15 @@ export default function BonLivraisonTemplate({
           <div className="flex items-start gap-4">
             <PrintLogo company={company} size="large" className="shrink-0" />
             <div className="text-[11px] text-[var(--print-text-muted)] space-y-0.5 pt-0.5">
-              <div className="text-[13px] font-black uppercase text-[var(--print-text)] tracking-tight">
-                {company.name}
+              <div className="flex items-baseline gap-2">
+                <span className="text-[13px] font-black uppercase text-[var(--print-text)] tracking-tight">
+                  {company.name}
+                </span>
+                {company.arabic_name ? (
+                  <span className="font-[var(--font-arabic)] text-[11px] font-bold text-[var(--print-accent-dark)]">
+                    {company.arabic_name}
+                  </span>
+                ) : null}
               </div>
               {company.address ? <div>{company.address}</div> : null}
               {company.phone || company.gsm ? (

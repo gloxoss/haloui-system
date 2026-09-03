@@ -1,12 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
   <defs>
     <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="var(--accent, #1e40af)" />
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#1e40af" />
       <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="brand-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#60a5fa" />
     </linearGradient>
   </defs>
   <rect width="120" height="120" rx="28" fill="url(#brand-grad)" />
-  <!-- Geometric Monogram -->
-  <path d="M36 86V34H84M36 60H74" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="84" cy="86" r="8" fill="#60a5fa"/>
+  <!-- Luxury Architectural Monogram H & Diamond -->
+  <path d="M34 32 V88 M86 32 V88" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M34 60 H86" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+  <!-- Center Diamond Accent -->
+  <polygon points="60,50 70,60 60,70 50,60" fill="url(#brand-accent)" />
+  <!-- Precision Corner Accent -->
+  <circle cx="86" cy="88" r="6" fill="#38bdf8" />
 </svg>

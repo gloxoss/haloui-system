@@ -125,7 +125,7 @@ export function PrintLayout({
         @media screen {
           body {
             background-color: #cbd5e1;
-            padding: 24px 0;
+            padding: 20px 0;
             margin: 0;
           }
           .print-root {
@@ -134,10 +134,10 @@ export function PrintLayout({
             max-width: 210mm;
             min-height: 297mm;
             margin: 0 auto;
-            padding: 8mm 12mm;
+            padding: 6mm 8mm;
             box-sizing: border-box;
             box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
-            border-radius: 4px;
+            border-radius: 2px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -145,6 +145,10 @@ export function PrintLayout({
         }
 
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
           html, body {
             width: 210mm !important;
             height: 297mm !important;
@@ -162,7 +166,7 @@ export function PrintLayout({
             height: 297mm !important;
             min-height: 297mm !important;
             margin: 0 !important;
-            padding: 8mm 12mm !important;
+            padding: 6mm 8mm !important;
             box-sizing: border-box !important;
             background: #ffffff !important;
             background-color: #ffffff !important;

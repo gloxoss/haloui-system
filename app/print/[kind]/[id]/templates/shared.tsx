@@ -75,16 +75,42 @@ export function PrintLogo({
   size?: "small" | "large";
   className?: string;
 }) {
-  const dimensions = size === "large" ? { width: 220, height: 90 } : { width: 180, height: 75 };
+  const isCustomLogo =
+    Boolean(company.logo_path) &&
+    !company.logo_path?.startsWith("/assets/logo") &&
+    !company.logo_path?.startsWith("/assets/brand-icon");
 
+  if (isCustomLogo && company.logo_path) {
+    const dimensions = size === "large" ? { width: 180, height: 75 } : { width: 140, height: 60 };
+    return (
+      <div className={className}>
+        <Image
+          src={company.logo_path}
+          alt={company.name}
+          width={dimensions.width}
+          height={dimensions.height}
+          className={
+            size === "large"
+              ? "h-14 w-auto max-w-[180px] object-contain"
+              : "h-11 w-auto max-w-[140px] object-contain"
+          }
+          priority
+        />
+      </div>
+    );
+  }
+
+  // Modern corporate emblem mark
+  const iconPx = size === "large" ? 48 : 40;
   return (
-    <div className={className}>
+    <div className={`flex items-center ${className}`}>
       <Image
-        src={company.logo_path || "/assets/logo.svg"}
+        src="/assets/brand-icon.svg"
         alt={company.name}
-        width={dimensions.width}
-        height={dimensions.height}
-        className={size === "large" ? "h-14 w-auto max-w-[220px] object-contain" : "h-12 w-auto max-w-[180px] object-contain"}
+        width={iconPx}
+        height={iconPx}
+        style={{ width: `${iconPx}px`, height: `${iconPx}px` }}
+        className="rounded-xl object-contain shadow-xs shrink-0"
         priority
       />
     </div>
