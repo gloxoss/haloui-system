@@ -13,7 +13,10 @@ export type FeatureKey =
   | "personnel"
   | "attestations"
   | "chiffre_affaires"
-  | "utilisateurs";
+  | "utilisateurs"
+  | "multi_societes"
+  | "multi_branches"
+  | "multi_langue";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

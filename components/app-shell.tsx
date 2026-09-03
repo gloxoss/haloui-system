@@ -165,9 +165,13 @@ export function AppShell({
               </Group>
 
               <Group gap="sm" wrap="nowrap">
-                <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />
+                {featureFlags.multi_societes && (
+                  <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />
+                )}
                 <CommandPalette />
-                <LanguageSwitcher variant="button" size="xs" />
+                {featureFlags.multi_langue && (
+                  <LanguageSwitcher variant="button" size="xs" />
+                )}
 
                 <Menu position={isRtl ? "bottom-start" : "bottom-end"} shadow="md" width={220}>
                   <Menu.Target>

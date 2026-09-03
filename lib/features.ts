@@ -24,10 +24,6 @@ export function isFeatureEnabled(feature: FeatureKey) {
 export async function requireFeature(feature: FeatureKey) {
   const session = await requireAuth();
 
-  if (session.user.role === "superadmin") {
-    return session;
-  }
-
   if (!isFeatureEnabled(feature)) {
     redirect("/dashboard");
   }

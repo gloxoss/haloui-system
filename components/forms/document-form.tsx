@@ -63,6 +63,7 @@ export function DocumentForm({
   clients,
   fournisseurs,
   products,
+  multiBranchesEnabled = true,
 }: {
   slug: string;
   type: DocumentKind;
@@ -71,6 +72,7 @@ export function DocumentForm({
   clients: LookupItem[];
   fournisseurs: LookupItem[];
   products: LookupItem[];
+  multiBranchesEnabled?: boolean;
 }) {
   const { t, locale, isRtl } = useTranslation();
   const initialLines = document?.lines?.length ? document.lines : [EMPTY_LINE()];
@@ -88,7 +90,7 @@ export function DocumentForm({
   const [date, setDate] = useState(toInputDate(document?.date));
   const [notes, setNotes] = useState(document?.notes ?? "");
   const [advanceValue, setAdvanceValue] = useState<number>(Number(document?.avance ?? 0));
-  const [branchId, setBranchId] = useState(stringValue(document?.branch_id));
+  const [branchId, setBranchId] = useState(stringValue(document?.branch_id) || (branches[0] ? String(branches[0].id) : ""));
   const [sourceBranchId, setSourceBranchId] = useState(stringValue(document?.source_branch_id));
   const [destinationBranchId, setDestinationBranchId] = useState(stringValue(document?.destination_branch_id));
   const [clientId, setClientId] = useState(stringValue(document?.client_id));
@@ -1373,7 +1375,7 @@ export function DocumentForm({
                   <Field label="Date">
                     <AppDateInput value={date} onChange={setDate} />
                   </Field>
-                  {type === "bs" ? null : (
+                  {type === "bs" || !multiBranchesEnabled || branches.length <= 1 ? null : (
                     <Field label="Magasin">
                       <Select value={branchId || "none"} onValueChange={(val) => setBranchId(val === "none" ? "" : val)}>
                         <SelectTrigger>
@@ -1587,26 +1589,28 @@ export function DocumentForm({
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Magasin">
-                    <Select
-                      name="branch_id"
-                      value={branchId || "none"}
-                      disabled={locked}
-                      onValueChange={(val) => setBranchId(val === "none" ? "" : val)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sélectionner</SelectItem>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.id} value={String(branch.id)}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                  {multiBranchesEnabled && branches.length > 1 && (
+                    <Field label="Magasin">
+                      <Select
+                        name="branch_id"
+                        value={branchId || "none"}
+                        disabled={locked}
+                        onValueChange={(val) => setBranchId(val === "none" ? "" : val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sélectionner</SelectItem>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={String(branch.id)}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
                   {renderPartyField()}
                 </div>
               )}

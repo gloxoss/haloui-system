@@ -44,10 +44,44 @@ const FEATURE_LOCALES_AR: Record<string, { label: string; description: string }>
   produits: { label: "السلعة والمنتوجات", description: "تفعيل كتالوج السلعة، الأثمنة والتعديل الجماعي." },
   clients: { label: "الكليان والزبناء", description: "تفعيل دليل وحسابات الكليان وأرقام ICE." },
   fournisseurs: { label: "الفورنيسور والموردين", description: "تفعيل دليل الموردين وحسابات الشراء." },
+  chiffre_affaires: { label: "المداخيل ولاكيس", description: "تفعيل تتبع ومقارنة مداخيل الصندوق والمبيعات." },
   personnel: { label: "المستخدمين والعمال", description: "تفعيل ملفات المستخدمين، الأجور والتتبع." },
   attestations: { label: "شهادات العمل", description: "تفعيل إصدار وطباعة شهادات العمل الرسمية." },
-  chiffre_affaires: { label: "المداخيل ولاكيس", description: "تفعيل تتبع ومقارنة مداخيل الصندوق والمبيعات." },
-  utilisateurs: { label: "حسابات المستخدمين", description: "تفعيل إدارة الحسابات، الصلاحيات وسجل العمليات." },
+  multi_societes: { label: "الشركات المتعددة (Multi-Sociétés)", description: "تفعيل التبديل بين عدة شركات ومحطات قانونية في أعلى الصفحة." },
+  multi_branches: { label: "المحلات والمحطات المتعددة (Multi-Magasins)", description: "تفعيل إدارة وتحديد نقاط البيع والمحلات في الفواتير والتقارير." },
+  multi_langue: { label: "تغيير اللغة (فرنسية / عربية)", description: "تفعيل زر التبديل بين اللغتين في رأس الصفحة." },
+  utilisateurs: { label: "حسابات المستخدمين", description: "تفعيل إدارة الحسابات، الصلاحيات وسجل العمليات (خاص بالسوبر أدمين)." },
+};
+
+const CATEGORY_META: Record<
+  "commercial" | "caisse" | "rh" | "multientite" | "systeme",
+  { fr: string; ar: string; badge: string }
+> = {
+  commercial: {
+    fr: "Ventes, Achats & Documents Commerciaux",
+    ar: "المبيعات، الشراء والوثائق التجارية",
+    badge: "8 modules",
+  },
+  caisse: {
+    fr: "Suivi Financier & Caisse Quotidienne",
+    ar: "التتبع المالي والصندوق اليومي",
+    badge: "1 module",
+  },
+  rh: {
+    fr: "Ressources Humaines & Attestations",
+    ar: "الموارد البشرية وشهادات العمل",
+    badge: "2 modules",
+  },
+  multientite: {
+    fr: "Multi-Sociétés & Multi-Magasins",
+    ar: "الشركات ونقاط البيع المتعددة",
+    badge: "2 modules",
+  },
+  systeme: {
+    fr: "Système, Langue & Utilisateurs",
+    ar: "النظام، اللغة والمستخدمين",
+    badge: "2 modules",
+  },
 };
 
 export default async function ParametresPage() {
@@ -160,34 +194,56 @@ export default async function ParametresPage() {
               </p>
             </div>
 
-            <form action={saveFeatureFlagsAction} className="grid gap-3">
-              <div className="grid gap-2.5">
-                {FEATURE_TOGGLE_DEFINITIONS.map((feature) => {
-                  const localizedMeta = locale === "ar" && FEATURE_LOCALES_AR[feature.key]
-                    ? FEATURE_LOCALES_AR[feature.key]
-                    : { label: feature.label, description: feature.description };
+            <form action={saveFeatureFlagsAction} className="grid gap-4">
+              {(["commercial", "caisse", "rh", "multientite", "systeme"] as const).map((catKey) => {
+                const categoryFeatures = FEATURE_TOGGLE_DEFINITIONS.filter((f) => f.category === catKey);
+                if (!categoryFeatures.length) return null;
+                const meta = CATEGORY_META[catKey];
 
-                  return (
-                    <label
-                      key={feature.key}
-                      className="flex cursor-pointer items-start gap-3 rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 transition hover:border-[var(--accent)]"
-                    >
-                      <input
-                        type="checkbox"
-                        name={feature.key}
-                        value="1"
-                        defaultChecked={featureFlags[feature.key]}
-                        className="mt-1 h-4 w-4 accent-[var(--accent)]"
-                      />
-                      <span className="grid gap-0.5">
-                        <span className="text-sm font-semibold">{localizedMeta.label}</span>
-                        <span className="text-xs text-[var(--muted)]">{localizedMeta.description}</span>
+                return (
+                  <div key={catKey} className="grid gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3.5 shadow-xs">
+                    <div className="flex items-center justify-between pb-1 border-b border-[var(--border)]">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">
+                        {locale === "ar" ? meta.ar : meta.fr}
                       </span>
-                    </label>
-                  );
-                })}
+                      <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--muted-strong)]">
+                        {meta.badge}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-2">
+                      {categoryFeatures.map((feature) => {
+                        const localizedMeta =
+                          locale === "ar" && FEATURE_LOCALES_AR[feature.key]
+                            ? FEATURE_LOCALES_AR[feature.key]
+                            : { label: feature.label, description: feature.description };
+
+                        return (
+                          <label
+                            key={feature.key}
+                            className="flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[var(--background-alt)] px-3 py-2.5 transition hover:border-[var(--accent)] hover:shadow-xs"
+                          >
+                            <input
+                              type="checkbox"
+                              name={feature.key}
+                              value="1"
+                              defaultChecked={featureFlags[feature.key]}
+                              className="mt-1 h-4 w-4 accent-[var(--accent)]"
+                            />
+                            <span className="grid gap-0.5">
+                              <span className="text-sm font-semibold text-[var(--foreground)]">{localizedMeta.label}</span>
+                              <span className="text-xs text-[var(--muted)]">{localizedMeta.description}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-2">
+                <SubmitButton className="w-full">{dict.settings.saveModules}</SubmitButton>
               </div>
-              <SubmitButton>{dict.settings.saveModules}</SubmitButton>
             </form>
           </Card>
 
@@ -292,132 +348,139 @@ export default async function ParametresPage() {
       </div>
 
       {/* Magasins / Emplacements Management Card */}
-      <Card>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-lg font-black">{dict.settings.storesTitle} — {company.name} ({branches.length})</h3>
-            <p className="text-sm text-[var(--muted)]">
-              {dict.settings.storesDesc}
-            </p>
+      {featureFlags.multi_branches ? (
+        <Card>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-black">{dict.settings.storesTitle} — {company.name} ({branches.length})</h3>
+              <p className="text-sm text-[var(--muted)]">
+                {dict.settings.storesDesc}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Add Branch Form */}
-        <form
-          action={saveBranchAction}
-          className="mt-4 grid gap-3.5 rounded-[20px] border border-[var(--border)] bg-[var(--background-alt)] p-4"
-        >
-          <input type="hidden" name="company_id" value={company.id} />
-          <div className="text-sm font-bold text-[var(--foreground)]">{dict.settings.addNewStore}</div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label={dict.settings.storeName}>
-              <Input name="name" placeholder={locale === "ar" ? "مثال: محل المدينة / Centre-Ville" : "Ex: Boutique Centre-Ville"} required />
+          {/* Add Branch Form */}
+          <form
+            action={saveBranchAction}
+            className="mt-4 grid gap-3.5 rounded-[20px] border border-[var(--border)] bg-[var(--background-alt)] p-4"
+          >
+            <input type="hidden" name="company_id" value={company.id} />
+            <div className="text-sm font-bold text-[var(--foreground)]">{dict.settings.addNewStore}</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label={dict.settings.storeName}>
+                <Input name="name" placeholder={locale === "ar" ? "مثال: محل المدينة / Centre-Ville" : "Ex: Boutique Centre-Ville"} required />
+              </Field>
+              <Field label={dict.settings.storePhone}>
+                <Input name="phone" placeholder="Ex: 0539 00 00 00" />
+              </Field>
+            </div>
+            <Field label={dict.settings.storeAddress}>
+              <Input name="address" placeholder={locale === "ar" ? "مثال: شارع الحسن الثاني، طنجة" : "Ex: Angle Boulevard Hassan II, Tanger"} />
             </Field>
-            <Field label={dict.settings.storePhone}>
-              <Input name="phone" placeholder="Ex: 0539 00 00 00" />
-            </Field>
-          </div>
-          <Field label={dict.settings.storeAddress}>
-            <Input name="address" placeholder={locale === "ar" ? "مثال: شارع الحسن الثاني، طنجة" : "Ex: Angle Boulevard Hassan II, Tanger"} />
-          </Field>
-          <input type="hidden" name="active" value="1" />
-          <div>
-            <SubmitButton>{dict.settings.createStore}</SubmitButton>
-          </div>
-        </form>
+            <input type="hidden" name="active" value="1" />
+            <div>
+              <SubmitButton>{dict.settings.createStore}</SubmitButton>
+            </div>
+          </form>
 
-        {/* Existing Branches List */}
-        <div className="mt-5">
-          <Table>
-            <THead>
-              <tr>
-                <TH>{dict.settings.storeCol}</TH>
-                <TH>{dict.settings.coordsCol}</TH>
-                <TH>{dict.settings.statusCol}</TH>
-                <TH className={locale === "ar" ? "text-left" : "text-right"}>{dict.settings.actionsCol}</TH>
-              </tr>
-            </THead>
-            <tbody>
-              {branches.map((branch) => (
-                <tr key={branch.id} className="border-b border-[var(--border)]">
-                  <TD className="w-72">
-                    <details className="group">
-                      <summary className="cursor-pointer list-none font-bold text-[var(--foreground)] transition hover:text-[var(--accent)]">
-                        <span className="inline-flex items-center gap-2">
-                          <span>{branch.name}</span>
-                          <span className="text-xs text-[var(--muted)] underline group-open:hidden">
-                            {dict.settings.editStore}
-                          </span>
-                        </span>
-                      </summary>
-                      <form
-                        action={saveBranchAction}
-                        className="mt-3.5 grid gap-3 rounded-xl border border-[var(--border-strong)] bg-[var(--card)] p-3.5 shadow-sm"
-                      >
-                        <input type="hidden" name="id" value={branch.id} />
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <Field label={dict.settings.storeName}>
-                            <Input name="name" defaultValue={branch.name} required />
-                          </Field>
-                          <Field label={dict.settings.storePhone}>
-                            <Input name="phone" defaultValue={branch.phone} />
-                          </Field>
-                        </div>
-                        <Field label={dict.settings.storeAddress}>
-                          <Input name="address" defaultValue={branch.address} />
-                        </Field>
-                        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-                          <input
-                            type="checkbox"
-                            name="active"
-                            value="1"
-                            defaultChecked={Boolean(branch.active)}
-                            className="h-4 w-4 accent-[var(--accent)]"
-                          />
-                          {dict.settings.storeActiveLabel}
-                        </label>
-                        <div className="flex items-center gap-2 pt-1">
-                          <SubmitButton variant="secondary">{dict.settings.updateStore}</SubmitButton>
-                        </div>
-                      </form>
-                    </details>
-                  </TD>
-                  <TD>
-                    <div className="font-medium">{branch.address || (locale === "ar" ? "لا يوجد عنوان" : "Aucune adresse")}</div>
-                    <div className="text-xs text-[var(--muted)]">{branch.phone || (locale === "ar" ? "لا يوجد هاتف" : "Aucun téléphone")}</div>
-                  </TD>
-                  <TD>
-                    {branch.active ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        {dict.settings.activeStatus}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold text-zinc-500">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
-                        {dict.settings.inactiveStatus}
-                      </span>
-                    )}
-                  </TD>
-                  <TD className={locale === "ar" ? "text-left" : "text-right"}>
-                    <form action={deleteBranchAction} className="inline-block">
-                      <input type="hidden" name="id" value={branch.id} />
-                      <ConfirmSubmitButton
-                        type="submit"
-                        variant="ghost"
-                        className="text-xs text-rose-600 hover:bg-rose-50"
-                        message={`${dict.settings.deleteStoreConfirm} (${branch.name})`}
-                      >
-                        {dict.settings.deleteStore}
-                      </ConfirmSubmitButton>
-                    </form>
-                  </TD>
+          {/* Existing Branches List */}
+          <div className="mt-5">
+            <Table>
+              <THead>
+                <tr>
+                  <TH>{dict.settings.storeCol}</TH>
+                  <TH>{dict.settings.coordsCol}</TH>
+                  <TH>{dict.settings.statusCol}</TH>
+                  <TH className={locale === "ar" ? "text-left" : "text-right"}>{dict.settings.actionsCol}</TH>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-      </Card>
+              </THead>
+              <tbody>
+                {branches.map((branch) => (
+                  <tr key={branch.id} className="border-b border-[var(--border)]">
+                    <TD className="w-72">
+                      <details className="group">
+                        <summary className="cursor-pointer list-none font-bold text-[var(--foreground)] transition hover:text-[var(--accent)]">
+                          <span className="inline-flex items-center gap-2">
+                            <span>{branch.name}</span>
+                            <span className="text-xs text-[var(--muted)] underline group-open:hidden">
+                              {dict.settings.editStore}
+                            </span>
+                          </span>
+                        </summary>
+                        <form
+                          action={saveBranchAction}
+                          className="mt-3.5 grid gap-3 rounded-xl border border-[var(--border-strong)] bg-[var(--card)] p-3.5 shadow-sm"
+                        >
+                          <input type="hidden" name="id" value={branch.id} />
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <Field label={dict.settings.storeName}>
+                              <Input name="name" defaultValue={branch.name} required />
+                            </Field>
+                            <Field label={dict.settings.storePhone}>
+                              <Input name="phone" defaultValue={branch.phone} />
+                            </Field>
+                          </div>
+                          <Field label={dict.settings.storeAddress}>
+                            <Input name="address" defaultValue={branch.address} />
+                          </Field>
+                          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                            <input
+                              type="checkbox"
+                              name="active"
+                              value="1"
+                              defaultChecked={Boolean(branch.active)}
+                              className="h-4 w-4 accent-[var(--accent)]"
+                            />
+                            {dict.settings.storeActiveLabel}
+                          </label>
+                          <div className="flex items-center gap-2 pt-1">
+                            <SubmitButton variant="secondary">{dict.settings.updateStore}</SubmitButton>
+                          </div>
+                        </form>
+                      </details>
+                    </TD>
+                    <TD>
+                      <div className="font-medium">{branch.address || (locale === "ar" ? "لا يوجد عنوان" : "Aucune adresse")}</div>
+                      <div className="text-xs text-[var(--muted)]">{branch.phone || (locale === "ar" ? "لا يوجد هاتف" : "Aucun téléphone")}</div>
+                    </TD>
+                    <TD>
+                      {branch.active ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          {dict.settings.activeStatus}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold text-zinc-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                          {dict.settings.inactiveStatus}
+                        </span>
+                      )}
+                    </TD>
+                    <TD className={locale === "ar" ? "text-left" : "text-right"}>
+                      <form action={deleteBranchAction} className="inline-block">
+                        <input type="hidden" name="id" value={branch.id} />
+                        <ConfirmSubmitButton
+                          type="submit"
+                          variant="ghost"
+                          className="text-xs text-rose-600 hover:bg-rose-50"
+                          message={`${dict.settings.deleteStoreConfirm} (${branch.name})`}
+                        >
+                          {dict.settings.deleteStore}
+                        </ConfirmSubmitButton>
+                      </form>
+                    </TD>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </Card>
+      ) : null}
+
+      {/* Attestations Template Studio (when personnel and attestations active) */}
+      {featureFlags.personnel && featureFlags.attestations ? (
+        <AttestationTemplateEditor initialValues={company} />
+      ) : null}
     </div>
   );
 }

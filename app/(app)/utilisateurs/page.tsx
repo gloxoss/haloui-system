@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input";
 import { SelectDropdown } from "@/components/ui/select";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
-import { requireAdmin } from "@/lib/auth";
+import { requireSuperadmin } from "@/lib/auth";
 import { getAuditLogs, listUsers } from "@/lib/data";
 import { requireFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { formatDateLong } from "@/lib/utils";
 
 export default async function UtilisateursPage() {
-  await requireAdmin();
+  await requireSuperadmin();
   await requireFeature("utilisateurs");
 
   const locale = await getServerLocale();

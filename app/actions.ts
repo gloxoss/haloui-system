@@ -123,7 +123,7 @@ export async function deleteBranchAction(formData: FormData) {
 }
 
 export async function saveUserAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireSuperadmin();
   saveUser(
     {
       id: Number(formData.get("id")) || undefined,

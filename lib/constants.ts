@@ -104,19 +104,23 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   key: FeatureKey;
   label: string;
   description: string;
+  category: "commercial" | "caisse" | "rh" | "multientite" | "systeme";
 }> = [
-  { key: "devis", label: "Devis", description: "Afficher les devis et leur creation." },
-  { key: "factures", label: "Factures", description: "Afficher les factures et leur creation." },
-  { key: "bons_livraison", label: "Bons de livraison", description: "Afficher les bons de livraison." },
-  { key: "bons_sortie", label: "Bons de sortie", description: "Afficher les bons de sortie." },
-  { key: "bons_commande", label: "Bons de commande", description: "Afficher les bons de commande." },
-  { key: "produits", label: "Produits", description: "Afficher le catalogue des produits." },
-  { key: "clients", label: "Clients", description: "Afficher le repertoire clients." },
-  { key: "fournisseurs", label: "Fournisseurs", description: "Afficher la page fournisseurs." },
-  { key: "personnel", label: "Personnel", description: "Afficher les dossiers du personnel." },
-  { key: "attestations", label: "Attestations", description: "Afficher la creation des attestations." },
-  { key: "chiffre_affaires", label: "Chiffre d'affaires", description: "Afficher les recettes et statistiques." },
-  { key: "utilisateurs", label: "Utilisateurs", description: "Afficher la gestion des comptes." },
+  { key: "devis", label: "Devis", description: "Afficher les devis et leur création.", category: "commercial" },
+  { key: "factures", label: "Factures", description: "Afficher les factures et leur création.", category: "commercial" },
+  { key: "bons_livraison", label: "Bons de livraison", description: "Afficher les bons de livraison (BL).", category: "commercial" },
+  { key: "bons_sortie", label: "Bons de sortie", description: "Afficher les bons de sortie (BS).", category: "commercial" },
+  { key: "bons_commande", label: "Bons de commande", description: "Afficher les bons de commande (BC).", category: "commercial" },
+  { key: "produits", label: "Articles & Catalogue", description: "Afficher le catalogue des produits et tarifs.", category: "commercial" },
+  { key: "clients", label: "Clients", description: "Afficher le répertoire clients.", category: "commercial" },
+  { key: "fournisseurs", label: "Fournisseurs", description: "Afficher le répertoire fournisseurs.", category: "commercial" },
+  { key: "chiffre_affaires", label: "Chiffre d'affaires & Caisse", description: "Afficher le suivi des recettes, la caisse journalière et les statistiques.", category: "caisse" },
+  { key: "personnel", label: "Personnel & Salaires", description: "Afficher la gestion des salariés et dossiers du personnel.", category: "rh" },
+  { key: "attestations", label: "Attestations de travail", description: "Génération et impression des 10 modèles d'attestations.", category: "rh" },
+  { key: "multi_societes", label: "Multi-Sociétés", description: "Activer le sélecteur d'entreprises (Ourida Station / Ananas Trans).", category: "multientite" },
+  { key: "multi_branches", label: "Multi-Magasins & Pistes", description: "Activer la gestion de plusieurs points de vente et magasins.", category: "multientite" },
+  { key: "multi_langue", label: "Sélecteur de Langue", description: "Activer le commutateur de langue bilingue (Français / العربية).", category: "systeme" },
+  { key: "utilisateurs", label: "Gestion des Utilisateurs", description: "Réservé Superadmin : création et permissions des comptes d'accès.", category: "systeme" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -128,9 +132,12 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   produits: true,
   clients: true,
   fournisseurs: false,
+  chiffre_affaires: true,
   personnel: true,
   attestations: true,
-  chiffre_affaires: true,
+  multi_societes: true,
+  multi_branches: true,
+  multi_langue: true,
   utilisateurs: true,
 };
 
@@ -351,7 +358,7 @@ export const MORE_NAV_ITEMS = [
   { href: "/produits", label: "Produits", feature: "produits" as const },
   { href: "/clients", label: "Clients", feature: "clients" as const },
   { href: "/fournisseurs", label: "Fournisseurs", feature: "fournisseurs" as const },
-  { href: "/utilisateurs", label: "Utilisateurs", feature: "utilisateurs" as const },
+  { href: "/utilisateurs", label: "Utilisateurs", feature: "utilisateurs" as const, superadminOnly: true as const },
   { href: "/parametres", label: "Paramètres", superadminOnly: true as const },
 ] as const;
 

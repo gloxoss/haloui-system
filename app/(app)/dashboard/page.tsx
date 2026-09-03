@@ -182,50 +182,52 @@ export default async function DashboardPage() {
             </Group>
           </Group>
 
-          {/* 3 Executive Stat Cards with Tinted Accents */}
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+          {/* Executive Stat Cards with Tinted Accents */}
+          <SimpleGrid cols={{ base: 1, sm: featureFlags.chiffre_affaires ? 3 : 2 }} spacing="md">
             {/* Card 1: Recettes du jour */}
-            <Paper
-              radius="xl"
-              withBorder
-              p="md"
-              style={{
-                background: "var(--surface-soft)",
-                borderColor: "var(--border)",
-                transition: "all 200ms ease",
-              }}
-              className="hover:-translate-y-0.5 hover:shadow-xs"
-            >
-              <Group justify="space-between" align="center">
-                <Stack gap={3}>
-                  <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
-                    {locale === "ar" ? "مداخيل اليوم" : "Recettes du jour"}
-                  </Text>
-                  <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
-                    {formatCurrency(totalDayRevenue)}
-                  </Text>
-                  <Text size="11px" c="dimmed">
-                    {totalDayRevenue > 0
-                      ? (locale === "ar" ? "مجموع المداخيل المسجلة" : "Encaissements enregistrés")
-                      : (locale === "ar" ? "في انتظار التسجيل اليومي" : "En attente de clôture")}
-                  </Text>
-                </Stack>
-                <div
-                  style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
-                    background: "rgba(16, 185, 129, 0.12)",
-                    color: "#059669",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <CircleDollarSign size={22} strokeWidth={1.8} />
-                </div>
-              </Group>
-            </Paper>
+            {featureFlags.chiffre_affaires ? (
+              <Paper
+                radius="xl"
+                withBorder
+                p="md"
+                style={{
+                  background: "var(--surface-soft)",
+                  borderColor: "var(--border)",
+                  transition: "all 200ms ease",
+                }}
+                className="hover:-translate-y-0.5 hover:shadow-xs"
+              >
+                <Group justify="space-between" align="center">
+                  <Stack gap={3}>
+                    <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
+                      {locale === "ar" ? "مداخيل اليوم" : "Recettes du jour"}
+                    </Text>
+                    <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
+                      {formatCurrency(totalDayRevenue)}
+                    </Text>
+                    <Text size="11px" c="dimmed">
+                      {totalDayRevenue > 0
+                        ? (locale === "ar" ? "مجموع المداخيل المسجلة" : "Encaissements enregistrés")
+                        : (locale === "ar" ? "في انتظار التسجيل اليومي" : "En attente de clôture")}
+                    </Text>
+                  </Stack>
+                  <div
+                    style={{
+                      width: 46,
+                      height: 46,
+                      borderRadius: 14,
+                      background: "rgba(16, 185, 129, 0.12)",
+                      color: "#059669",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <CircleDollarSign size={22} strokeWidth={1.8} />
+                  </div>
+                </Group>
+              </Paper>
+            ) : null}
 
             {/* Card 2: Magasins actifs */}
             <Paper
@@ -242,13 +244,19 @@ export default async function DashboardPage() {
               <Group justify="space-between" align="center">
                 <Stack gap={3}>
                   <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
-                    {locale === "ar" ? "المحلات والماڭازات النشطة" : "Magasins actifs"}
+                    {featureFlags.multi_branches
+                      ? (locale === "ar" ? "المحلات والماڭازات النشطة" : "Magasins actifs")
+                      : (locale === "ar" ? "نقطة البيع" : "Point de vente")}
                   </Text>
-                  <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "var(--foreground)" }}>
-                    {branchesCount} {locale === "ar" ? "محل" : (branchesCount > 1 ? "emplacements" : "emplacement")}
+                  <Text size="lg" fw={900} truncate style={{ letterSpacing: "-0.03em", color: "var(--foreground)", maxWidth: 220 }}>
+                    {featureFlags.multi_branches
+                      ? `${branchesCount} ${locale === "ar" ? "محل" : (branchesCount > 1 ? "emplacements" : "emplacement")}`
+                      : (revenue?.branches[0]?.name ?? (locale === "ar" ? "نقطة بيع رئيسية" : "Magasin principal"))}
                   </Text>
                   <Text size="11px" c="dimmed">
-                    {locale === "ar" ? "نقاط بيع متصلة" : "Points de vente opérationnels"}
+                    {featureFlags.multi_branches
+                      ? (locale === "ar" ? "نقاط بيع متصلة" : "Points de vente opérationnels")
+                      : (locale === "ar" ? "محل رئيسي نشط" : "Établissement actif")}
                   </Text>
                 </Stack>
                 <div
