@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { getActiveCompanyId } from "@/lib/company";
 import { listProducts } from "@/lib/data";
 import { requireFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
@@ -70,7 +71,8 @@ export async function ProductManager({
   await requireFeature("produits");
   const locale = await getServerLocale();
   const dict = getServerDictionary(locale);
-  const items = listProducts(search);
+  const activeCompanyId = await getActiveCompanyId();
+  const items = listProducts(search, activeCompanyId);
 
   return (
     <div className="grid gap-4">
@@ -87,6 +89,7 @@ export async function ProductManager({
           <Card>
             <h3 className="text-lg font-black">{dict.products.newProduct}</h3>
             <form action={saveProductAction} className="mt-4 grid gap-4">
+              <input type="hidden" name="company_id" value={activeCompanyId} />
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label={dict.products.ref}>
                   <Input name="ref" required />

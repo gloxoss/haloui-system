@@ -41,17 +41,17 @@ export default async function ChiffreAffairesPage({
   const branches = listBranches({ activeOnly: true, companyId: activeCompanyId });
   const selectedBranchId = params.branch ? Number(params.branch) : branches[0]?.id || 1;
 
-  const grid = getRevenueGrid(month);
-  const stats = getRevenueStats(month);
-  const sorties = listSortiesCaisse({ month });
+  const grid = getRevenueGrid(month, activeCompanyId);
+  const stats = getRevenueStats(month, activeCompanyId);
+  const sorties = listSortiesCaisse({ month, companyId: activeCompanyId });
   const daySummary = getCashDaySummary(date, selectedBranchId);
-  const systemSalesToday = getSystemSalesForDate(date);
+  const systemSalesToday = getSystemSalesForDate(date, activeCompanyId);
   const systemSaleTotal = systemSalesToday[selectedBranchId] || 0;
 
   // Month sorties sum
   const totalMonthSorties = sorties.reduce((sum, s) => sum + Number(s.montant), 0);
   const netMonthCaisse = stats.monthTotal - totalMonthSorties;
-  const salesDocuments = getSystemSalesDocumentsForMonth(month);
+  const salesDocuments = getSystemSalesDocumentsForMonth(month, activeCompanyId);
 
   return (
     <div className="grid gap-4">

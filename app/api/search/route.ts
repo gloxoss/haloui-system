@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth";
+import { getActiveCompanyId } from "@/lib/company";
 import { searchGlobal } from "@/lib/data";
 
 export async function GET(request: Request) {
@@ -10,5 +11,6 @@ export async function GET(request: Request) {
   }
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q") ?? "";
-  return NextResponse.json({ results: searchGlobal(query) });
+  const activeCompanyId = await getActiveCompanyId();
+  return NextResponse.json({ results: searchGlobal(query, activeCompanyId) });
 }

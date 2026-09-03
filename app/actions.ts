@@ -282,9 +282,11 @@ export async function deleteEntityAction(type: PartyType, formData: FormData) {
 
 export async function saveProductAction(formData: FormData) {
   const session = await requireAuth();
+  const activeCompanyId = await getActiveCompanyId();
   saveProduct(
     {
       id: Number(formData.get("id")) || undefined,
+      company_id: Number(formData.get("company_id")) || activeCompanyId,
       ref: String(formData.get("ref") || ""),
       designation: String(formData.get("designation") || ""),
       unite: String(formData.get("unite") || "u"),

@@ -129,6 +129,7 @@ export type EntityRecord = {
 
 export type ProductRecord = {
   id: number;
+  company_id?: number;
   ref: string;
   designation: string;
   unite: string;

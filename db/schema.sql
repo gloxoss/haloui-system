@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS produits (
 
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER DEFAULT 1,
   type TEXT NOT NULL CHECK (type IN ('devis', 'facture', 'bl', 'bs', 'bc')),
   numero INTEGER NOT NULL,
   date TEXT NOT NULL,
@@ -137,7 +138,7 @@ CREATE TABLE IF NOT EXISTS documents (
   FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
-  UNIQUE (type, numero)
+  UNIQUE (company_id, type, numero)
 );
 
 CREATE TABLE IF NOT EXISTS document_lignes (

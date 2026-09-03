@@ -71,7 +71,7 @@ export default async function DashboardPage() {
 
   const company = await getActiveCompany();
   const featureFlags = getFeatureFlags();
-  const stats = getDashboardStats();
+  const stats = getDashboardStats(company.id);
   const latestDocuments = (stats.latestDocuments as Array<{
     id: number;
     type: "devis" | "facture" | "bl" | "bs" | "bc";
@@ -86,7 +86,7 @@ export default async function DashboardPage() {
     .slice(0, 6);
 
   const today = todayIso();
-  const revenue = featureFlags.chiffre_affaires ? getRevenueGrid(monthKey()) : null;
+  const revenue = featureFlags.chiffre_affaires ? getRevenueGrid(monthKey(), company.id) : null;
   const todayRow = revenue?.table.find((row) => row.date === today);
   const totalDayRevenue = todayRow?.total ?? 0;
   const branchesCount = revenue?.branches.length ?? 0;

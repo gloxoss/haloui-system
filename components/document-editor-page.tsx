@@ -1,4 +1,5 @@
 import { DocumentForm } from "@/components/forms/document-form";
+import { getActiveCompanyId } from "@/lib/company";
 import { getDocumentById, getLookupData } from "@/lib/data";
 import { requireDocumentFeature } from "@/lib/features";
 import { type DocumentType } from "@/lib/types";
@@ -13,7 +14,8 @@ export async function DocumentEditorPage({
   id?: number;
 }) {
   await requireDocumentFeature(type);
-  const lookup = getLookupData();
+  const activeCompanyId = await getActiveCompanyId();
+  const lookup = getLookupData(activeCompanyId);
   const document = id ? getDocumentById(id) : null;
 
   return (

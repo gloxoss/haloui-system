@@ -340,6 +340,56 @@ function migrateDatabase(db: Database.Database) {
     `);
   }
 
+  const documentsTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='documents'").get() as { sql?: string } | undefined;
+  if (documentsTableInfo?.sql && documentsTableInfo.sql.includes("UNIQUE (type, numero)")) {
+    db.exec(`
+      CREATE TABLE documents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER DEFAULT 1,
+        type TEXT NOT NULL CHECK (type IN ('devis', 'facture', 'bl', 'bs', 'bc')),
+        numero INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        branch_id INTEGER,
+        source_branch_id INTEGER,
+        destination_branch_id INTEGER,
+        client_id INTEGER,
+        fournisseur_id INTEGER,
+        parent_document_id INTEGER,
+        total_ht REAL NOT NULL DEFAULT 0,
+        total_tva REAL NOT NULL DEFAULT 0,
+        total_ttc REAL NOT NULL DEFAULT 0,
+        remise REAL NOT NULL DEFAULT 0,
+        avance REAL NOT NULL DEFAULT 0,
+        reste REAL NOT NULL DEFAULT 0,
+        notes TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'brouillon' CHECK (status IN ('brouillon', 'valide', 'imprime')),
+        created_by INTEGER,
+        updated_by INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+        FOREIGN KEY (source_branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+        FOREIGN KEY (destination_branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+        FOREIGN KEY (fournisseur_id) REFERENCES fournisseurs(id) ON DELETE SET NULL,
+        FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+        UNIQUE (company_id, type, numero)
+      );
+      INSERT INTO documents_new (
+        id, company_id, type, numero, date, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
+        parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste, notes, status, created_by, updated_by, created_at, updated_at
+      )
+      SELECT
+        id, COALESCE(company_id, 1), type, numero, date, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
+        parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste, notes, status, created_by, updated_by, created_at, updated_at
+      FROM documents;
+      DROP TABLE documents;
+      ALTER TABLE documents_new RENAME TO documents;
+    `);
+  }
+
   ensureColumnExists(db, "company", "attestation_template_simple", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_salary", "TEXT DEFAULT ''");
   ensureColumnExists(db, "company", "attestation_template_visa", "TEXT DEFAULT ''");

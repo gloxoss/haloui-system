@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 import { getAuthSession } from "@/lib/auth";
+import { getActiveCompanyId } from "@/lib/company";
 import { getFeatureFlags, getRevenueGrid } from "@/lib/data";
 import { formatDate } from "@/lib/utils";
 
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month") || undefined;
-  const grid = getRevenueGrid(month);
+  const activeCompanyId = await getActiveCompanyId();
+  const grid = getRevenueGrid(month, activeCompanyId);
 
   const rows = grid.table.map((row) => ({
     Date: formatDate(row.date),

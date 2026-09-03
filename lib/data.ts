@@ -574,12 +574,23 @@ export function deleteEntity(type: PartyType, id: number, userId: number) {
   logAudit(userId, "delete", type, id, snapshot);
 }
 
-export function listProducts(search = "") {
+export function listProducts(search = "", companyId?: number) {
   const db = getDb();
   const wildcard = `%${search.trim()}%`;
+  if (companyId) {
+    return db.prepare(
+      `
+        SELECT id, company_id, ref, designation, unite, prix_ht, tva_rate, active
+        FROM produits
+        WHERE (? = '' OR ref LIKE ? OR designation LIKE ?)
+          AND (company_id = ? OR company_id IS NULL)
+        ORDER BY active DESC, designation
+      `,
+    ).all(search.trim(), wildcard, wildcard, companyId) as ProductRecord[];
+  }
   return db.prepare(
     `
-      SELECT id, ref, designation, unite, prix_ht, tva_rate, active
+      SELECT id, company_id, ref, designation, unite, prix_ht, tva_rate, active
       FROM produits
       WHERE (? = '' OR ref LIKE ? OR designation LIKE ?)
       ORDER BY active DESC, designation
@@ -590,7 +601,7 @@ export function listProducts(search = "") {
 export function getProductById(id: number) {
   const db = getDb();
   return db
-    .prepare("SELECT id, ref, designation, unite, prix_ht, tva_rate, active FROM produits WHERE id = ?")
+    .prepare("SELECT id, company_id, ref, designation, unite, prix_ht, tva_rate, active FROM produits WHERE id = ?")
     .get(id) as ProductRecord | undefined;
 }
 
@@ -605,7 +616,8 @@ export function saveProduct(input: SaveProductInput, userId: number) {
     db.prepare(
       `
         UPDATE produits
-        SET ref = @ref,
+        SET company_id = COALESCE(@company_id, company_id),
+            ref = @ref,
             designation = @designation,
             unite = @unite,
             prix_ht = @prix_ht,
@@ -617,6 +629,7 @@ export function saveProduct(input: SaveProductInput, userId: number) {
       `,
     ).run({
       ...normalizedInput,
+      company_id: input.company_id,
       active: input.active ?? 1,
       updated_by: userId,
     });
@@ -626,11 +639,12 @@ export function saveProduct(input: SaveProductInput, userId: number) {
 
   const result = db.prepare(
     `
-      INSERT INTO produits (ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
-      VALUES (@ref, @designation, @unite, @prix_ht, @tva_rate, @active, @created_by, @updated_by)
+      INSERT INTO produits (company_id, ref, designation, unite, prix_ht, tva_rate, active, created_by, updated_by)
+      VALUES (@company_id, @ref, @designation, @unite, @prix_ht, @tva_rate, @active, @created_by, @updated_by)
     `,
   ).run({
     ...normalizedInput,
+    company_id: input.company_id || 1,
     active: input.active ?? 1,
     created_by: userId,
     updated_by: userId,
@@ -737,63 +751,131 @@ export function deleteProduct(id: number, userId: number) {
   logAudit(userId, "delete", "product", id, snapshot);
 }
 
-export function getDashboardStats() {
+export function getDashboardStats(companyId?: number) {
   const db = getDb();
   const month = monthKey();
   const year = month.slice(0, 4);
-  const monthRow = db
-    .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 7) = ?")
-    .get(month) as { total: number };
-  const yearRow = db
-    .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 4) = ?")
-    .get(year) as { total: number };
 
-  const counts = db
-    .prepare(
-      `
-        SELECT
-          (SELECT COUNT(*) FROM documents) AS documents_count,
-          (SELECT COUNT(*) FROM clients) AS clients_count,
-          (SELECT COUNT(*) FROM produits) AS products_count,
-          (SELECT COUNT(*) FROM employes) AS employees_count
-      `,
-    )
-    .get() as {
-      documents_count: number;
-      clients_count: number;
-      products_count: number;
-      employees_count: number;
-    };
+  const monthRow = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(ca.montant), 0) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 7) = ? AND b.company_id = ?
+        `)
+        .get(month, companyId) as { total: number })
+    : (db
+        .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 7) = ?")
+        .get(month) as { total: number });
 
-  const latestDocuments = db
-    .prepare(
-      `
-        SELECT d.id, d.type, d.numero, d.date, d.total_ttc, d.status,
-               COALESCE(c.name, f.name, '—') AS party_name,
-               b.name AS branch_name
-        FROM documents d
-        LEFT JOIN clients c ON c.id = d.client_id
-        LEFT JOIN fournisseurs f ON f.id = d.fournisseur_id
-        LEFT JOIN branches b ON b.id = d.branch_id
-        ORDER BY d.created_at DESC
-        LIMIT 5
-      `,
-    )
-    .all();
+  const yearRow = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(ca.montant), 0) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 4) = ? AND b.company_id = ?
+        `)
+        .get(year, companyId) as { total: number })
+    : (db
+        .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 4) = ?")
+        .get(year) as { total: number });
 
-  const branchRanking = db
-    .prepare(
-      `
-        SELECT b.id, b.name, COALESCE(SUM(ca.montant), 0) AS total
-        FROM branches b
-        LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
-        WHERE b.active = 1
-        GROUP BY b.id, b.name
-        ORDER BY total DESC, b.name
-        LIMIT 1
-      `,
-    )
-    .get(month) as { id?: number; name?: string; total?: number } | undefined;
+  const counts = companyId
+    ? (db
+        .prepare(
+          `
+            SELECT
+              (SELECT COUNT(*) FROM documents WHERE company_id = ?) AS documents_count,
+              (SELECT COUNT(*) FROM clients) AS clients_count,
+              (SELECT COUNT(*) FROM produits WHERE company_id = ? OR company_id IS NULL) AS products_count,
+              (SELECT COUNT(*) FROM employes) AS employees_count
+          `,
+        )
+        .get(companyId, companyId) as {
+          documents_count: number;
+          clients_count: number;
+          products_count: number;
+          employees_count: number;
+        })
+    : (db
+        .prepare(
+          `
+            SELECT
+              (SELECT COUNT(*) FROM documents) AS documents_count,
+              (SELECT COUNT(*) FROM clients) AS clients_count,
+              (SELECT COUNT(*) FROM produits) AS products_count,
+              (SELECT COUNT(*) FROM employes) AS employees_count
+          `,
+        )
+        .get() as {
+          documents_count: number;
+          clients_count: number;
+          products_count: number;
+          employees_count: number;
+        });
+
+  const latestDocuments = companyId
+    ? db
+        .prepare(
+          `
+            SELECT d.id, d.type, d.numero, d.date, d.total_ttc, d.status,
+                   COALESCE(c.name, f.name, '—') AS party_name,
+                   b.name AS branch_name
+            FROM documents d
+            LEFT JOIN clients c ON c.id = d.client_id
+            LEFT JOIN fournisseurs f ON f.id = d.fournisseur_id
+            LEFT JOIN branches b ON b.id = d.branch_id
+            WHERE d.company_id = ?
+            ORDER BY d.created_at DESC
+            LIMIT 5
+          `,
+        )
+        .all(companyId)
+    : db
+        .prepare(
+          `
+            SELECT d.id, d.type, d.numero, d.date, d.total_ttc, d.status,
+                   COALESCE(c.name, f.name, '—') AS party_name,
+                   b.name AS branch_name
+            FROM documents d
+            LEFT JOIN clients c ON c.id = d.client_id
+            LEFT JOIN fournisseurs f ON f.id = d.fournisseur_id
+            LEFT JOIN branches b ON b.id = d.branch_id
+            ORDER BY d.created_at DESC
+            LIMIT 5
+          `,
+        )
+        .all();
+
+  const branchRanking = companyId
+    ? (db
+        .prepare(
+          `
+            SELECT b.id, b.name, COALESCE(SUM(ca.montant), 0) AS total
+            FROM branches b
+            LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
+            WHERE b.active = 1 AND b.company_id = ?
+            GROUP BY b.id, b.name
+            ORDER BY total DESC, b.name
+            LIMIT 1
+          `,
+        )
+        .get(month, companyId) as { id?: number; name?: string; total?: number } | undefined)
+    : (db
+        .prepare(
+          `
+            SELECT b.id, b.name, COALESCE(SUM(ca.montant), 0) AS total
+            FROM branches b
+            LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
+            WHERE b.active = 1
+            GROUP BY b.id, b.name
+            ORDER BY total DESC, b.name
+            LIMIT 1
+          `,
+        )
+        .get(month) as { id?: number; name?: string; total?: number } | undefined);
 
   return {
     monthTotal: monthRow.total,
@@ -808,6 +890,7 @@ export function getDashboardStats() {
 }
 
 export function listDocuments(type: DocumentType, filters: {
+  companyId?: number | null;
   from?: string;
   to?: string;
   branchId?: number | null;
@@ -817,6 +900,7 @@ export function listDocuments(type: DocumentType, filters: {
   const db = getDb();
   const params = {
     type,
+    companyId: filters.companyId ?? null,
     from: filters.from ?? "",
     to: filters.to ?? "",
     branchId: filters.branchId ?? null,
@@ -842,6 +926,7 @@ export function listDocuments(type: DocumentType, filters: {
       LEFT JOIN users uc ON uc.id = d.created_by
       LEFT JOIN users uu ON uu.id = d.updated_by
       WHERE d.type = @type
+        AND (@companyId IS NULL OR d.company_id = @companyId)
         AND (@from = '' OR d.date >= @from)
         AND (@to = '' OR d.date <= @to)
         AND (@branchId IS NULL OR d.branch_id = @branchId OR d.source_branch_id = @branchId OR d.destination_branch_id = @branchId)
@@ -1000,7 +1085,7 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
         `,
       ).run({
         ...documentPayload,
-        numero: nextNumber(input.type),
+        numero: nextNumber(input.type, input.company_id ?? 1),
         created_by: userId,
         updated_by: userId,
       });
@@ -1070,6 +1155,7 @@ export function convertDocument(sourceId: number, targetType: Extract<DocumentTy
 
   return saveDocument(
     {
+      company_id: source.company_id ?? 1,
       type: targetType,
       date: todayIso(),
       branch_id: nullableId(source.branch_id),
@@ -1225,9 +1311,20 @@ export function getAttestationById(id: number) {
   ).get(id) as (AttestationRecord & EmployeeRecord) | undefined;
 }
 
-export function getSystemSalesByDayAndBranch(selectedMonth = monthKey()) {
+export function getSystemSalesByDayAndBranch(selectedMonth = monthKey(), companyId?: number) {
   const db = getDb();
-  const rows = db.prepare(`
+  if (companyId) {
+    return db.prepare(`
+      SELECT branch_id, date, COALESCE(SUM(total_ttc), 0) AS total
+      FROM documents
+      WHERE substr(date, 1, 7) = ?
+        AND type IN ('facture', 'bl')
+        AND branch_id IS NOT NULL
+        AND company_id = ?
+      GROUP BY branch_id, date
+    `).all(selectedMonth, companyId) as Array<{ branch_id: number; date: string; total: number }>;
+  }
+  return db.prepare(`
     SELECT branch_id, date, COALESCE(SUM(total_ttc), 0) AS total
     FROM documents
     WHERE substr(date, 1, 7) = ?
@@ -1235,20 +1332,29 @@ export function getSystemSalesByDayAndBranch(selectedMonth = monthKey()) {
       AND branch_id IS NOT NULL
     GROUP BY branch_id, date
   `).all(selectedMonth) as Array<{ branch_id: number; date: string; total: number }>;
-
-  return rows;
 }
 
-export function getSystemSalesForDate(date: string) {
+export function getSystemSalesForDate(date: string, companyId?: number) {
   const db = getDb();
-  const rows = db.prepare(`
-    SELECT branch_id, COALESCE(SUM(total_ttc), 0) AS total
-    FROM documents
-    WHERE date = ?
-      AND type IN ('facture', 'bl')
-      AND branch_id IS NOT NULL
-    GROUP BY branch_id
-  `).all(date) as Array<{ branch_id: number; total: number }>;
+  const query = companyId
+    ? `
+      SELECT branch_id, COALESCE(SUM(total_ttc), 0) AS total
+      FROM documents
+      WHERE date = ?
+        AND type IN ('facture', 'bl')
+        AND branch_id IS NOT NULL
+        AND company_id = ?
+      GROUP BY branch_id
+    `
+    : `
+      SELECT branch_id, COALESCE(SUM(total_ttc), 0) AS total
+      FROM documents
+      WHERE date = ?
+        AND type IN ('facture', 'bl')
+        AND branch_id IS NOT NULL
+      GROUP BY branch_id
+    `;
+  const rows = (companyId ? db.prepare(query).all(date, companyId) : db.prepare(query).all(date)) as Array<{ branch_id: number; total: number }>;
 
   const map: Record<number, number> = {};
   for (const row of rows) {
@@ -1282,28 +1388,49 @@ export function syncRevenueFromSystemSales(selectedMonth: string, userId: number
   return sales.length;
 }
 
-export function getSystemSalesDocumentsForMonth(selectedMonth = monthKey()): SalesDocumentSyncCandidate[] {
+export function getSystemSalesDocumentsForMonth(selectedMonth = monthKey(), companyId?: number): SalesDocumentSyncCandidate[] {
   const db = getDb();
-  const rows = db.prepare(`
-    SELECT
-      d.id,
-      d.type,
-      d.numero,
-      d.date,
-      d.branch_id,
-      COALESCE(b.name, '-') AS branch_name,
-      COALESCE(c.name, '-') AS party_name,
-      d.total_ttc,
-      d.status
-    FROM documents d
-    LEFT JOIN branches b ON b.id = d.branch_id
-    LEFT JOIN clients c ON c.id = d.client_id
-    WHERE substr(d.date, 1, 7) = ?
-      AND d.type IN ('facture', 'bl')
-      AND d.branch_id IS NOT NULL
-    ORDER BY d.date DESC, d.numero DESC
-  `).all(selectedMonth) as SalesDocumentSyncCandidate[];
-
+  const query = companyId
+    ? `
+      SELECT
+        d.id,
+        d.type,
+        d.numero,
+        d.date,
+        d.branch_id,
+        COALESCE(b.name, '-') AS branch_name,
+        COALESCE(c.name, '-') AS party_name,
+        d.total_ttc,
+        d.status
+      FROM documents d
+      LEFT JOIN branches b ON b.id = d.branch_id
+      LEFT JOIN clients c ON c.id = d.client_id
+      WHERE substr(d.date, 1, 7) = ?
+        AND d.type IN ('facture', 'bl')
+        AND d.branch_id IS NOT NULL
+        AND d.company_id = ?
+      ORDER BY d.date DESC, d.numero DESC
+    `
+    : `
+      SELECT
+        d.id,
+        d.type,
+        d.numero,
+        d.date,
+        d.branch_id,
+        COALESCE(b.name, '-') AS branch_name,
+        COALESCE(c.name, '-') AS party_name,
+        d.total_ttc,
+        d.status
+      FROM documents d
+      LEFT JOIN branches b ON b.id = d.branch_id
+      LEFT JOIN clients c ON c.id = d.client_id
+      WHERE substr(d.date, 1, 7) = ?
+        AND d.type IN ('facture', 'bl')
+        AND d.branch_id IS NOT NULL
+      ORDER BY d.date DESC, d.numero DESC
+    `;
+  const rows = (companyId ? db.prepare(query).all(selectedMonth, companyId) : db.prepare(query).all(selectedMonth)) as SalesDocumentSyncCandidate[];
   return rows;
 }
 
@@ -1376,7 +1503,7 @@ export function batchSaveDailyRevenue(
   logAudit(userId, "batch_upsert", "daily_revenue", null, { date, entriesCount: entries.length });
 }
 
-export function listSortiesCaisse(options?: { month?: string; branchId?: number; date?: string }): SortieCaisseRecord[] {
+export function listSortiesCaisse(options?: { month?: string; branchId?: number; date?: string; companyId?: number }): SortieCaisseRecord[] {
   const db = getDb();
   let query = `
     SELECT s.*, b.name as branch_name
@@ -1385,6 +1512,11 @@ export function listSortiesCaisse(options?: { month?: string; branchId?: number;
     WHERE 1=1
   `;
   const params: unknown[] = [];
+
+  if (options?.companyId) {
+    query += " AND b.company_id = ?";
+    params.push(options.companyId);
+  }
 
   if (options?.date) {
     query += " AND s.date = ?";
@@ -1558,23 +1690,32 @@ export function saveCashDayClosing(
   logAudit(userId, "closing", "cash_day_closing", input.branch_id, { ...input, total });
 }
 
-export function getRevenueGrid(selectedMonth = monthKey()) {
+export function getRevenueGrid(selectedMonth = monthKey(), companyId?: number) {
   const db = getDb();
-  const branches = listBranches({ activeOnly: true });
+  const branches = listBranches({ activeOnly: true, companyId });
   const days = listDaysInMonth(selectedMonth);
 
   // Manual CA rows
-  const rows = db.prepare(
-    `
-      SELECT branch_id, date, montant
-      FROM chiffre_affaires
-      WHERE substr(date, 1, 7) = ?
-    `,
-  ).all(selectedMonth) as Array<{ branch_id: number; date: string; montant: number }>;
+  const rows = companyId
+    ? (db.prepare(
+        `
+          SELECT ca.branch_id, ca.date, ca.montant
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 7) = ? AND b.company_id = ?
+        `,
+      ).all(selectedMonth, companyId) as Array<{ branch_id: number; date: string; montant: number }>)
+    : (db.prepare(
+        `
+          SELECT branch_id, date, montant
+          FROM chiffre_affaires
+          WHERE substr(date, 1, 7) = ?
+        `,
+      ).all(selectedMonth) as Array<{ branch_id: number; date: string; montant: number }>);
   const lookup = new Map(rows.map((row) => [`${row.date}:${row.branch_id}`, row.montant]));
 
   // Auto System sales rows from documents
-  const systemSales = getSystemSalesByDayAndBranch(selectedMonth);
+  const systemSales = getSystemSalesByDayAndBranch(selectedMonth, companyId);
   const systemLookup = new Map(systemSales.map((s) => [`${s.date}:${s.branch_id}`, s.total]));
 
   const table = days.map((date) => {
@@ -1611,94 +1752,193 @@ export function upsertRevenueEntry(branchId: number, date: string, montant: numb
   logAudit(userId, "upsert", "revenue", branchId, { branchId, date, montant, notes });
 }
 
-export function getRevenueStats(selectedMonth = monthKey()): RevenueStats {
+export function getRevenueStats(selectedMonth = monthKey(), companyId?: number): RevenueStats {
   const db = getDb();
   const year = selectedMonth.slice(0, 4);
 
-  const monthTotal = db
-    .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 7) = ?")
-    .get(selectedMonth) as { total: number };
-  const yearTotal = db
-    .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 4) = ?")
-    .get(year) as { total: number };
+  const monthTotal = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(ca.montant), 0) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 7) = ? AND b.company_id = ?
+        `)
+        .get(selectedMonth, companyId) as { total: number })
+    : (db
+        .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 7) = ?")
+        .get(selectedMonth) as { total: number });
 
-  const systemMonthTotalRow = db
-    .prepare(`
-      SELECT COALESCE(SUM(total_ttc), 0) AS total
-      FROM documents
-      WHERE substr(date, 1, 7) = ?
-        AND type IN ('facture', 'bl')
-        AND branch_id IS NOT NULL
-    `)
-    .get(selectedMonth) as { total: number };
+  const yearTotal = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(ca.montant), 0) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 4) = ? AND b.company_id = ?
+        `)
+        .get(year, companyId) as { total: number })
+    : (db
+        .prepare("SELECT COALESCE(SUM(montant), 0) AS total FROM chiffre_affaires WHERE substr(date, 1, 4) = ?")
+        .get(year) as { total: number });
+
+  const systemMonthTotalRow = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(d.total_ttc), 0) AS total
+          FROM documents d
+          WHERE substr(d.date, 1, 7) = ?
+            AND d.type IN ('facture', 'bl')
+            AND d.branch_id IS NOT NULL
+            AND d.company_id = ?
+        `)
+        .get(selectedMonth, companyId) as { total: number })
+    : (db
+        .prepare(`
+          SELECT COALESCE(SUM(total_ttc), 0) AS total
+          FROM documents
+          WHERE substr(date, 1, 7) = ?
+            AND type IN ('facture', 'bl')
+            AND branch_id IS NOT NULL
+        `)
+        .get(selectedMonth) as { total: number });
 
   const systemMonthTotal = systemMonthTotalRow.total;
   const diffMonthTotal = monthTotal.total - systemMonthTotal;
 
-  const bestBranch = db
-    .prepare(
-      `
-        SELECT b.name, COALESCE(SUM(ca.montant), 0) AS total
-        FROM branches b
-        LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
-        WHERE b.active = 1
-        GROUP BY b.id
-        ORDER BY total DESC, b.name
-        LIMIT 1
-      `,
-    )
-    .get(selectedMonth) as { name?: string; total?: number } | undefined;
+  const bestBranch = companyId
+    ? (db
+        .prepare(
+          `
+            SELECT b.name, COALESCE(SUM(ca.montant), 0) AS total
+            FROM branches b
+            LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
+            WHERE b.active = 1 AND b.company_id = ?
+            GROUP BY b.id
+            ORDER BY total DESC, b.name
+            LIMIT 1
+          `,
+        )
+        .get(selectedMonth, companyId) as { name?: string; total?: number } | undefined)
+    : (db
+        .prepare(
+          `
+            SELECT b.name, COALESCE(SUM(ca.montant), 0) AS total
+            FROM branches b
+            LEFT JOIN chiffre_affaires ca ON ca.branch_id = b.id AND substr(ca.date, 1, 7) = ?
+            WHERE b.active = 1
+            GROUP BY b.id
+            ORDER BY total DESC, b.name
+            LIMIT 1
+          `,
+        )
+        .get(selectedMonth) as { name?: string; total?: number } | undefined);
 
-  const daily = db.prepare(
-    `
-      SELECT date, SUM(montant) AS total
-      FROM chiffre_affaires
-      WHERE substr(date, 1, 7) = ?
-      GROUP BY date
-      ORDER BY date
-    `,
-  ).all(selectedMonth) as RevenueDailyPoint[];
+  const daily = companyId
+    ? (db.prepare(
+        `
+          SELECT ca.date, SUM(ca.montant) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 7) = ? AND b.company_id = ?
+          GROUP BY ca.date
+          ORDER BY ca.date
+        `,
+      ).all(selectedMonth, companyId) as RevenueDailyPoint[])
+    : (db.prepare(
+        `
+          SELECT date, SUM(montant) AS total
+          FROM chiffre_affaires
+          WHERE substr(date, 1, 7) = ?
+          GROUP BY date
+          ORDER BY date
+        `,
+      ).all(selectedMonth) as RevenueDailyPoint[]);
 
-  const monthlyByBranch = db.prepare(
-    `
-      SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
-      FROM chiffre_affaires ca
-      JOIN branches b ON b.id = ca.branch_id
-      WHERE ca.date >= date('now', '-12 months')
-      GROUP BY month, b.name
-      ORDER BY month, b.name
-    `,
-  ).all() as RevenueMonthlyBranchPoint[];
+  const monthlyByBranch = companyId
+    ? (db.prepare(
+        `
+          SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE ca.date >= date('now', '-12 months') AND b.company_id = ?
+          GROUP BY month, b.name
+          ORDER BY month, b.name
+        `,
+      ).all(companyId) as RevenueMonthlyBranchPoint[])
+    : (db.prepare(
+        `
+          SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE ca.date >= date('now', '-12 months')
+          GROUP BY month, b.name
+          ORDER BY month, b.name
+        `,
+      ).all() as RevenueMonthlyBranchPoint[]);
 
-  const pivot = db.prepare(
-    `
-      SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
-      FROM chiffre_affaires ca
-      JOIN branches b ON b.id = ca.branch_id
-      GROUP BY month, b.name
-      ORDER BY month DESC, b.name
-    `,
-  ).all() as RevenueMonthlyBranchPoint[];
+  const pivot = companyId
+    ? (db.prepare(
+        `
+          SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE b.company_id = ?
+          GROUP BY month, b.name
+          ORDER BY month DESC, b.name
+        `,
+      ).all(companyId) as RevenueMonthlyBranchPoint[])
+    : (db.prepare(
+        `
+          SELECT substr(ca.date, 1, 7) AS month, b.name, SUM(ca.montant) AS total
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          GROUP BY month, b.name
+          ORDER BY month DESC, b.name
+        `,
+      ).all() as RevenueMonthlyBranchPoint[]);
 
-  const payments = db
-    .prepare(`
-      SELECT
-        COALESCE(SUM(especes), 0) AS especes,
-        COALESCE(SUM(carte), 0) AS carte,
-        COALESCE(SUM(cheque), 0) AS cheque,
-        COALESCE(SUM(virement), 0) AS virement
-      FROM chiffre_affaires
-      WHERE substr(date, 1, 7) = ?
-    `)
-    .get(selectedMonth) as { especes: number; carte: number; cheque: number; virement: number };
+  const payments = companyId
+    ? (db
+        .prepare(`
+          SELECT
+            COALESCE(SUM(ca.especes), 0) AS especes,
+            COALESCE(SUM(ca.carte), 0) AS carte,
+            COALESCE(SUM(ca.cheque), 0) AS cheque,
+            COALESCE(SUM(ca.virement), 0) AS virement
+          FROM chiffre_affaires ca
+          JOIN branches b ON b.id = ca.branch_id
+          WHERE substr(ca.date, 1, 7) = ? AND b.company_id = ?
+        `)
+        .get(selectedMonth, companyId) as { especes: number; carte: number; cheque: number; virement: number })
+    : (db
+        .prepare(`
+          SELECT
+            COALESCE(SUM(especes), 0) AS especes,
+            COALESCE(SUM(carte), 0) AS carte,
+            COALESCE(SUM(cheque), 0) AS cheque,
+            COALESCE(SUM(virement), 0) AS virement
+          FROM chiffre_affaires
+          WHERE substr(date, 1, 7) = ?
+        `)
+        .get(selectedMonth) as { especes: number; carte: number; cheque: number; virement: number });
 
-  const sortiesTotalRow = db
-    .prepare(`
-      SELECT COALESCE(SUM(montant), 0) AS total
-      FROM sorties_caisse
-      WHERE substr(date, 1, 7) = ?
-    `)
-    .get(selectedMonth) as { total: number };
+  const sortiesTotalRow = companyId
+    ? (db
+        .prepare(`
+          SELECT COALESCE(SUM(s.montant), 0) AS total
+          FROM sorties_caisse s
+          JOIN branches b ON b.id = s.branch_id
+          WHERE substr(s.date, 1, 7) = ? AND b.company_id = ?
+        `)
+        .get(selectedMonth, companyId) as { total: number })
+    : (db
+        .prepare(`
+          SELECT COALESCE(SUM(montant), 0) AS total
+          FROM sorties_caisse
+          WHERE substr(date, 1, 7) = ?
+        `)
+        .get(selectedMonth) as { total: number });
 
   const sortiesTotal = sortiesTotalRow.total;
   const netCaisse = monthTotal.total - sortiesTotal;
@@ -1756,7 +1996,7 @@ export function getAuditLogs(limit = 200) {
   ).all(limit);
 }
 
-export function searchGlobal(query: string): SearchResult[] {
+export function searchGlobal(query: string, companyId?: number): SearchResult[] {
   const trimmed = query.trim();
   if (!trimmed) {
     return [];
@@ -1768,15 +2008,26 @@ export function searchGlobal(query: string): SearchResult[] {
 
   const results: SearchResult[] = [];
 
-  const documents = db.prepare(
+  const documentsQuery = companyId
+    ? `
+      SELECT id, type, numero, date
+      FROM documents
+      WHERE (CAST(numero AS TEXT) LIKE ? OR type LIKE ?)
+        AND company_id = ?
+      ORDER BY updated_at DESC
+      LIMIT 8
     `
+    : `
       SELECT id, type, numero, date
       FROM documents
       WHERE CAST(numero AS TEXT) LIKE ? OR type LIKE ?
       ORDER BY updated_at DESC
       LIMIT 8
-    `,
-  ).all(wildcard, wildcard) as Array<{ id: number; type: DocumentType; numero: number; date: string }>;
+    `;
+
+  const documents = (companyId
+    ? db.prepare(documentsQuery).all(wildcard, wildcard, companyId)
+    : db.prepare(documentsQuery).all(wildcard, wildcard)) as Array<{ id: number; type: DocumentType; numero: number; date: string }>;
 
   results.push(
     ...documents
@@ -1790,15 +2041,26 @@ export function searchGlobal(query: string): SearchResult[] {
       })),
   );
 
-  const products = db.prepare(
+  const productsQuery = companyId
+    ? `
+      SELECT id, ref, designation
+      FROM produits
+      WHERE (ref LIKE ? OR designation LIKE ?)
+        AND (company_id = ? OR company_id IS NULL)
+      ORDER BY designation
+      LIMIT 8
     `
+    : `
       SELECT id, ref, designation
       FROM produits
       WHERE ref LIKE ? OR designation LIKE ?
       ORDER BY designation
       LIMIT 8
-    `,
-  ).all(wildcard, wildcard) as Array<{ id: number; ref: string; designation: string }>;
+    `;
+
+  const products = (companyId
+    ? db.prepare(productsQuery).all(wildcard, wildcard, companyId)
+    : db.prepare(productsQuery).all(wildcard, wildcard)) as Array<{ id: number; ref: string; designation: string }>;
 
   if (featureFlags.produits) {
     results.push(
@@ -1859,12 +2121,12 @@ export function searchGlobal(query: string): SearchResult[] {
   return results.slice(0, 20);
 }
 
-export function getLookupData() {
+export function getLookupData(companyId?: number) {
   return {
-    branches: listBranches({ activeOnly: true }),
+    branches: listBranches({ activeOnly: true, companyId }),
     clients: listEntities("clients"),
     fournisseurs: listEntities("fournisseurs"),
-    produits: listProducts(),
+    produits: listProducts("", companyId),
   };
 }
 

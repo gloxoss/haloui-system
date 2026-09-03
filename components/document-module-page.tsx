@@ -60,6 +60,7 @@ export async function DocumentModulePage({
   const branches = listBranches({ activeOnly: true, companyId: activeCompanyId });
   const parties = listEntities(type === "bc" ? "fournisseurs" : "clients");
   const documents = listDocuments(type, {
+    companyId: activeCompanyId,
     from: filters.from,
     to: filters.to,
     branchId: filters.branchId ? Number(filters.branchId) : null,
