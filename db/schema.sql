@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  email TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1,
   is_superadmin INTEGER NOT NULL DEFAULT 0,
   hidden_from_admin INTEGER NOT NULL DEFAULT 0,

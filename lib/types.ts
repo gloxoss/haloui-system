@@ -160,7 +160,11 @@ export type UserRecord = {
   full_name: string;
   role: Role;
   active: number;
+  is_superadmin?: number;
+  email?: string;
+  phone?: string;
   created_at: string;
+  updated_at?: string;
 };
 
 export type DocumentLineInput = {

@@ -397,6 +397,8 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "company", "attestation_templates_json", "TEXT DEFAULT ''");
   ensureColumnExists(db, "users", "is_superadmin", "INTEGER NOT NULL DEFAULT 0");
   ensureColumnExists(db, "users", "hidden_from_admin", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "users", "email", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "users", "phone", "TEXT DEFAULT ''");
 
   ensureColumnExists(db, "chiffre_affaires", "especes", "REAL NOT NULL DEFAULT 0");
   ensureColumnExists(db, "chiffre_affaires", "carte", "REAL NOT NULL DEFAULT 0");

@@ -365,7 +365,7 @@ export const MORE_NAV_ITEMS = [
   { href: "/clients", label: "Clients", feature: "clients" as const },
   { href: "/fournisseurs", label: "Fournisseurs", feature: "fournisseurs" as const },
   { href: "/utilisateurs", label: "Utilisateurs", feature: "utilisateurs" as const, superadminOnly: true as const },
-  { href: "/parametres", label: "Paramètres", superadminOnly: true as const },
+  { href: "/parametres", label: "Paramètres" },
 ] as const;
 
 export function getDocumentModule(slug: string) {

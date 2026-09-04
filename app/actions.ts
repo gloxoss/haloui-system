@@ -12,6 +12,7 @@ import { ACTIVE_COMPANY_COOKIE, getActiveCompany, getActiveCompanyId } from "@/l
 import {
   batchSaveDailyRevenue,
   bulkSaveProducts,
+  changeUserPassword,
   convertDocument,
   createAttestation,
   deleteEmployee,
@@ -19,6 +20,7 @@ import {
   deleteProduct,
   deleteBranch,
   deleteSortieCaisse,
+  getUserById,
   resetBusinessData,
   saveBranch,
   saveCashDayClosing,
@@ -34,6 +36,7 @@ import {
   syncRevenueFromSystemSales,
   syncSelectedSalesDocuments,
   updateDocumentStatus,
+  updateProfile,
   upsertRevenueEntry,
 } from "@/lib/data";
 import { createDatabaseBackup } from "@/lib/db";
@@ -64,8 +67,47 @@ export async function switchActiveCompanyAction(companyId: number) {
   refresh(["/", "/dashboard", "/factures", "/devis", "/bons", "/bons-livraison", "/bons-commande", "/bons-sortie", "/chiffre-affaires", "/parametres", "/personnel"]);
 }
 
+export async function updateProfileInfoAction(formData: FormData) {
+  const session = await requireAuth();
+  const fullName = String(formData.get("full_name") || "").trim();
+  const email = String(formData.get("email") || "").trim();
+  const phone = String(formData.get("phone") || "").trim();
+
+  if (!fullName) {
+    throw new Error("Le nom complet est obligatoire.");
+  }
+
+  updateProfile(session.user.id, {
+    full_name: fullName,
+    email,
+    phone,
+  });
+
+  refresh(["/profil", "/dashboard", "/parametres"]);
+}
+
+export async function changeUserPasswordAction(formData: FormData) {
+  const session = await requireAuth();
+  const currentPassword = String(formData.get("current_password") || "");
+  const newPassword = String(formData.get("new_password") || "");
+  const confirmPassword = String(formData.get("confirm_password") || "");
+
+  if (!currentPassword) {
+    throw new Error("Veuillez saisir votre mot de passe actuel.");
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("Le nouveau mot de passe doit comporter au moins 6 caractères.");
+  }
+  if (newPassword !== confirmPassword) {
+    throw new Error("La confirmation du mot de passe ne correspond pas.");
+  }
+
+  changeUserPassword(session.user.id, currentPassword, newPassword);
+  refresh(["/profil", "/parametres"]);
+}
+
 export async function saveCompanyAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAdmin();
   const targetId = Number(formData.get("id")) || 1;
   const current = getCompany(targetId);
 
@@ -97,7 +139,7 @@ export async function saveCompanyAction(formData: FormData) {
 }
 
 export async function saveCompanyAttestationTemplatesAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAdmin();
   const companyId = Number(formData.get("company_id")) || (await getActiveCompanyId());
   const jsonRaw = String(formData.get("attestation_templates_json") || "{}");
 
@@ -114,7 +156,7 @@ export async function saveCompanyAttestationTemplatesAction(formData: FormData) 
 }
 
 export async function saveBranchAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAdmin();
   const activeCompanyId = await getActiveCompanyId();
   saveBranch(
     {
@@ -131,7 +173,7 @@ export async function saveBranchAction(formData: FormData) {
 }
 
 export async function deleteBranchAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAdmin();
   const id = Number(formData.get("id"));
   if (id) {
     deleteBranch(id, session.user.id);
@@ -185,7 +227,7 @@ export async function saveFeatureFlagsAction(formData: FormData) {
 }
 
 export async function saveThemeSettingsAction(formData: FormData) {
-  const session = await requireSuperadmin();
+  const session = await requireAuth();
 
   const preset = String(formData.get("theme_preset") || "") as ThemePreset;
   const density = String(formData.get("theme_density") || "") as ThemeDensity;
@@ -203,14 +245,16 @@ export async function saveThemeSettingsAction(formData: FormData) {
       }
     : undefined;
 
-  saveThemeSettings(
-    {
-      preset,
-      density,
-      customColors,
-    },
-    session.user.id,
-  );
+  if (session.user.role === "superadmin" || session.user.role === "admin") {
+    saveThemeSettings(
+      {
+        preset,
+        density,
+        customColors,
+      },
+      session.user.id,
+    );
+  }
 
   const cookieStore = await cookies();
   if (preset) {

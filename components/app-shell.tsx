@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
   ActionIcon,
@@ -216,8 +217,12 @@ export function AppShell({
 
                   <Menu.Dropdown>
                     <Menu.Label>{locale === "ar" ? "الحساب الشخصي" : "Mon compte"}</Menu.Label>
-                    <Menu.Item leftSection={<User size={15} />}>{t.nav.profile}</Menu.Item>
-                    <Menu.Item leftSection={<Settings size={15} />}>{t.nav.parametres}</Menu.Item>
+                    <Menu.Item component={Link} href="/profil" leftSection={<User size={15} />}>
+                      {t.nav.profile}
+                    </Menu.Item>
+                    <Menu.Item component={Link} href="/parametres" leftSection={<Settings size={15} />}>
+                      {t.nav.parametres}
+                    </Menu.Item>
                     <Divider my={6} />
                     <Menu.Item
                       color="red"
