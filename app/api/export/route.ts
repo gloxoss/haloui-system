@@ -20,8 +20,8 @@ export async function GET(request: Request) {
     return new NextResponse("Non autorise", { status: 401 });
   }
 
-  if (session.user.role !== "superadmin") {
-    return new NextResponse("Acces reserve au superadmin", { status: 403 });
+  if (session.user.role !== "superadmin" && session.user.role !== "admin") {
+    return new NextResponse("Acces reserve aux administrateurs", { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);

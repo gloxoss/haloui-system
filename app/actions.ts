@@ -263,12 +263,17 @@ export async function saveThemeSettingsAction(formData: FormData) {
   if (density) {
     cookieStore.set("app_density", density, { path: "/", maxAge: 31536000 });
   }
+  if (customColors) {
+    cookieStore.set("app_custom_colors", JSON.stringify(customColors), { path: "/", maxAge: 31536000 });
+  } else if (preset && preset !== "custom") {
+    cookieStore.delete("app_custom_colors");
+  }
 
   revalidatePath("/", "layout");
 }
 
 export async function manualBackupAction() {
-  await requireSuperadmin();
+  await requireAdmin();
   createDatabaseBackup("backup-manual");
   refresh(["/parametres"]);
 }

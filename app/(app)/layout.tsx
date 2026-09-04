@@ -30,7 +30,18 @@ export default async function ProtectedLayout({
   const themeSettings = getThemeSettings();
   const activePreset = (cookieStore.get("app_theme")?.value as typeof themeSettings.preset) || themeSettings.preset;
   const activeDensity = (cookieStore.get("app_density")?.value as typeof themeSettings.density) || themeSettings.density;
-  const activeThemeSettings = { preset: activePreset, density: activeDensity };
+  const cookieCustomColors = cookieStore.get("app_custom_colors")?.value;
+  let parsedCustomColors = themeSettings.customColors;
+  if (cookieCustomColors) {
+    try {
+      parsedCustomColors = JSON.parse(cookieCustomColors);
+    } catch {}
+  }
+  const activeThemeSettings = {
+    preset: activePreset,
+    density: activeDensity,
+    customColors: parsedCustomColors,
+  };
 
   return (
     <AppShell

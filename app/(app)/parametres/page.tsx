@@ -414,21 +414,17 @@ export default async function ParametresPage() {
                   <a href="/api/export?format=xlsx" className={downloadLinkClass()}>
                     {dict.settings.excelExport}
                   </a>
-                  {isSuperadmin && (
-                    <>
-                      <a href="/api/export?format=sqlite" className={downloadLinkClass()}>
-                        {dict.settings.sqliteExport}
-                      </a>
-                      <a href="/api/export?format=sql" className={downloadLinkClass()}>
-                        {dict.settings.sqlExport}
-                      </a>
-                      <form action={manualBackupAction}>
-                        <Button type="submit" variant="secondary" className="w-full">
-                          {dict.settings.backupNow}
-                        </Button>
-                      </form>
-                    </>
-                  )}
+                  <a href="/api/export?format=sqlite" className={downloadLinkClass()}>
+                    {dict.settings.sqliteExport}
+                  </a>
+                  <a href="/api/export?format=sql" className={downloadLinkClass()}>
+                    {dict.settings.sqlExport}
+                  </a>
+                  <form action={manualBackupAction}>
+                    <Button type="submit" variant="secondary" className="w-full">
+                      {dict.settings.backupNow}
+                    </Button>
+                  </form>
                 </div>
 
                 <div className="grid gap-2">
@@ -455,12 +451,10 @@ export default async function ParametresPage() {
                   </div>
                 </div>
 
-                {isSuperadmin && (
-                  <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-xs text-[var(--muted)]">
-                    <div>{dict.settings.currentDb} {DB_PATH}</div>
-                    <div className="mt-1">{dict.settings.backupFolder} {BACKUP_DIR}</div>
-                  </div>
-                )}
+                <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-xs text-[var(--muted)]">
+                  <div>{dict.settings.currentDb} {DB_PATH}</div>
+                  <div className="mt-1">{dict.settings.backupFolder} {BACKUP_DIR}</div>
+                </div>
               </div>
             </Card>
           ) : null}

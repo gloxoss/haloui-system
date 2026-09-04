@@ -75,10 +75,23 @@ export function AppShell({
         ? (locale === "ar" ? "مدير النظام" : "Administrateur")
         : (locale === "ar" ? "مستخدم" : "Utilisateur");
 
+  const customStyles =
+    themeSettings.preset === "custom" && themeSettings.customColors
+      ? ({
+          "--accent": themeSettings.customColors.accent,
+          "--accent-soft": themeSettings.customColors.accentSoft,
+          "--accent-foreground": "#ffffff",
+          "--ring": `${themeSettings.customColors.accent}33`,
+          "--sidebar-bg": themeSettings.customColors.sidebarBg,
+          "--background": themeSettings.customColors.background,
+        } as React.CSSProperties)
+      : undefined;
+
   return (
     <div
       data-ui-theme={themeSettings.preset}
       data-ui-density={themeSettings.density}
+      style={customStyles}
       className="min-h-screen bg-[var(--background)]"
     >
       <MantineAppShell
