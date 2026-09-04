@@ -123,6 +123,16 @@ export default async function ParametresPage() {
         eyebrow={eyebrow}
         title={dict.settings.title}
         description={pageDescription}
+        actions={
+          (isSuperadmin || (isAdmin && featureFlags.attestations)) ? (
+            <a
+              href="#attestations-studio"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs font-bold text-[var(--foreground)] shadow-2xs transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            >
+              <span>{locale === "ar" ? "نماذج شهادات العمل ↓" : "Modèles d'attestations ↓"}</span>
+            </a>
+          ) : null
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -672,9 +682,11 @@ export default async function ParametresPage() {
         </Card>
       ) : null}
 
-      {/* Attestations Template Studio (when personnel and attestations active, for Admin & Superadmin) */}
-      {(isSuperadmin || isAdmin) && featureFlags.personnel && featureFlags.attestations ? (
-        <AttestationTemplateEditor initialValues={company} />
+      {/* Attestations Template Studio (Always accessible to Superadmin, and to Admin when attestations active) */}
+      {isSuperadmin || (isAdmin && featureFlags.attestations) ? (
+        <div id="attestations-studio" className="scroll-mt-6">
+          <AttestationTemplateEditor initialValues={company} />
+        </div>
       ) : null}
     </div>
   );
