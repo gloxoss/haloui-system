@@ -110,11 +110,11 @@ export function SortiesCaisseManager({
             </div>
           </Group>
 
-          <Group gap="sm" wrap="wrap">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <Select
               size="xs"
               radius="md"
-              style={{ width: 180 }}
+              className="w-full sm:w-[180px]"
               data={[
                 { value: "all", label: locale === "ar" ? "جميع المحلات" : "Tous les magasins" },
                 ...branches.map((b) => ({ value: String(b.id), label: b.name })),
@@ -130,10 +130,11 @@ export function SortiesCaisseManager({
               leftSection={<Plus size={16} />}
               onClick={open}
               style={{ fontWeight: 700 }}
+              className="w-full sm:w-auto"
             >
               {locale === "ar" ? "+ تسجيل مصاريف جديدة" : "+ Nouvelle Sortie de Caisse"}
             </Button>
-          </Group>
+          </div>
         </Group>
 
         <Divider my="sm" />
@@ -159,9 +160,10 @@ export function SortiesCaisseManager({
           borderColor: "var(--border)",
           overflow: "hidden",
         }}
+        className="min-w-0"
       >
-        <div className="overflow-x-auto">
-          <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+        <div className="overflow-x-auto w-full min-w-0">
+          <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md" style={{ minWidth: 640 }}>
             <Table.Thead className="bg-[var(--surface-soft,rgba(0,0,0,0.02))]">
               <Table.Tr className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
                 <Table.Th>{t.documents.date}</Table.Th>

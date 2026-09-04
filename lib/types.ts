@@ -16,7 +16,8 @@ export type FeatureKey =
   | "utilisateurs"
   | "multi_societes"
   | "multi_branches"
-  | "multi_langue";
+  | "multi_langue"
+  | "gestion_tva";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -32,6 +33,7 @@ export type ThemePreset =
   | "monochrome-black"
   | "olive-ledger"
   | "haloui-classic"
+  | "dark-executive"
   | "custom";
 export type ThemeDensity = "compact" | "comfortable";
 

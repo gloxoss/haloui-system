@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { Button, Kbd, Modal, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import { ActionIcon, Button, Kbd, Modal, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import { Search } from "lucide-react";
 
 import { useTranslation } from "@/lib/i18n";
@@ -57,14 +57,36 @@ export function CommandPalette() {
       <Button
         type="button"
         variant="default"
-        radius="md"
-        leftSection={<Search size={15} />}
-        rightSection={<Kbd>Ctrl+K</Kbd>}
-        className="hidden md:inline-flex"
+        radius="xl"
+        size="xs"
+        visibleFrom="md"
+        leftSection={<Search size={14} />}
+        rightSection={<Kbd size="xs">Ctrl+K</Kbd>}
         onClick={() => setOpen(true)}
+        style={{
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          fontWeight: 600,
+        }}
       >
         {t.commandPalette.triggerButton}
       </Button>
+
+      <ActionIcon
+        type="button"
+        variant="default"
+        radius="xl"
+        size="md"
+        hiddenFrom="md"
+        onClick={() => setOpen(true)}
+        aria-label={t.commandPalette.triggerButton}
+        style={{
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+        }}
+      >
+        <Search size={16} />
+      </ActionIcon>
 
       <Modal
         opened={open}

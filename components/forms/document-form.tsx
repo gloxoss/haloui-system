@@ -66,6 +66,7 @@ export function DocumentForm({
   products,
   unitOptions,
   multiBranchesEnabled = true,
+  tvaEnabled = true,
 }: {
   slug: string;
   type: DocumentKind;
@@ -76,6 +77,7 @@ export function DocumentForm({
   products: LookupItem[];
   unitOptions?: string[];
   multiBranchesEnabled?: boolean;
+  tvaEnabled?: boolean;
 }) {
   const { t, locale, isRtl } = useTranslation();
   const initialLines = document?.lines?.length ? document.lines : [EMPTY_LINE()];
@@ -514,17 +516,46 @@ export function DocumentForm({
                   />
                 </Field>
                 {type === "bs" ? null : (
-                  <Field label="PU">
-                    <Input
-                      disabled={locked}
-                      type="number"
-                      step="0.01"
-                      value={line.prix_unitaire_ht}
-                      onChange={(event) =>
-                        updateLine(index, { prix_unitaire_ht: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </Field>
+                  <>
+                    <Field label={locale === "ar" ? "ثمن الوحدة (HT)" : "PU HT"}>
+                      <Input
+                        disabled={locked}
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={line.prix_unitaire_ht}
+                        onChange={(event) =>
+                          updateLine(index, { prix_unitaire_ht: Number(event.target.value) || 0 })
+                        }
+                      />
+                    </Field>
+                    {tvaEnabled && (
+                      <Field label={locale === "ar" ? "الضريبة TVA (%)" : "TVA (%)"}>
+                        <Input
+                          disabled={locked}
+                          type="number"
+                          step="0.01"
+                          placeholder="0"
+                          value={line.tva_rate}
+                          onChange={(event) =>
+                            updateLine(index, { tva_rate: Number(event.target.value) || 0 })
+                          }
+                        />
+                      </Field>
+                    )}
+                    <Field label={locale === "ar" ? "تخفيض Remise (MAD)" : "Remise (MAD)"}>
+                      <Input
+                        disabled={locked}
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={line.remise}
+                        onChange={(event) =>
+                          updateLine(index, { remise: Number(event.target.value) || 0 })
+                        }
+                      />
+                    </Field>
+                  </>
                 )}
               </div>
 
@@ -553,8 +584,10 @@ export function DocumentForm({
               <th className="pb-2.5">Unité</th>
               {type === "bs" ? null : (
                 <>
-                  <th className="pb-2.5">PU</th>
-                  <th className="pb-2.5">PT</th>
+                  <th className="pb-2.5">{locale === "ar" ? "ثمن الوحدة" : "PU HT"}</th>
+                  {tvaEnabled && <th className="pb-2.5">{locale === "ar" ? "الضريبة %" : "TVA (%)"}</th>}
+                  <th className="pb-2.5">{locale === "ar" ? "تخفيض" : "Remise"}</th>
+                  <th className="pb-2.5">{locale === "ar" ? "المجموع" : "Total HT"}</th>
                 </>
               )}
               {type === "bs" ? <th className="pb-2.5">Résumé</th> : null}
@@ -638,26 +671,31 @@ export function DocumentForm({
                           disabled={locked}
                           type="number"
                           step="0.01"
+                          placeholder="0.00"
                           value={line.prix_unitaire_ht}
                           onChange={(event) =>
                             updateLine(index, { prix_unitaire_ht: Number(event.target.value) || 0 })
                           }
                         />
                       </td>
+                      {tvaEnabled && (
+                        <td className="py-2.5 pr-2.5">
+                          <Input
+                            disabled={locked}
+                            type="number"
+                            step="0.01"
+                            placeholder="0"
+                            value={line.tva_rate}
+                            onChange={(event) => updateLine(index, { tva_rate: Number(event.target.value) || 0 })}
+                          />
+                        </td>
+                      )}
                       <td className="py-2.5 pr-2.5">
                         <Input
                           disabled={locked}
                           type="number"
                           step="0.01"
-                          value={line.tva_rate}
-                          onChange={(event) => updateLine(index, { tva_rate: Number(event.target.value) || 0 })}
-                        />
-                      </td>
-                      <td className="py-2.5 pr-2.5">
-                        <Input
-                          disabled={locked}
-                          type="number"
-                          step="0.01"
+                          placeholder="0.00"
                           value={line.remise}
                           onChange={(event) => updateLine(index, { remise: Number(event.target.value) || 0 })}
                         />
@@ -890,18 +928,32 @@ export function DocumentForm({
       <h3 className="text-base font-black">Montants</h3>
       <div className="mt-3.5 grid gap-2.5 text-[13px]">
         <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
-          <span>Total HT</span>
-          <strong>{formatCurrency(computed.totals.total_ht)}</strong>
+          <span>{locale === "ar" ? "المجموع الإجمالي (HT)" : "Total Brut HT"}</span>
+          <strong>{formatCurrency(computed.totals.total_ht + computed.totals.remise)}</strong>
         </div>
         {type === "bs" ? null : (
           <>
             <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
-              <span>Remise (réduction)</span>
-              <strong>{formatCurrency(computed.totals.remise)}</strong>
+              <span>{locale === "ar" ? "تخفيض (Remise)" : "Remise (réduction)"}</span>
+              <strong className={computed.totals.remise > 0 ? "text-[var(--danger)]" : ""}>
+                {computed.totals.remise > 0 ? `-${formatCurrency(computed.totals.remise)}` : formatCurrency(0)}
+              </strong>
             </div>
+            {tvaEnabled && (
+              <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
+                <span>{locale === "ar" ? "مجموع الضريبة (TVA)" : "Total TVA"}</span>
+                <strong>{formatCurrency(computed.totals.total_tva)}</strong>
+              </div>
+            )}
             <div className="flex items-center justify-between rounded-xl border bg-[var(--accent)] px-3 py-3 text-[var(--accent-foreground)]">
-              <span className="font-semibold">Total</span>
-              <strong className="text-lg">{formatCurrency(computed.totals.total_ttc)}</strong>
+              <span className="font-semibold">
+                {tvaEnabled
+                  ? (locale === "ar" ? "المجموع الصافي (TTC)" : "Total TTC")
+                  : (locale === "ar" ? "المجموع الصافي" : "Total Net")}
+              </span>
+              <strong className="text-lg">
+                {formatCurrency(tvaEnabled ? computed.totals.total_ttc : computed.totals.total_ht)}
+              </strong>
             </div>
           </>
         )}

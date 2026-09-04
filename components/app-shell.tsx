@@ -88,14 +88,9 @@ export function AppShell({
       : undefined;
 
   return (
-    <div
-      data-ui-theme={themeSettings.preset}
-      data-ui-density={themeSettings.density}
-      style={customStyles}
-      className="min-h-screen bg-[var(--background)]"
-    >
+    <div className="min-h-screen bg-[var(--background)]">
       <MantineAppShell
-        header={{ height: 86 }}
+        header={{ height: { base: 64, sm: 74, lg: 84 } }}
         navbar={{
           width: desktopCollapsed ? 82 : 280,
           breakpoint: "lg",
@@ -105,9 +100,9 @@ export function AppShell({
         styles={{
           main: {
             background: "var(--background)",
-            paddingTop: "calc(var(--app-shell-header-offset) + 16px)",
-            paddingLeft: isRtl ? "20px" : "calc(var(--app-shell-navbar-offset) + 16px)",
-            paddingRight: isRtl ? "calc(var(--app-shell-navbar-offset) + 16px)" : "20px",
+            paddingTop: "calc(var(--app-shell-header-offset) + clamp(8px, 1.8vw, 16px))",
+            paddingLeft: isRtl ? "clamp(10px, 2.5vw, 20px)" : "calc(var(--app-shell-navbar-offset) + clamp(10px, 2.5vw, 20px))",
+            paddingRight: isRtl ? "calc(var(--app-shell-navbar-offset) + clamp(10px, 2.5vw, 20px))" : "clamp(10px, 2.5vw, 20px)",
             paddingBottom: "32px",
             minHeight: "100dvh",
             transition: "padding 220ms cubic-bezier(0.2, 0, 0, 1)",
@@ -115,24 +110,24 @@ export function AppShell({
           header: {
             background: "transparent",
             borderBottom: "none",
-            padding: "16px 20px 0 20px",
+            padding: "clamp(6px, 1.5vw, 14px) clamp(10px, 2.5vw, 20px) 0 clamp(10px, 2.5vw, 20px)",
           },
           navbar: {
             background: "transparent",
             borderInlineEnd: "none",
-            padding: isRtl ? "16px 16px 16px 0" : "16px 0 16px 16px",
+            padding: isRtl ? "12px 12px 12px 0" : "12px 0 12px 12px",
             transition: "width 220ms cubic-bezier(0.2, 0, 0, 1)",
           },
         }}
       >
         <MantineAppShell.Header>
           <Paper
-            radius={24}
+            radius="xl"
             shadow="sm"
             withBorder
-            px="lg"
-            py="sm"
-            h={70}
+            px={{ base: "xs", sm: "md", lg: "lg" }}
+            py={4}
+            h={{ base: 52, sm: 60, lg: 68 }}
             style={{
               background: "var(--card)",
               borderColor: "var(--border-strong)",
@@ -141,7 +136,7 @@ export function AppShell({
             }}
           >
             <Group justify="space-between" align="center" wrap="nowrap" style={{ width: "100%" }}>
-              <Group gap="sm" wrap="nowrap">
+              <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
                 <Burger
                   opened={mobileOpened}
                   onClick={toggle}
@@ -168,17 +163,17 @@ export function AppShell({
                   </ActionIcon>
                 </Tooltip>
 
-                <Stack gap={1}>
-                  <Text size="11px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.12em" }}>
+                <Stack gap={1} visibleFrom="sm" style={{ minWidth: 0 }}>
+                  <Text size="11px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.12em" }} truncate>
                     {todayLabel}
                   </Text>
-                  <Text fw={800} size="lg" style={{ letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+                  <Text fw={800} size="lg" style={{ letterSpacing: "-0.03em", lineHeight: 1.2 }} truncate>
                     {companyName}
                   </Text>
                 </Stack>
               </Group>
 
-              <Group gap="sm" wrap="nowrap">
+              <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
                 {featureFlags.multi_societes && (
                   <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />
                 )}
@@ -190,19 +185,20 @@ export function AppShell({
                 <Menu position={isRtl ? "bottom-start" : "bottom-end"} shadow="md" width={220}>
                   <Menu.Target>
                     <UnstyledButton
+                      className="transition hover:opacity-90"
                       style={{
                         border: "1px solid var(--border-strong)",
                         background: "var(--card)",
                         borderRadius: 16,
-                        padding: "8px 14px",
+                        padding: "6px 8px",
                         boxShadow: "var(--shadow-sm)",
                       }}
                     >
-                      <Group gap="sm" wrap="nowrap">
+                      <Group gap={6} wrap="nowrap">
                         <div
                           style={{
-                            width: 30,
-                            height: 30,
+                            width: 28,
+                            height: 28,
                             borderRadius: "50%",
                             background: "var(--accent-soft)",
                             color: "var(--accent)",
@@ -211,19 +207,20 @@ export function AppShell({
                             justifyContent: "center",
                             fontWeight: 800,
                             fontSize: 12,
+                            flexShrink: 0,
                           }}
                         >
                           {userName.charAt(0).toUpperCase()}
                         </div>
-                        <Stack gap={0} visibleFrom="sm">
-                          <Text size="sm" fw={700} style={{ lineHeight: 1.2 }}>
+                        <Stack gap={0} visibleFrom="sm" style={{ paddingRight: 4 }}>
+                          <Text size="xs" fw={700} style={{ lineHeight: 1.2 }} truncate>
                             {userName}
                           </Text>
-                          <Text size="xs" c="dimmed" style={{ lineHeight: 1.1 }}>
+                          <Text size="10px" c="dimmed" style={{ lineHeight: 1.1 }}>
                             {roleLabel}
                           </Text>
                         </Stack>
-                        <ChevronDown size={15} className="text-gray-400" />
+                        <ChevronDown size={14} className="text-gray-400" />
                       </Group>
                     </UnstyledButton>
                   </Menu.Target>
@@ -260,7 +257,7 @@ export function AppShell({
             h="calc(100dvh - var(--app-shell-header-offset) - 32px)"
             style={{
               background: "var(--sidebar-bg)",
-              borderColor: "var(--border-strong)",
+              borderColor: "var(--sidebar-border, var(--border-strong))",
               overflow: "auto",
               display: "flex",
               flexDirection: "column",
@@ -299,8 +296,8 @@ export function AppShell({
                   withBorder
                   p="sm"
                   style={{
-                    background: "var(--card)",
-                    borderColor: "var(--border)",
+                    background: "var(--sidebar-card-bg, var(--card))",
+                    borderColor: "var(--sidebar-card-border, var(--border))",
                     boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                   }}
                 >
@@ -332,7 +329,7 @@ export function AppShell({
                         style={{
                           letterSpacing: "-0.02em",
                           lineHeight: 1.25,
-                          color: "var(--foreground)",
+                          color: "var(--sidebar-fg, var(--foreground))",
                           display: "-webkit-box",
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: "vertical",
@@ -342,7 +339,7 @@ export function AppShell({
                       >
                         {companyName}
                       </Text>
-                      <Text size="11px" fw={600} c="dimmed" mt={1}>
+                      <Text size="11px" fw={600} style={{ color: "var(--sidebar-muted, var(--muted))" }} mt={1}>
                         Gestion commerciale
                       </Text>
                     </div>

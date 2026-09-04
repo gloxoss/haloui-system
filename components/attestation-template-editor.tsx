@@ -436,10 +436,10 @@ export function AttestationTemplateEditor({
             </Group>
 
             {/* Form & Simulation Grid */}
-            <div className="grid gap-6 lg:grid-cols-2 mt-4">
+            <div className="grid gap-6 lg:grid-cols-2 mt-4 min-w-0">
               {/* Left Column: Model Configuration */}
-              <Stack gap="sm">
-                <Group grow align="flex-start">
+              <Stack gap="sm" className="min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <TextInput
                     label="Nom du modèle (pour les collaborateurs)"
                     description="Nom figurant dans la liste déroulante"
@@ -456,9 +456,9 @@ export function AttestationTemplateEditor({
                     placeholder="Ex: ATTESTATION DE TRAVAIL ET DE SALAIRE"
                     size="xs"
                   />
-                </Group>
+                </div>
 
-                <Group grow align="flex-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <TextInput
                     label="Objet ou Référence par défaut (facultatif)"
                     description="Ex: Objet : Demande de visa ou dossier bancaire"
@@ -476,7 +476,7 @@ export function AttestationTemplateEditor({
                     size="xs"
                     searchable
                   />
-                </Group>
+                </div>
 
                 {/* Variable insertion buttons */}
                 <div>

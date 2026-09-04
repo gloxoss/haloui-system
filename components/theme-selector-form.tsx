@@ -9,6 +9,8 @@ import { type ThemeDensity, type ThemePreset, type ThemeSettings } from "@/lib/t
 import { Badge, Button, Group, Paper, Stack, Text } from "@mantine/core";
 import { Check, Palette, RotateCcw, Sparkles } from "lucide-react";
 
+import { computeThemeCssVariables, isDarkColor } from "@/lib/theme-utils";
+
 const THEME_AR: Record<string, { label: string; desc: string }> = {
   "slate-minimal": { label: "رمادي أردواز كلاسيكي", desc: "تصميم هادئ ونظيف بخلفية بيضاء ورمادي عصري." },
   "corporate-navy": { label: "أزرق ملكي للشركات", desc: "أزرق احترافي فخم مع تباين قوي ومريح للعين." },
@@ -21,6 +23,7 @@ const THEME_AR: Record<string, { label: string; desc: string }> = {
   "monochrome-black": { label: "أبيض وأسود رسمي", desc: "أسلوب بسيط ودقيق: أبيض وأسود صافي وواضح." },
   "olive-ledger": { label: "أوليف وزيتوني كلاسيكي", desc: "طابع هادئ واحترافي للمحاسبة والمكاتب." },
   "haloui-classic": { label: "عنبري دافئ", desc: "ألوان ذهبية وعنبرية حرفية دافئة." },
+  "dark-executive": { label: "الوضع الليلي الفخم (Mode Nuit)", desc: "تصميم داكن أنيق وعصري مريح للعين أثناء العمل الليلي." },
   custom: { label: "ألوان مخصصة بالكامل", desc: "اختر ألوان هويتك البصرية بدقة وبنقرة واحدة." },
 };
 
@@ -98,27 +101,88 @@ export function ThemeSelectorForm({ initialSettings }: { initialSettings: ThemeS
     (accent: string, soft: string, sidebar: string, bg: string) => {
       document.documentElement.setAttribute("data-ui-theme", "custom");
       document.body.setAttribute("data-ui-theme", "custom");
-      document.querySelectorAll("[data-ui-theme]").forEach((el) => {
-        el.setAttribute("data-ui-theme", "custom");
+
+      const { vars, isDarkBg, isDarkSidebar } = computeThemeCssVariables({
+        accent,
+        accentSoft: soft,
+        sidebarBg: sidebar,
+        background: bg,
       });
 
-      document.documentElement.style.setProperty("--accent", accent);
-      document.documentElement.style.setProperty("--accent-soft", soft);
-      document.documentElement.style.setProperty("--accent-foreground", "#ffffff");
-      document.documentElement.style.setProperty("--ring", `${accent}33`);
-      document.documentElement.style.setProperty("--sidebar-bg", sidebar);
-      document.documentElement.style.setProperty("--background", bg);
+      Object.entries(vars).forEach(([key, val]) => {
+        document.documentElement.style.setProperty(key, val);
+      });
+
+      // Inject / update live style element for immediate cascade guarantee
+      let styleTag = document.getElementById("custom-theme-vars") as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement("style");
+        styleTag.id = "custom-theme-vars";
+        document.head.appendChild(styleTag);
+      }
+      const cssRules = Object.entries(vars)
+        .map(([k, v]) => `${k}: ${v} !important;`)
+        .join("\n");
+      styleTag.innerHTML = `
+        :root, [data-ui-theme="custom"], body {
+          ${cssRules}
+        }
+      `;
+
+      if (isDarkBg) {
+        document.documentElement.setAttribute("data-mantine-color-scheme", "dark");
+        document.documentElement.setAttribute("data-dark-bg", "true");
+        document.body.setAttribute("data-dark-bg", "true");
+      } else {
+        document.documentElement.setAttribute("data-mantine-color-scheme", "light");
+        document.documentElement.removeAttribute("data-dark-bg");
+        document.body.removeAttribute("data-dark-bg");
+      }
+
+      if (isDarkSidebar) {
+        document.documentElement.setAttribute("data-dark-sidebar", "true");
+      } else {
+        document.documentElement.removeAttribute("data-dark-sidebar");
+      }
     },
     []
   );
 
   const clearCustomStylesFromDom = React.useCallback(() => {
-    document.documentElement.style.removeProperty("--accent");
-    document.documentElement.style.removeProperty("--accent-soft");
-    document.documentElement.style.removeProperty("--accent-foreground");
-    document.documentElement.style.removeProperty("--ring");
-    document.documentElement.style.removeProperty("--sidebar-bg");
-    document.documentElement.style.removeProperty("--background");
+    const styleTag = document.getElementById("custom-theme-vars");
+    if (styleTag) {
+      styleTag.remove();
+    }
+    const customProps = [
+      "--accent",
+      "--accent-soft",
+      "--accent-foreground",
+      "--ring",
+      "--sidebar-bg",
+      "--sidebar-fg",
+      "--sidebar-muted",
+      "--sidebar-muted-strong",
+      "--sidebar-border",
+      "--sidebar-hover",
+      "--sidebar-card-bg",
+      "--sidebar-card-border",
+      "--background",
+      "--foreground",
+      "--card",
+      "--surface-soft",
+      "--background-alt",
+      "--control-bg",
+      "--border",
+      "--border-strong",
+      "--muted",
+      "--muted-strong",
+    ];
+    customProps.forEach((prop) => {
+      document.documentElement.style.removeProperty(prop);
+    });
+    document.documentElement.removeAttribute("data-dark-bg");
+    document.body.removeAttribute("data-dark-bg");
+    document.documentElement.removeAttribute("data-dark-sidebar");
   }, []);
 
   const handlePresetChange = (preset: ThemePreset) => {
@@ -133,6 +197,14 @@ export function ThemeSelectorForm({ initialSettings }: { initialSettings: ThemeS
       document.querySelectorAll("[data-ui-theme]").forEach((el) => {
         el.setAttribute("data-ui-theme", preset);
       });
+
+      if (preset === "dark-executive") {
+        document.documentElement.setAttribute("data-mantine-color-scheme", "dark");
+        document.documentElement.setAttribute("data-dark-bg", "true");
+        document.body.setAttribute("data-dark-bg", "true");
+      } else {
+        document.documentElement.setAttribute("data-mantine-color-scheme", "light");
+      }
     }
   };
 

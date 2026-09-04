@@ -133,13 +133,14 @@ export async function DocumentModulePage({
       />
 
       <Paper
-        radius={24}
+        radius="xl"
         shadow="sm"
         withBorder
-        p="lg"
-        style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+        p={{ base: "xs", sm: "md", lg: "lg" }}
+        style={{ background: "var(--card)", borderColor: "var(--border-strong)", overflow: "hidden" }}
       >
-        <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped>
+        <div className="overflow-x-auto w-full min-w-0">
+          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped style={{ minWidth: 620 }}>
           <TableThead>
             <TableTr>
               <TableTh>{dict.documents.number}</TableTh>
@@ -209,7 +210,8 @@ export async function DocumentModulePage({
             )}
           </TableTbody>
         </Table>
-      </Paper>
+      </div>
+    </Paper>
     </Stack>
   );
 }

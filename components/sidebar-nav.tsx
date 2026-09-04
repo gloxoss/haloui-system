@@ -78,7 +78,7 @@ function navStyles(active: boolean) {
       borderRadius: "14px",
       minHeight: "42px",
       background: active ? "var(--accent)" : "transparent",
-      color: active ? "var(--accent-foreground)" : "var(--foreground)",
+      color: active ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
       border: "1px solid transparent",
       transition: "background-color 180ms ease, color 180ms ease, box-shadow 180ms ease",
       boxShadow: active ? "var(--shadow-sm)" : "none",
@@ -89,12 +89,14 @@ function navStyles(active: boolean) {
     label: {
       fontSize: "13px",
       fontWeight: 700,
+      color: active ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
     },
     description: {
       fontSize: "11px",
+      color: active ? "var(--accent-foreground)" : "var(--sidebar-muted, var(--muted))",
     },
     section: {
-      color: active ? "var(--accent-foreground)" : "var(--muted-strong)",
+      color: active ? "var(--accent-foreground)" : "var(--sidebar-muted-strong, var(--muted-strong))",
     },
     children: {
       display: "grid",
@@ -183,11 +185,11 @@ export function SidebarNav({
                   justifyContent: "center",
                   borderRadius: 14,
                   background: active ? "var(--accent)" : "transparent",
-                  color: active ? "var(--accent-foreground)" : "var(--foreground)",
+                  color: active ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
                   transition: "all 160ms ease",
                   boxShadow: active ? "var(--shadow-sm)" : "none",
                 }}
-                className={active ? "" : "hover:bg-[var(--surface-soft)]"}
+                className={active ? "" : "hover:bg-[var(--sidebar-hover,var(--surface-soft))]"}
               >
                 <Icon size={18} strokeWidth={active ? 2.2 : 1.9} />
               </UnstyledButton>
@@ -209,11 +211,11 @@ export function SidebarNav({
                     borderRadius: 14,
                     position: "relative",
                     background: bonsActive ? "var(--accent)" : "transparent",
-                    color: bonsActive ? "var(--accent-foreground)" : "var(--foreground)",
+                    color: bonsActive ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
                     transition: "all 160ms ease",
                     boxShadow: bonsActive ? "var(--shadow-sm)" : "none",
                   }}
-                  className={bonsActive ? "" : "hover:bg-[var(--surface-soft)]"}
+                  className={bonsActive ? "" : "hover:bg-[var(--sidebar-hover,var(--surface-soft))]"}
                 >
                   <Package size={18} strokeWidth={bonsActive ? 2.2 : 1.9} />
                   <span
@@ -275,11 +277,11 @@ export function SidebarNav({
                   justifyContent: "center",
                   borderRadius: 14,
                   background: active ? "var(--accent)" : "transparent",
-                  color: active ? "var(--accent-foreground)" : "var(--foreground)",
+                  color: active ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
                   transition: "all 160ms ease",
                   boxShadow: active ? "var(--shadow-sm)" : "none",
                 }}
-                className={active ? "" : "hover:bg-[var(--surface-soft)]"}
+                className={active ? "" : "hover:bg-[var(--sidebar-hover,var(--surface-soft))]"}
               >
                 <Icon size={18} strokeWidth={active ? 2.2 : 1.9} />
               </UnstyledButton>
@@ -301,11 +303,11 @@ export function SidebarNav({
                     borderRadius: 14,
                     position: "relative",
                     background: moreActive ? "var(--accent)" : "transparent",
-                    color: moreActive ? "var(--accent-foreground)" : "var(--foreground)",
+                    color: moreActive ? "var(--accent-foreground)" : "var(--sidebar-fg, var(--foreground))",
                     transition: "all 160ms ease",
                     boxShadow: moreActive ? "var(--shadow-sm)" : "none",
                   }}
-                  className={moreActive ? "" : "hover:bg-[var(--surface-soft)]"}
+                  className={moreActive ? "" : "hover:bg-[var(--sidebar-hover,var(--surface-soft))]"}
                 >
                   <MoreHorizontal size={18} strokeWidth={moreActive ? 2.2 : 1.9} />
                   <span
@@ -480,12 +482,12 @@ export function SidebarNav({
               width: "100%",
               padding: "8px 12px",
               borderRadius: 14,
-              color: "var(--muted-strong)",
+              color: "var(--sidebar-muted, var(--muted-strong))",
               fontSize: 13,
               fontWeight: 600,
               transition: "all 160ms ease",
             }}
-            className="hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+            className="hover:bg-[var(--sidebar-hover,var(--surface-soft))] hover:text-[var(--sidebar-fg,var(--foreground))]"
           >
             <PanelLeftClose size={16} />
             <span>{collapseLabel}</span>

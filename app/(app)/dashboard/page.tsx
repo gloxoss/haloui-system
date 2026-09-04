@@ -104,9 +104,9 @@ export default async function DashboardPage() {
     <Stack gap="xl">
       {/* Executive Hero Banner */}
       <Paper
-        radius={24}
+        radius="xl"
         withBorder
-        p={{ base: "lg", md: "xl" }}
+        p={{ base: "md", sm: "lg", md: "xl" }}
         style={{
           background: "var(--card)",
           borderColor: "var(--border-strong)",
@@ -115,8 +115,8 @@ export default async function DashboardPage() {
       >
         <Stack gap="lg">
           {/* Header Row: Title on Left, Actions on Right */}
-          <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
-            <Stack gap={4}>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <Stack gap={4} className="min-w-0">
               <Group gap="xs" align="center">
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
             </Stack>
 
             {/* Action Buttons */}
-            <Group gap="sm" wrap="wrap">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto [&>*]:w-full [&>*]:sm:w-auto">
               {featureFlags.devis ? (
                 <Button
                   component={Link}
@@ -179,8 +179,8 @@ export default async function DashboardPage() {
                   {dict.dashboard.newFacture}
                 </Button>
               ) : null}
-            </Group>
-          </Group>
+            </div>
+          </div>
 
           {/* Executive Stat Cards with Tinted Accents */}
           <SimpleGrid cols={{ base: 1, sm: featureFlags.chiffre_affaires ? 3 : 2 }} spacing="md">
@@ -326,9 +326,9 @@ export default async function DashboardPage() {
       {/* Revenue Grid by Branch */}
       {featureFlags.chiffre_affaires && revenue ? (
         <Paper
-          radius={24}
+          radius="xl"
           withBorder
-          p={{ base: "lg", md: "xl" }}
+          p={{ base: "md", sm: "lg", md: "xl" }}
           style={{
             background: "var(--card)",
             borderColor: "var(--border-strong)",
@@ -524,9 +524,10 @@ export default async function DashboardPage() {
 
       {/* Latest Documents */}
       <Paper
-        radius={24}
+        radius="xl"
         withBorder
-        p={{ base: "lg", md: "xl" }}
+        p={{ base: "md", sm: "lg", md: "xl" }}
+        className="overflow-hidden min-w-0"
         style={{
           background: "var(--card)",
           borderColor: "var(--border-strong)",
@@ -621,7 +622,12 @@ export default async function DashboardPage() {
                     radius="xl"
                     size="sm"
                     leftSection={<Plus size={15} strokeWidth={2} />}
-                    style={{ fontWeight: 600 }}
+                    style={{
+                      fontWeight: 700,
+                      backgroundColor: "var(--accent)",
+                      color: "var(--accent-foreground)",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                    }}
                   >
                     {dict.dashboard.newDevis}
                   </Button>
@@ -634,7 +640,11 @@ export default async function DashboardPage() {
                     radius="xl"
                     size="sm"
                     leftSection={<Plus size={15} strokeWidth={2} />}
-                    style={{ fontWeight: 600 }}
+                    style={{
+                      fontWeight: 600,
+                      borderColor: "var(--border-strong)",
+                      color: "var(--foreground)",
+                    }}
                   >
                     {dict.dashboard.newFacture}
                   </Button>
@@ -643,45 +653,47 @@ export default async function DashboardPage() {
             </Stack>
           </Paper>
         ) : (
-          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="md">
-            <TableThead>
-              <TableTr>
-                <TableTh>{dict.documents.number}</TableTh>
-                <TableTh>{dict.documents.client}</TableTh>
-                <TableTh>{dict.documents.magasin}</TableTh>
-                <TableTh>{dict.documents.date}</TableTh>
-                <TableTh>{dict.documents.totalTtc}</TableTh>
-                <TableTh>{dict.common.status}</TableTh>
-              </TableTr>
-            </TableThead>
-            <TableTbody>
-              {latestDocuments.map((document) => {
-                const badge = statusBadgeProps(document.status, dict);
+          <div className="overflow-x-auto w-full min-w-0">
+            <Table highlightOnHover horizontalSpacing="md" verticalSpacing="md" style={{ minWidth: 620 }}>
+              <TableThead>
+                <TableTr>
+                  <TableTh>{dict.documents.number}</TableTh>
+                  <TableTh>{dict.documents.client}</TableTh>
+                  <TableTh>{dict.documents.magasin}</TableTh>
+                  <TableTh>{dict.documents.date}</TableTh>
+                  <TableTh>{dict.documents.totalTtc}</TableTh>
+                  <TableTh>{dict.common.status}</TableTh>
+                </TableTr>
+              </TableThead>
+              <TableTbody>
+                {latestDocuments.map((document) => {
+                  const badge = statusBadgeProps(document.status, dict);
 
-                return (
-                  <TableTr key={document.id}>
-                    <TableTd>
-                      <Link
-                        href={`/${getModuleSlugByType(document.type)}/${document.id}/edit`}
-                        style={{ fontWeight: 700, color: "var(--accent)" }}
-                      >
-                        {getDocTypeLabel(document.type, dict)} #{document.numero}
-                      </Link>
-                    </TableTd>
-                    <TableTd>{String(document.party_name ?? "-")}</TableTd>
-                    <TableTd>{String(document.branch_name ?? "-")}</TableTd>
-                    <TableTd>{formatDate(document.date)}</TableTd>
-                    <TableTd fw={800}>{formatCurrency(document.total_ttc)}</TableTd>
-                    <TableTd>
-                      <Badge color={badge.color} variant={badge.variant} radius="xl" size="sm">
-                        {badge.label}
-                      </Badge>
-                    </TableTd>
-                  </TableTr>
-                );
-              })}
-            </TableTbody>
-          </Table>
+                  return (
+                    <TableTr key={document.id}>
+                      <TableTd>
+                        <Link
+                          href={`/${getModuleSlugByType(document.type)}/${document.id}/edit`}
+                          style={{ fontWeight: 700, color: "var(--accent)" }}
+                        >
+                          {getDocTypeLabel(document.type, dict)} #{document.numero}
+                        </Link>
+                      </TableTd>
+                      <TableTd>{String(document.party_name ?? "-")}</TableTd>
+                      <TableTd>{String(document.branch_name ?? "-")}</TableTd>
+                      <TableTd>{formatDate(document.date)}</TableTd>
+                      <TableTd fw={800}>{formatCurrency(document.total_ttc)}</TableTd>
+                      <TableTd>
+                        <Badge color={badge.color} variant={badge.variant} radius="xl" size="sm">
+                          {badge.label}
+                        </Badge>
+                      </TableTd>
+                    </TableTr>
+                  );
+                })}
+              </TableTbody>
+            </Table>
+          </div>
         )}
       </Paper>
     </Stack>

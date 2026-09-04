@@ -1,9 +1,24 @@
 import { cn } from "@/lib/utils";
 
-export function Table({ className, children }: { className?: string; children: React.ReactNode }) {
+export function Table({
+  className,
+  tableClassName,
+  children,
+  minWidth = 520,
+}: {
+  className?: string;
+  tableClassName?: string;
+  children: React.ReactNode;
+  minWidth?: number | string;
+}) {
   return (
-    <div className={cn("overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--card)]", className)}>
-      <table className="min-w-full border-collapse text-[13px]">{children}</table>
+    <div className={cn("overflow-x-auto w-full min-w-0 rounded-[var(--radius-lg)] border border-[var(--border-strong)] bg-[var(--card)]", className)}>
+      <table
+        className={cn("w-full border-collapse text-[13px]", tableClassName)}
+        style={{ minWidth: typeof minWidth === "number" ? `${minWidth}px` : minWidth }}
+      >
+        {children}
+      </table>
     </div>
   );
 }

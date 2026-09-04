@@ -17,7 +17,7 @@ export function PageHeading({
     <Paper
       radius="xl"
       shadow="sm"
-      p="lg"
+      p={{ base: "md", sm: "lg" }}
       withBorder
       className={className}
       style={{
@@ -25,12 +25,12 @@ export function PageHeading({
         borderColor: "var(--border-strong)",
       }}
     >
-      <Group justify="space-between" align="flex-end" gap="md">
-        <Stack gap={4}>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <Stack gap={4} className="min-w-0">
           <Text size="10px" fw={800} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.14em" }}>
             {eyebrow}
           </Text>
-          <Title order={2} style={{ fontSize: "1.65rem", lineHeight: 1.1, letterSpacing: "-0.03em" }}>
+          <Title order={2} style={{ fontSize: "1.65rem", lineHeight: 1.1, letterSpacing: "-0.03em" }} className="break-words">
             {title}
           </Title>
           {description ? (
@@ -39,8 +39,12 @@ export function PageHeading({
             </Text>
           ) : null}
         </Stack>
-        {actions ? <Group gap="sm">{actions}</Group> : null}
-      </Group>
+        {actions ? (
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+            {actions}
+          </div>
+        ) : null}
+      </div>
     </Paper>
   );
 }

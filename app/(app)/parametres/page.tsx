@@ -53,6 +53,7 @@ const FEATURE_LOCALES_AR: Record<string, { label: string; description: string }>
   multi_branches: { label: "المحلات والمحطات المتعددة (Multi-Magasins)", description: "تفعيل إدارة وتحديد نقاط البيع والمحلات في الفواتير والتقارير." },
   multi_langue: { label: "تغيير اللغة (فرنسية / عربية)", description: "تفعيل زر التبديل بين اللغتين في رأس الصفحة." },
   utilisateurs: { label: "حسابات المستخدمين", description: "تفعيل إدارة الحسابات، الصلاحيات وسجل العمليات (خاص بالسوبر أدمين)." },
+  gestion_tva: { label: "إدارة الضريبة على القيمة المضافة (TVA)", description: "تفعيل حساب وعرض الضريبة (TVA) في المنتجات والوثائق التجارية." },
 };
 
 const CATEGORY_META: Record<
@@ -62,7 +63,7 @@ const CATEGORY_META: Record<
   commercial: {
     fr: "Ventes, Achats & Documents Commerciaux",
     ar: "المبيعات، الشراء والوثائق التجارية",
-    badge: "8 modules",
+    badge: "9 modules",
   },
   caisse: {
     fr: "Suivi Financier & Caisse Quotidienne",
@@ -137,7 +138,7 @@ export default async function ParametresPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         {/* Left Column: Informations de l'Entreprise & Paramètres Métier */}
-        <div className="grid gap-6">
+        <div className="grid gap-6 min-w-0">
           {isSuperadmin || isAdmin ? (
             <Card>
             <h3 className="text-lg font-black">{dict.settings.companyInfo}</h3>
@@ -288,7 +289,7 @@ export default async function ParametresPage() {
       </div>
 
       {/* Right Column: Themes, Modules, Backups, System Info */}
-      <div className="grid gap-6">
+      <div className="grid gap-6 min-w-0">
           {/* Card: Themes & Density (Available to everyone) */}
           <Card>
             <div className="mb-4">
@@ -487,7 +488,7 @@ export default async function ParametresPage() {
                   </div>
                 </div>
 
-                <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-xs text-[var(--muted)]">
+                <div className="rounded-[18px] border bg-[var(--background-alt)] px-3.5 py-3 text-xs text-[var(--muted)] break-all">
                   <div>{dict.settings.currentDb} {DB_PATH}</div>
                   <div className="mt-1">{dict.settings.backupFolder} {BACKUP_DIR}</div>
                 </div>

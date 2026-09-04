@@ -121,6 +121,7 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "multi_branches", label: "Multi-Magasins & Pistes", description: "Activer la gestion de plusieurs points de vente et magasins.", category: "multientite" },
   { key: "multi_langue", label: "Sélecteur de Langue", description: "Activer le commutateur de langue bilingue (Français / العربية).", category: "systeme" },
   { key: "utilisateurs", label: "Gestion des Utilisateurs", description: "Réservé Superadmin : création et permissions des comptes d'accès.", category: "systeme" },
+  { key: "gestion_tva", label: "Gestion de la TVA & Taxes", description: "Activer le calcul et l'affichage de la TVA sur les articles et les documents (Devis, Factures).", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -139,6 +140,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   multi_branches: true,
   multi_langue: true,
   utilisateurs: true,
+  gestion_tva: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -232,6 +234,12 @@ export const THEME_PRESET_DEFINITIONS = [
     label: "Ambre chaleureux",
     description: "Palette artisanale aux tons dorés et ambrés.",
     swatches: ["#7c2d12", "#b45309", "#fef3c7"],
+  },
+  {
+    key: "dark-executive",
+    label: "Sombre Exécutif (Mode Nuit)",
+    description: "Design sombre prestigieux: fond nuit profonde, cartes contrastées et accent bleu moderne.",
+    swatches: ["#090d16", "#1e293b", "#38bdf8"],
   },
   {
     key: "custom",

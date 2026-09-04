@@ -170,6 +170,7 @@ export function RevenueGrid({
       withBorder
       radius="lg"
       p="md"
+      className="min-w-0 overflow-hidden"
       style={{
         background: "var(--card)",
         borderColor: "var(--border)",
@@ -177,7 +178,7 @@ export function RevenueGrid({
       }}
     >
       {/* Header with Title, Mode Toggle & Save Indicator */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
         <div>
           <Group gap="xs">
             <h3 className="text-lg font-black tracking-tight">{t.revenueGrid.title}</h3>
@@ -197,21 +198,24 @@ export function RevenueGrid({
         </div>
 
         {/* View Mode Switcher */}
-        <SegmentedControl
-          value={viewMode}
-          onChange={(val) => setViewMode(val as "manual" | "system" | "compare")}
-          size="xs"
-          radius="md"
-          data={[
-            { label: t.revenueGrid.manualTab, value: "manual" },
-            { label: t.revenueGrid.systemTab, value: "system" },
-            { label: t.revenueGrid.compareTab, value: "compare" },
-          ]}
-        />
+        <div className="w-full sm:w-auto overflow-x-auto">
+          <SegmentedControl
+            value={viewMode}
+            onChange={(val) => setViewMode(val as "manual" | "system" | "compare")}
+            size="xs"
+            radius="md"
+            fullWidth
+            data={[
+              { label: t.revenueGrid.manualTab, value: "manual" },
+              { label: t.revenueGrid.systemTab, value: "system" },
+              { label: t.revenueGrid.compareTab, value: "compare" },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Responsive Spreadsheet Grid */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] w-full min-w-0">
         <table className="w-full min-w-[960px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--surface-soft,rgba(0,0,0,0.02))] text-left text-xs font-bold uppercase tracking-wider text-[var(--muted)]">

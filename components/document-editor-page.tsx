@@ -31,6 +31,7 @@ export async function DocumentEditorPage({
       products={lookup.produits}
       unitOptions={unitOptions}
       multiBranchesEnabled={flags.multi_branches}
+      tvaEnabled={flags.gestion_tva ?? true}
     />
   );
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ColorSchemeScript } from "@mantine/core";
 import { Lora, Manrope, Noto_Naskh_Arabic } from "next/font/google";
 
@@ -31,8 +31,17 @@ export const metadata: Metadata = {
   description: "Système de gestion commerciale : devis, factures, bons, produits, clients et recettes.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#315d7b",
+};
+
 import { cookies } from "next/headers";
 import { getThemeSettings } from "@/lib/data";
+import { computeThemeCssVariables } from "@/lib/theme-utils";
 
 export default async function RootLayout({
   children,
@@ -46,27 +55,43 @@ export default async function RootLayout({
   const locale = (cookieStore.get("app_locale")?.value as "fr" | "ar") || "fr";
   const dir = locale === "ar" ? "rtl" : "ltr";
 
+  const isDarkPreset = preset === "dark-executive";
+  const customVarsResult = preset === "custom" && themeSetting.customColors
+    ? computeThemeCssVariables({
+        accent: themeSetting.customColors.accent,
+        accentSoft: themeSetting.customColors.accentSoft,
+        sidebarBg: themeSetting.customColors.sidebarBg,
+        background: themeSetting.customColors.background,
+      })
+    : null;
+
+  const isDark = isDarkPreset || Boolean(customVarsResult?.isDarkBg);
+  const isDarkSidebar = isDarkPreset || Boolean(customVarsResult?.isDarkSidebar);
+
+  const customCssString = customVarsResult
+    ? Object.entries(customVarsResult.vars)
+        .map(([k, v]) => `${k}: ${v} !important;`)
+        .join("\n")
+    : "";
+
   return (
     <html
       lang={locale}
       dir={dir}
-      data-mantine-color-scheme="light"
+      data-mantine-color-scheme={isDark ? "dark" : "light"}
+      data-dark-bg={isDark ? "true" : undefined}
+      data-dark-sidebar={isDarkSidebar ? "true" : undefined}
       data-ui-theme={preset}
       data-ui-density={density}
       className={locale === "ar" ? "rtl" : ""}
       suppressHydrationWarning
     >
       <head>
-        <ColorSchemeScript defaultColorScheme="light" />
-        {preset === "custom" && themeSetting.customColors ? (
+        <ColorSchemeScript defaultColorScheme={isDark ? "dark" : "light"} />
+        {customCssString ? (
           <style id="custom-theme-vars" dangerouslySetInnerHTML={{ __html: `
             :root, [data-ui-theme="custom"] {
-              --accent: ${themeSetting.customColors.accent} !important;
-              --accent-soft: ${themeSetting.customColors.accentSoft || themeSetting.customColors.accent + "22"} !important;
-              --accent-foreground: #ffffff !important;
-              --ring: ${themeSetting.customColors.accent}33 !important;
-              ${themeSetting.customColors.sidebarBg ? `--sidebar-bg: ${themeSetting.customColors.sidebarBg} !important;` : ""}
-              ${themeSetting.customColors.background ? `--background: ${themeSetting.customColors.background} !important;` : ""}
+              ${customCssString}
             }
           ` }} />
         ) : null}

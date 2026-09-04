@@ -64,15 +64,23 @@ export function DocumentFilterBar({
     { value: "imprime", label: t.documents.statusImprime },
   ];
 
+  const hasActiveFilters = Boolean(
+    fromDate ||
+      toDate ||
+      (branchId && branchId !== "all") ||
+      (partyId && partyId !== "all") ||
+      (status && status !== "all"),
+  );
+
   return (
     <Paper
-      radius={24}
+      radius="xl"
       shadow="xs"
       withBorder
-      p="lg"
+      p={{ base: "sm", sm: "md", lg: "lg" }}
       style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
     >
-      <form method="GET" action="" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5 items-end">
+      <form method="GET" action="" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-end">
         <AppDateInput
           name="from"
           label={t.common.from}
@@ -137,41 +145,56 @@ export function DocumentFilterBar({
 
         <div>
           <input type="hidden" name="status" value={status} />
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label={t.common.status}
-              value={status}
-              onChange={(val) => setStatus(val || "all")}
-              data={statusData}
-              radius="xl"
-              style={{ flex: 1 }}
-              styles={{
-                input: {
-                  backgroundColor: "var(--card)",
-                  borderColor: "var(--border-strong)",
-                  color: "var(--foreground)",
-                  fontWeight: 500,
-                  fontSize: "13px",
-                  height: "42px",
-                  borderRadius: "14px",
-                },
-              }}
-            />
-            <Button
-              type="submit"
-              radius="xl"
-              size="md"
-              leftSection={<Filter size={15} strokeWidth={2} />}
-              style={{
-                backgroundColor: "var(--accent)",
-                color: "var(--accent-foreground)",
-                fontWeight: 700,
+          <Select
+            label={t.common.status}
+            value={status}
+            onChange={(val) => setStatus(val || "all")}
+            data={statusData}
+            radius="xl"
+            styles={{
+              input: {
+                backgroundColor: "var(--card)",
+                borderColor: "var(--border-strong)",
+                color: "var(--foreground)",
+                fontWeight: 500,
+                fontSize: "13px",
                 height: "42px",
-              }}
+                borderRadius: "14px",
+              },
+            }}
+          />
+        </div>
+
+        <div className="sm:col-span-2 lg:col-span-3 xl:col-span-5 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 pt-1">
+          {hasActiveFilters && (
+            <Button
+              component="a"
+              href="?"
+              variant="subtle"
+              color="gray"
+              radius="xl"
+              size="sm"
+              leftSection={<RotateCcw size={14} />}
+              className="w-full sm:w-auto"
             >
-              {t.common.filter}
+              {locale === "ar" ? "إلغاء التصفية" : "Réinitialiser"}
             </Button>
-          </Group>
+          )}
+          <Button
+            type="submit"
+            radius="xl"
+            size="md"
+            leftSection={<Filter size={15} strokeWidth={2} />}
+            className="w-full sm:w-auto"
+            style={{
+              backgroundColor: "var(--accent)",
+              color: "var(--accent-foreground)",
+              fontWeight: 700,
+              height: "42px",
+            }}
+          >
+            {t.common.filter}
+          </Button>
         </div>
       </form>
     </Paper>

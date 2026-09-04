@@ -81,16 +81,21 @@ export async function EntityManager({
         </Card>
 
         <Card>
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-lg font-black">{locale === "ar" ? "الدليل المسجل" : "Répertoire"}</h3>
               <p className="text-sm text-[var(--muted)]">
                 {items.length} {locale === "ar" ? "مسجل" : "enregistrements"}
               </p>
             </div>
-            <form className="flex gap-2" action="">
-              <Input name="q" defaultValue={search} placeholder={dict.common.searchPlaceholder} />
-              <Button type="submit" variant="secondary">{dict.common.filter}</Button>
+            <form className="flex gap-2 w-full sm:w-auto" action="">
+              <Input
+                name="q"
+                defaultValue={search}
+                placeholder={dict.common.searchPlaceholder}
+                className="flex-1 sm:w-[200px]"
+              />
+              <Button type="submit" variant="secondary" className="shrink-0">{dict.common.filter}</Button>
             </form>
           </div>
           <Table>

@@ -79,7 +79,9 @@ export function CompanySwitcher({
             boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
           }}
         >
-          <span className="truncate max-w-[180px] text-[13px]">{currentCompany?.name}</span>
+          <span className="truncate max-w-[100px] sm:max-w-[170px] text-[12px] sm:text-[13px]">
+            {currentCompany?.name}
+          </span>
         </Button>
       </Menu.Target>
 

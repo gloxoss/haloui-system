@@ -84,7 +84,7 @@ export async function ProductManager({
       <ImportFeedback imported={imported} skipped={skipped} importState={importState} />
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="grid gap-4">
+        <div className="grid gap-4 min-w-0">
           <Card>
             <h3 className="text-lg font-black">{dict.products.newProduct}</h3>
             <form action={saveProductAction} className="mt-4 grid gap-4">
@@ -147,20 +147,21 @@ export async function ProductManager({
         </div>
 
         <Card>
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-lg font-black">{locale === "ar" ? "الكتالوج المتوفر" : "Catalogue"}</h3>
               <p className="text-[13px] text-[var(--muted)]">
                 {items.length} {locale === "ar" ? "سلعة مسجلة" : "produits"}
               </p>
             </div>
-            <form className="flex gap-2" action="">
+            <form className="flex gap-2 w-full sm:w-auto" action="">
               <Input
                 name="q"
                 defaultValue={search}
                 placeholder={locale === "ar" ? "بحث بالمرجع أو الاسم..." : "Réf ou désignation"}
+                className="flex-1 sm:w-[200px]"
               />
-              <Button type="submit" variant="secondary">{dict.common.filter}</Button>
+              <Button type="submit" variant="secondary" className="shrink-0">{dict.common.filter}</Button>
             </form>
           </div>
           <Table>
