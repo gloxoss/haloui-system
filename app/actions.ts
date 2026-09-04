@@ -31,6 +31,7 @@ import {
   saveFeatureFlags,
   saveThemeSettings,
   saveProduct,
+  saveProductUnits,
   saveSortieCaisse,
   saveUser,
   syncRevenueFromSystemSales,
@@ -276,6 +277,26 @@ export async function manualBackupAction() {
   await requireAdmin();
   createDatabaseBackup("backup-manual");
   refresh(["/parametres"]);
+}
+
+export async function saveProductUnitsAction(formData: FormData) {
+  const session = await requireAdmin();
+  const raw = String(formData.get("units") || "");
+  const list = raw
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  saveProductUnits(list, session.user.id);
+  refresh([
+    "/parametres",
+    "/produits",
+    "/devis",
+    "/factures",
+    "/bons-livraison",
+    "/bons-sortie",
+    "/bons-commande",
+  ]);
 }
 
 export async function resetBusinessDataAction() {

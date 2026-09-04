@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useState, useTransition } from "react";
+import { startTransition, useMemo, useState, useTransition } from "react";
 import { Building2, Check, Package, Plus, Search, UserPlus } from "lucide-react";
 
 import {
@@ -21,6 +21,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DEFAULT_PRODUCT_UNITS,
   DEFAULT_TVA_RATE,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_COMPACT_LABELS,
@@ -63,6 +64,7 @@ export function DocumentForm({
   clients,
   fournisseurs,
   products,
+  unitOptions,
   multiBranchesEnabled = true,
 }: {
   slug: string;
@@ -72,6 +74,7 @@ export function DocumentForm({
   clients: LookupItem[];
   fournisseurs: LookupItem[];
   products: LookupItem[];
+  unitOptions?: string[];
   multiBranchesEnabled?: boolean;
 }) {
   const { t, locale, isRtl } = useTranslation();
@@ -85,6 +88,16 @@ export function DocumentForm({
       ? (locale === "ar" ? "الفورنيسور (المورد)" : "Fournisseur")
       : (locale === "ar" ? "الكليان (الزبون)" : "Client");
   const wizardSteps = getWizardSteps(type, locale);
+
+  const availableUnits = useMemo(() => {
+    const base = unitOptions && unitOptions.length > 0 ? unitOptions : DEFAULT_PRODUCT_UNITS;
+    const extra = new Set<string>();
+    products.forEach((p) => {
+      if (p.unite) extra.add(p.unite);
+    });
+    base.forEach((u) => extra.add(u));
+    return Array.from(extra);
+  }, [unitOptions, products]);
 
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [date, setDate] = useState(toInputDate(document?.date));
@@ -495,6 +508,7 @@ export function DocumentForm({
                 <Field label="Unité">
                   <Input
                     disabled={locked}
+                    list="product-unit-suggestions"
                     value={line.unite}
                     onChange={(event) => updateLine(index, { unite: event.target.value })}
                   />
@@ -612,6 +626,7 @@ export function DocumentForm({
                   <td className="py-2.5 pr-2.5">
                     <Input
                       disabled={locked}
+                      list="product-unit-suggestions"
                       value={line.unite}
                       onChange={(event) => updateLine(index, { unite: event.target.value })}
                     />
@@ -745,6 +760,7 @@ export function DocumentForm({
                   <Field label="Unite">
                     <Input
                       disabled={locked}
+                      list="product-unit-suggestions"
                       value={line.unite}
                       onChange={(event) => updateLine(index, { unite: event.target.value })}
                     />
@@ -832,6 +848,7 @@ export function DocumentForm({
                     {type === "bs" ? (
                       <Input
                         disabled={locked}
+                        list="product-unit-suggestions"
                         value={line.unite}
                         onChange={(event) => updateLine(index, { unite: event.target.value })}
                       />
@@ -1227,6 +1244,11 @@ export function DocumentForm({
 
   return (
     <div className="grid gap-4">
+      <datalist id="product-unit-suggestions">
+        {availableUnits.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
       <PageHeading
         eyebrow={DOCUMENT_TYPE_LABELS[type]}
         title={

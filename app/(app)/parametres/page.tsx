@@ -8,6 +8,7 @@ import {
 } from "@/app/actions";
 import { AttestationTemplateEditor } from "@/components/attestation-template-editor";
 import { PageHeading } from "@/components/page-heading";
+import { ProductUnitsEditor } from "@/components/product-units-editor";
 import { ThemeSelectorForm } from "@/components/theme-selector-form";
 import { UploadField } from "@/components/upload-field";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ import {
   FEATURE_TOGGLE_DEFINITIONS,
 } from "@/lib/constants";
 import { getActiveCompany } from "@/lib/company";
-import { getFeatureFlags, getThemeSettings, listBranches } from "@/lib/data";
+import { getFeatureFlags, getProductUnits, getThemeSettings, listBranches } from "@/lib/data";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,7 @@ export default async function ParametresPage() {
   const branches = listBranches({ companyId: company.id });
   const featureFlags = getFeatureFlags();
   const themeSettings = getThemeSettings();
+  const productUnits = getProductUnits();
 
   const eyebrow = isSuperadmin
     ? dict.settings.superadminSection
@@ -124,9 +126,10 @@ export default async function ParametresPage() {
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        {/* Left Column: Informations de l'Entreprise */}
-        {isSuperadmin || isAdmin ? (
-          <Card>
+        {/* Left Column: Informations de l'Entreprise & Paramètres Métier */}
+        <div className="grid gap-6">
+          {isSuperadmin || isAdmin ? (
+            <Card>
             <h3 className="text-lg font-black">{dict.settings.companyInfo}</h3>
             <p className="mt-1 text-xs text-[var(--muted)]">
               {dict.settings.companyInfoDesc}
@@ -251,8 +254,31 @@ export default async function ParametresPage() {
           </Card>
         )}
 
-        {/* Right Column: Themes, Modules, Backups, System Info */}
-        <div className="grid gap-6">
+        {/* Product Units Configuration (Superadmin & Admin) */}
+        {(isSuperadmin || isAdmin) && (
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black">
+                  {locale === "ar" ? "وحدات قياس المنتجات والسلعة" : "Unités de mesure des produits"}
+                </h3>
+                <p className="text-sm text-[var(--muted)]">
+                  {locale === "ar"
+                    ? "تحديد وتخصيص وحدات البيع والمخزون المتاحة في الكتالوج والوثائق (كيلو، وحدة، لتر، علبة...)"
+                    : "Personnalisez les unités de vente et de gestion (kilo, unité, litre, boîte, carton...) disponibles dans le catalogue et les pièces commerciales."}
+                </p>
+              </div>
+              <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--muted-strong)]">
+                {productUnits.length} {locale === "ar" ? "وحدات" : "unités"}
+              </span>
+            </div>
+            <ProductUnitsEditor initialUnits={productUnits} />
+          </Card>
+        )}
+      </div>
+
+      {/* Right Column: Themes, Modules, Backups, System Info */}
+      <div className="grid gap-6">
           {/* Card: Themes & Density (Available to everyone) */}
           <Card>
             <div className="mb-4">

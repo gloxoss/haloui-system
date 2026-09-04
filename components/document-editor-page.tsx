@@ -1,6 +1,6 @@
 import { DocumentForm } from "@/components/forms/document-form";
 import { getActiveCompanyId } from "@/lib/company";
-import { getDocumentById, getFeatureFlags, getLookupData } from "@/lib/data";
+import { getDocumentById, getFeatureFlags, getLookupData, getProductUnits } from "@/lib/data";
 import { requireDocumentFeature } from "@/lib/features";
 import { type DocumentType } from "@/lib/types";
 
@@ -18,6 +18,7 @@ export async function DocumentEditorPage({
   const flags = getFeatureFlags();
   const lookup = getLookupData(activeCompanyId);
   const document = id ? getDocumentById(id) : null;
+  const unitOptions = getProductUnits();
 
   return (
     <DocumentForm
@@ -28,6 +29,7 @@ export async function DocumentEditorPage({
       clients={lookup.clients}
       fournisseurs={lookup.fournisseurs}
       products={lookup.produits}
+      unitOptions={unitOptions}
       multiBranchesEnabled={flags.multi_branches}
     />
   );

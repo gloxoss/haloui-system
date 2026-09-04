@@ -10,12 +10,10 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getActiveCompanyId } from "@/lib/company";
-import { listProducts } from "@/lib/data";
+import { getProductUnits, listProducts } from "@/lib/data";
 import { requireFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { formatCurrency } from "@/lib/utils";
-
-const UNIT_OPTIONS = ["u", "kg", "g", "boîte", "pièce", "plateau"];
 
 const BULK_PLACEHOLDER = `# Une ligne par produit. Colonnes separees par | (ou tab, ou ;).
 # Format : DESIGNATION | PRIX
@@ -73,6 +71,7 @@ export async function ProductManager({
   const dict = getServerDictionary(locale);
   const activeCompanyId = await getActiveCompanyId();
   const items = listProducts(search, activeCompanyId);
+  const unitOptions = getProductUnits();
 
   return (
     <div className="grid gap-4">
@@ -95,12 +94,12 @@ export async function ProductManager({
                   <Input name="ref" required />
                 </Field>
                 <Field label={dict.products.unit}>
-                  <Select name="unite" defaultValue="u">
+                  <Select name="unite" defaultValue={unitOptions[0] ?? "u"}>
                     <SelectTrigger>
                       <SelectValue placeholder={dict.products.unit} />
                     </SelectTrigger>
                     <SelectContent>
-                      {UNIT_OPTIONS.map((unit) => (
+                      {unitOptions.map((unit) => (
                         <SelectItem key={unit} value={unit}>{unit}</SelectItem>
                       ))}
                     </SelectContent>
@@ -198,7 +197,7 @@ export async function ProductManager({
                                   <SelectValue placeholder={dict.products.unit} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {UNIT_OPTIONS.map((unit) => (
+                                  {Array.from(new Set([item.unite, ...unitOptions])).filter(Boolean).map((unit) => (
                                     <SelectItem key={unit} value={unit}>{unit}</SelectItem>
                                   ))}
                                 </SelectContent>

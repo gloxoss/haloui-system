@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import {
   ATTESTATION_TYPE_LABELS,
   DEFAULT_FEATURE_FLAGS,
+  DEFAULT_PRODUCT_UNITS,
   DEFAULT_THEME_SETTINGS,
   DEFAULT_TVA_RATE,
   DOCUMENT_STATUS_LABELS,
@@ -250,6 +251,42 @@ export function saveThemeSettings(input: Partial<ThemeSettings>, userId: number)
 
   transaction();
   logAudit(userId, "update", "theme_settings", null, nextTheme);
+}
+
+export function getProductUnits(): string[] {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'product.units'").get() as
+    | { value: string }
+    | undefined;
+
+  if (!row?.value) {
+    return DEFAULT_PRODUCT_UNITS;
+  }
+
+  try {
+    const parsed = JSON.parse(row.value);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((u) => String(u).trim()).filter(Boolean);
+    }
+  } catch {}
+
+  return DEFAULT_PRODUCT_UNITS;
+}
+
+export function saveProductUnits(units: string[], userId: number) {
+  const db = getDb();
+  const cleaned = Array.from(new Set(units.map((u) => u.trim()).filter(Boolean)));
+  if (cleaned.length === 0) {
+    cleaned.push("u");
+  }
+
+  db.prepare(`
+    INSERT INTO app_settings (key, value)
+    VALUES ('product.units', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(JSON.stringify(cleaned));
+
+  logAudit(userId, "update", "product_units", null, { units: cleaned });
 }
 
 export function resetBusinessData() {

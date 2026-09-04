@@ -141,6 +141,26 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   utilisateurs: true,
 };
 
+export const DEFAULT_PRODUCT_UNITS = [
+  "u",
+  "kg",
+  "kilo",
+  "g",
+  "L",
+  "litre",
+  "tonne",
+  "pièce",
+  "boîte",
+  "carton",
+  "plateau",
+  "bidon",
+  "mètre",
+  "m²",
+  "voyage",
+  "sac",
+  "pack",
+];
+
 export const DEFAULT_THEME_SETTINGS = {
   preset: "slate-minimal",
   density: "compact",
