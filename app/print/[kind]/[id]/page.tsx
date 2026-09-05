@@ -22,15 +22,20 @@ import { getActiveCompanyId } from "@/lib/company";
 
 export const dynamic = "force-dynamic";
 
-const documentKinds = new Map([
+const documentKinds = new Map<string, "devis" | "facture" | "bl" | "bs" | "bc">([
   ["devis", "devis"],
   ["facture", "facture"],
+  ["factures", "facture"],
+  ["bl", "bl"],
   ["bon-livraison", "bl"],
+  ["bons-livraison", "bl"],
+  ["bs", "bs"],
   ["bon-sortie", "bs"],
+  ["bons-sortie", "bs"],
+  ["bc", "bc"],
   ["bon-commande", "bc"],
-] as const);
-
-type PrintDocumentKind = "devis" | "facture" | "bon-livraison" | "bon-sortie" | "bon-commande";
+  ["bons-commande", "bc"],
+]);
 
 export default async function PrintPage({
   params,
@@ -42,7 +47,7 @@ export default async function PrintPage({
   const { kind, id } = await params;
   const { paper } = await searchParams;
   const activeCompanyId = await getActiveCompanyId();
-  const documentKind = documentKinds.get(kind as PrintDocumentKind);
+  const documentKind = documentKinds.get(kind.toLowerCase());
 
   if (documentKind) {
     const document = getDocumentById(Number(id)) as (PrintableDocument & { company_id?: number }) | null;
@@ -65,16 +70,16 @@ export default async function PrintPage({
     return (
       <>
         <PrintTrigger />
-        {kind === "devis" ? (
+        {documentKind === "devis" ? (
           <DevisTemplate company={company} document={document} branch={branch} party={party} />
         ) : null}
-        {kind === "facture" ? (
+        {documentKind === "facture" ? (
           <FactureTemplate company={company} document={document} branch={branch} party={party} />
         ) : null}
-        {kind === "bon-livraison" ? (
+        {documentKind === "bl" ? (
           <BonLivraisonTemplate company={company} document={document} branch={branch} party={party} />
         ) : null}
-        {kind === "bon-sortie" ? (
+        {documentKind === "bs" ? (
           <BonSortieTemplate
             company={company}
             document={document}
@@ -82,14 +87,14 @@ export default async function PrintPage({
             destinationBranch={destinationBranch}
           />
         ) : null}
-        {kind === "bon-commande" ? (
+        {documentKind === "bc" ? (
           <BonCommandeTemplate company={company} document={document} branch={branch} party={party} />
         ) : null}
       </>
     );
   }
 
-  if (kind === "fiche-personnel") {
+  if (kind === "fiche-personnel" || kind === "personnel") {
     const company = getCompany(activeCompanyId);
     const employee = getEmployeeById(Number(id));
     if (!employee) {
@@ -108,7 +113,7 @@ export default async function PrintPage({
     );
   }
 
-  if (kind === "attestation") {
+  if (kind === "attestation" || kind === "attestations") {
     const company = getCompany(activeCompanyId);
     const attestation = getAttestationById(Number(id)) as PrintableAttestation | undefined;
     if (!attestation) {

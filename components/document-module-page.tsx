@@ -72,12 +72,12 @@ export async function DocumentModulePage({
     type === "devis"
       ? "devis"
       : type === "facture"
-        ? "factures"
+        ? "facture"
         : type === "bl"
-          ? "bons-livraison"
+          ? "bon-livraison"
           : type === "bc"
-            ? "bons-commande"
-            : "bons-sortie";
+            ? "bon-commande"
+            : "bon-sortie";
 
   const getDocTypeName = () => {
     switch (type) {
