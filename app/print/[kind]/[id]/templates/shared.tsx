@@ -268,10 +268,16 @@ export function SignatureStrip({
   left,
   right,
   compact = false,
+  signatureData,
+  signedByName,
+  signedAt,
 }: {
   left: string;
   right: string;
   compact?: boolean;
+  signatureData?: string;
+  signedByName?: string;
+  signedAt?: string;
 }) {
   return (
     <div className="grid grid-cols-2 gap-6 text-[11px]">
@@ -286,10 +292,24 @@ export function SignatureStrip({
       <div
         className={`rounded-xl border border-[var(--print-border-medium)] p-2.5 ${
           compact ? "min-h-[16mm]" : "min-h-[20mm]"
-        } flex flex-col justify-between text-right`}
+        } flex flex-col justify-between text-right relative overflow-hidden`}
       >
         <div className="font-bold text-[var(--print-text)]">{right}</div>
-        <div className="border-b border-dashed border-[var(--print-border-light)]" />
+        {signatureData ? (
+          <div className="flex flex-col items-end my-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={signatureData}
+              alt="Signature"
+              className="max-h-[14mm] object-contain border border-dashed border-emerald-500/40 rounded p-1 bg-emerald-50/20"
+            />
+            <div className="text-[9px] text-emerald-700 font-semibold mt-0.5">
+              ✓ Signé numériquement par {signedByName || "le client"} {signedAt ? `le ${signedAt}` : ""}
+            </div>
+          </div>
+        ) : (
+          <div className="border-b border-dashed border-[var(--print-border-light)]" />
+        )}
       </div>
     </div>
   );

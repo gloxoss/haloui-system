@@ -12,6 +12,7 @@ import { listEntities } from "@/lib/data";
 import { requirePartyFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { type PartyType } from "@/lib/types";
+import { ClientPortalAdminActions } from "@/components/portal/client-portal-admin-actions";
 
 export async function EntityManager({
   type,
@@ -103,13 +104,16 @@ export async function EntityManager({
               <tr>
                 <TH>{dict.entities.name}</TH>
                 <TH>{dict.entities.phone}</TH>
+                {type === "clients" && (
+                  <TH>{locale === "ar" ? "فضاء الزبون" : "Espace Client"}</TH>
+                )}
                 <TH>{dict.entities.address}</TH>
               </tr>
             </THead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <TD colSpan={3} className="py-8 text-center text-[var(--muted)]">
+                  <TD colSpan={type === "clients" ? 4 : 3} className="py-8 text-center text-[var(--muted)]">
                     {locale === "ar" ? "ما كاين حتى تسجيل حالياً." : `Aucun ${type === "clients" ? "client" : "fournisseur"} pour l'instant.`}
                   </TD>
                 </tr>
@@ -159,9 +163,30 @@ export async function EntityManager({
                             </ConfirmSubmitButton>
                           </div>
                         </form>
+                        {type === "clients" && (
+                          <ClientPortalAdminActions client={item} locale={locale} />
+                        )}
                       </details>
                     </TD>
                     <TD>{item.phone || item.ice || "—"}</TD>
+                    {type === "clients" && (
+                      <TD>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            PIN: {item.portal_access_code || "—"}
+                          </span>
+                          <a
+                            href={`/espace-client?token=${item.portal_token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                            title="Ouvrir le portail client"
+                          >
+                            <span>Accès ↗</span>
+                          </a>
+                        </div>
+                      </TD>
+                    )}
                     <TD>{item.address || "—"}</TD>
                   </tr>
                 ))

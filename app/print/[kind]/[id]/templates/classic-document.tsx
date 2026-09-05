@@ -291,7 +291,14 @@ export default function ClassicDocumentTemplate({
         </div>
 
         {/* Signatures & Legal Footer pinned together */}
-        <SignatureStrip left={signatureLeft} right={signatureRight} compact={isCompact} />
+        <SignatureStrip
+          left={signatureLeft}
+          right={document.signed_at ? "Bon pour accord (Signé)" : signatureRight}
+          compact={isCompact}
+          signatureData={document.signature_data}
+          signedByName={document.signed_by_name}
+          signedAt={document.signed_at}
+        />
         <AddressBar company={company} compact={isCompact} />
       </div>
     </PrintPage>

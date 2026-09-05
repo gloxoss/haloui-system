@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -526,6 +527,16 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "produits", "company_id", "INTEGER DEFAULT 1");
   ensureColumnExists(db, "chiffre_affaires", "company_id", "INTEGER DEFAULT 1");
 
+  ensureColumnExists(db, "clients", "portal_enabled", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumnExists(db, "clients", "portal_access_code", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "clients", "portal_token", "TEXT");
+  ensureColumnExists(db, "clients", "portal_last_login", "TEXT DEFAULT ''");
+
+  ensureColumnExists(db, "documents", "signed_at", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "documents", "signed_by_name", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "documents", "signature_data", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "documents", "signature_ip", "TEXT DEFAULT ''");
+
   createSettingsTable(db);
   seedFeatureFlags(db);
 
@@ -622,6 +633,28 @@ function seedSubscriptionsIfEmpty(db: Database.Database, actorId: number) {
   `).run(sub3Id);
 }
 
+function seedPortalClientAccessIfMissing(db: Database.Database) {
+  const clientsWithoutCode = db
+    .prepare(`
+      SELECT id, phone, ice
+      FROM clients
+      WHERE portal_access_code IS NULL OR portal_access_code = '' OR portal_token IS NULL OR portal_token = ''
+    `)
+    .all() as Array<{ id: number; phone?: string; ice?: string }>;
+
+  for (const client of clientsWithoutCode) {
+    const pin = String(100000 + ((client.id * 73931) % 900000));
+    const token = crypto.randomBytes(16).toString("hex");
+    db.prepare(`
+      UPDATE clients
+      SET portal_access_code = COALESCE(NULLIF(portal_access_code, ''), ?),
+          portal_token = COALESCE(NULLIF(portal_token, ''), ?),
+          portal_enabled = 1
+      WHERE id = ?
+    `).run(pin, token, client.id);
+  }
+}
+
 function initializeDatabase() {
   ensureDataDirectories();
   const isNewDatabase = !fs.existsSync(DB_PATH);
@@ -635,6 +668,7 @@ function initializeDatabase() {
   applyProductBatchV2(db, superadminId);
   applyFullProductSeedIfMissing(db, superadminId);
   seedSubscriptionsIfEmpty(db, superadminId);
+  seedPortalClientAccessIfMissing(db);
 
   if (!isNewDatabase) {
     backupDatabase(db);

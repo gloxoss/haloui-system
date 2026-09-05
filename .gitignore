@@ -24,6 +24,7 @@
 /public/uploads
 /dev.log
 /.claude
+/scratch/
 
 # misc
 .DS_Store

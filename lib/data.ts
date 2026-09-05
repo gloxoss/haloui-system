@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 
 import {
@@ -39,6 +40,8 @@ import {
   type AttestationRecord,
   type BalanceAgeeStats,
   type BranchRecord,
+  type ClientPortalData,
+  type ClientPortalSession,
   type CompanyRecord,
   type DocumentLineInput,
   type DocumentRecord,
@@ -53,6 +56,7 @@ import {
   type ManagedRole,
   type CashDaySummary,
   type PartyType,
+  type PortalDocumentItem,
   type ProductRecord,
   type RelanceCanal,
   type RelanceLogRecord,
@@ -660,9 +664,10 @@ export function listEntities(type: PartyType, search = "") {
   const db = getDb();
   const table = PARTY_TABLES[type];
   const wildcard = `%${search.trim()}%`;
+  const portalCols = type === "clients" ? ", portal_enabled, portal_access_code, portal_token, portal_last_login" : "";
   return db.prepare(
     `
-      SELECT id, name, ice, address, phone, email, notes
+      SELECT id, name, ice, address, phone, email, notes${portalCols}
       FROM ${table}
       WHERE (? = '' OR name LIKE ? OR phone LIKE ? OR ice LIKE ?)
       ORDER BY name
@@ -673,8 +678,9 @@ export function listEntities(type: PartyType, search = "") {
 export function getEntityById(type: PartyType, id: number) {
   const db = getDb();
   const table = PARTY_TABLES[type];
+  const portalCols = type === "clients" ? ", portal_enabled, portal_access_code, portal_token, portal_last_login" : "";
   return db
-    .prepare(`SELECT id, name, ice, address, phone, email, notes FROM ${table} WHERE id = ?`)
+    .prepare(`SELECT id, name, ice, address, phone, email, notes${portalCols} FROM ${table} WHERE id = ?`)
     .get(id) as EntityRecord | undefined;
 }
 
@@ -699,6 +705,27 @@ export function saveEntity(type: PartyType, input: SaveEntityInput, userId: numb
     ).run({ ...input, updated_by: userId, notes: input.notes ?? "" });
     logAudit(userId, "update", type, input.id, input);
     return input.id;
+  }
+
+  if (type === "clients") {
+    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+    const token = crypto.randomBytes(16).toString("hex");
+    const result = db.prepare(
+      `
+        INSERT INTO clients (name, ice, address, phone, email, notes, portal_enabled, portal_access_code, portal_token, created_by, updated_by)
+        VALUES (@name, @ice, @address, @phone, @email, @notes, 1, @pin, @token, @created_by, @updated_by)
+      `,
+    ).run({
+      ...input,
+      notes: input.notes ?? "",
+      pin,
+      token,
+      created_by: userId,
+      updated_by: userId,
+    });
+    const entityId = Number(result.lastInsertRowid);
+    logAudit(userId, "create", type, entityId, input);
+    return entityId;
   }
 
   const result = db.prepare(
@@ -2722,7 +2749,7 @@ export function computeMrrArr(totalTtc: number, periodicite: Periodicite): { mrr
 
 export function listSubscriptions(
   companyId?: number,
-  options?: { statut?: string; periodicite?: string; search?: string }
+  options?: { statut?: string; periodicite?: string; search?: string; clientId?: number }
 ): SubscriptionItem[] {
   const db = getDb();
   const today = todayIso();
@@ -2744,6 +2771,11 @@ export function listSubscriptions(
   if (companyId) {
     query += ` AND s.company_id = ?`;
     params.push(companyId);
+  }
+
+  if (options?.clientId) {
+    query += ` AND s.client_id = ?`;
+    params.push(options.clientId);
   }
 
   if (options?.statut && options.statut !== "all") {
@@ -3229,3 +3261,220 @@ export function toggleSubscriptionStatus(
 
   logAudit(userId ?? null, "update", "subscription", id, { newStatus });
 }
+
+// ==========================================
+// PORTAIL CLIENT DÉDIÉ (ESPACE CLIENT SÉCURISÉ)
+// ==========================================
+
+export function getClientByPortalToken(token: string): ClientPortalSession | null {
+  if (!token || typeof token !== "string") return null;
+  const db = getDb();
+  const client = db
+    .prepare(`
+      SELECT id, name, phone, email, ice, portal_token, portal_enabled
+      FROM clients
+      WHERE portal_token = ? AND portal_enabled = 1
+    `)
+    .get(token.trim()) as (EntityRecord & { portal_token: string; portal_enabled: number }) | undefined;
+
+  if (!client) return null;
+
+  db.prepare(`
+    UPDATE clients
+    SET portal_last_login = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(client.id);
+
+  return {
+    clientId: client.id,
+    name: client.name,
+    phone: client.phone,
+    ice: client.ice || undefined,
+    email: client.email || undefined,
+    token: client.portal_token,
+  };
+}
+
+export function getClientByPortalCode(identifier: string, code: string): ClientPortalSession | null {
+  if (!identifier || !code) return null;
+  const db = getDb();
+  const cleanId = identifier.trim().replace(/\s+/g, "");
+  const cleanCode = code.trim();
+
+  const client = db
+    .prepare(`
+      SELECT id, name, phone, email, ice, portal_token, portal_access_code, portal_enabled
+      FROM clients
+      WHERE portal_enabled = 1
+        AND portal_access_code = ?
+        AND (
+          REPLACE(phone, ' ', '') = ?
+          OR REPLACE(ice, ' ', '') = ?
+          OR LOWER(name) LIKE ?
+        )
+      LIMIT 1
+    `)
+    .get(cleanCode, cleanId, cleanId, `%${identifier.trim().toLowerCase()}%`) as
+    | (EntityRecord & { portal_token: string; portal_access_code: string; portal_enabled: number })
+    | undefined;
+
+  if (!client) return null;
+
+  db.prepare(`
+    UPDATE clients
+    SET portal_last_login = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(client.id);
+
+  return {
+    clientId: client.id,
+    name: client.name,
+    phone: client.phone,
+    ice: client.ice || undefined,
+    email: client.email || undefined,
+    token: client.portal_token,
+  };
+}
+
+export function getClientPortalData(clientId: number): ClientPortalData | null {
+  const db = getDb();
+  const client = db
+    .prepare(`
+      SELECT id, name, ice, address, phone, email, portal_access_code, portal_token, portal_last_login, portal_enabled
+      FROM clients
+      WHERE id = ? AND portal_enabled = 1
+    `)
+    .get(clientId) as EntityRecord | undefined;
+
+  if (!client) return null;
+
+  const company = getCompany();
+
+  const docs = db
+    .prepare(`
+      SELECT id, type, numero, date, date_echeance, total_ht, total_tva, total_ttc, avance, reste, status,
+             signed_at, signed_by_name, signature_data, notes
+      FROM documents
+      WHERE client_id = ?
+      ORDER BY date DESC, numero DESC
+    `)
+    .all(clientId) as PortalDocumentItem[];
+
+  const factures = docs.filter((d) => d.type === "facture");
+  const bons_commande = docs.filter((d) => d.type === "bc");
+  const devis = docs.filter((d) => d.type === "devis");
+  const bons_livraison = docs.filter((d) => d.type === "bl");
+
+  let totalFactureTtc = 0;
+  let totalRegleTtc = 0;
+  let soldeDuTtc = 0;
+  let facturesImpayeesCount = 0;
+
+  for (const f of factures) {
+    totalFactureTtc += f.total_ttc || 0;
+    totalRegleTtc += f.avance || 0;
+    soldeDuTtc += f.reste || 0;
+    if ((f.reste || 0) > 0.01) {
+      facturesImpayeesCount++;
+    }
+  }
+
+  const bcEnAttenteCount = bons_commande.filter((bc) => !bc.signed_at).length;
+  const abonnements = listSubscriptions(company.id, { clientId });
+
+  return {
+    client: {
+      id: client.id,
+      name: client.name,
+      ice: client.ice || "",
+      address: client.address || "",
+      phone: client.phone || "",
+      email: client.email || "",
+      portal_access_code: client.portal_access_code || "",
+      portal_token: client.portal_token || "",
+      portal_last_login: client.portal_last_login || "",
+    },
+    company,
+    stats: {
+      total_facture_ttc: Math.round(totalFactureTtc * 100) / 100,
+      total_regle_ttc: Math.round(totalRegleTtc * 100) / 100,
+      solde_du_ttc: Math.round(soldeDuTtc * 100) / 100,
+      factures_count: factures.length,
+      factures_impayees_count: facturesImpayeesCount,
+      devis_count: devis.length,
+      bc_en_attente_count: bcEnAttenteCount,
+    },
+    factures,
+    bons_commande,
+    devis,
+    bons_livraison,
+    abonnements,
+  };
+}
+
+export function signDocumentByClient(
+  clientId: number,
+  documentId: number,
+  signerName: string,
+  signatureData: string,
+  ip = ""
+): { success: boolean; error?: string } {
+  const db = getDb();
+  const doc = db
+    .prepare(`
+      SELECT id, type, client_id, status, signed_at
+      FROM documents
+      WHERE id = ? AND client_id = ?
+    `)
+    .get(documentId, clientId) as { id: number; type: string; client_id: number; status: string; signed_at?: string } | undefined;
+
+  if (!doc) {
+    return { success: false, error: "Document introuvable ou non autorisé." };
+  }
+
+  if (doc.type !== "bc") {
+    return { success: false, error: "Seuls les bons de commande peuvent être signés." };
+  }
+
+  if (doc.signed_at) {
+    return { success: false, error: "Ce document a déjà été signé électroniquement." };
+  }
+
+  db.prepare(`
+    UPDATE documents
+    SET signed_at = CURRENT_TIMESTAMP,
+        signed_by_name = ?,
+        signature_data = ?,
+        signature_ip = ?,
+        status = 'valide',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND client_id = ?
+  `).run(signerName.trim(), signatureData, ip, documentId, clientId);
+
+  logAudit(null, "sign", "document", documentId, {
+    client_id: clientId,
+    signed_by: signerName,
+    ip,
+  });
+
+  return { success: true };
+}
+
+export function regenerateClientPortalAccess(clientId: number, actorId?: number) {
+  const db = getDb();
+  const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+  const newToken = crypto.randomBytes(16).toString("hex");
+
+  db.prepare(`
+    UPDATE clients
+    SET portal_access_code = ?,
+        portal_token = ?,
+        portal_enabled = 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(newPin, newToken, clientId);
+
+  logAudit(actorId ?? null, "update", "client_portal_access", clientId, { newPin });
+  return { portal_access_code: newPin, portal_token: newToken };
+}
+

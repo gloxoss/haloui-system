@@ -19,7 +19,8 @@ export type FeatureKey =
   | "multi_langue"
   | "gestion_tva"
   | "relances"
-  | "abonnements";
+  | "abonnements"
+  | "portail_client";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -145,6 +146,10 @@ export type EntityRecord = {
   phone: string;
   email: string;
   notes?: string;
+  portal_enabled?: number;
+  portal_access_code?: string;
+  portal_token?: string;
+  portal_last_login?: string;
 };
 
 export type ProductRecord = {
@@ -204,6 +209,10 @@ export type DocumentRecord = {
   reste: number;
   notes: string;
   status: DocumentStatus;
+  signed_at?: string;
+  signed_by_name?: string;
+  signature_data?: string;
+  signature_ip?: string;
   created_by: number | null;
   updated_by: number | null;
   created_at: string;
@@ -497,5 +506,74 @@ export type SubscriptionInvoiceRecord = {
   document_date: string;
   document_date_echeance: string;
   document_reste: number;
+};
+
+export type ClientPortalSession = {
+  clientId: number;
+  name: string;
+  phone: string;
+  ice?: string;
+  email?: string;
+  token: string;
+};
+
+export type PortalDocumentItem = {
+  id: number;
+  type: DocumentType;
+  numero: number;
+  date: string;
+  date_echeance?: string;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+  avance: number;
+  reste: number;
+  status: DocumentStatus;
+  signed_at?: string;
+  signed_by_name?: string;
+  signature_data?: string;
+  notes?: string;
+};
+
+export type ClientPortalData = {
+  client: {
+    id: number;
+    name: string;
+    ice?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    portal_access_code?: string;
+    portal_token?: string;
+    portal_last_login?: string;
+  };
+  company: {
+    id: number;
+    name: string;
+    address: string;
+    phone: string;
+    ice: string;
+    logo_path: string;
+  };
+  stats: {
+    total_facture_ttc: number;
+    total_regle_ttc: number;
+    solde_du_ttc: number;
+    factures_count: number;
+    factures_impayees_count: number;
+    devis_count: number;
+    bc_en_attente_count: number;
+  };
+  factures: PortalDocumentItem[];
+  bons_commande: PortalDocumentItem[];
+  devis: PortalDocumentItem[];
+  bons_livraison: PortalDocumentItem[];
+  abonnements: SubscriptionItem[];
+};
+
+export type SignDocumentInput = {
+  documentId: number;
+  signerName: string;
+  signatureData: string;
 };
 

@@ -24,11 +24,14 @@ import {
   enregistrerReglementRapide,
   generateBatchDueInvoices,
   generateSubscriptionInvoice,
+  getClientByPortalCode,
+  getClientByPortalToken,
   getRelanceSettings,
   getRelancesLogByDocument,
   getUserById,
   listSubscriptionInvoices,
   logRelance,
+  regenerateClientPortalAccess,
   resetBusinessData,
   saveBranch,
   saveCashDayClosing,
@@ -44,6 +47,7 @@ import {
   saveSubscription,
   saveThemeSettings,
   saveUser,
+  signDocumentByClient,
   syncRevenueFromSystemSales,
   syncSelectedSalesDocuments,
   toggleSubscriptionStatus,
@@ -51,6 +55,11 @@ import {
   updateProfile,
   upsertRevenueEntry,
 } from "@/lib/data";
+import {
+  clearPortalClientSession,
+  getPortalClientSession,
+  setPortalClientSession,
+} from "@/lib/portal-auth";
 import { createDatabaseBackup } from "@/lib/db";
 import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
 import {
@@ -947,3 +956,81 @@ export async function getSubscriptionInvoicesAction(subscriptionId: number) {
   await requireAuth();
   return listSubscriptionInvoices(subscriptionId);
 }
+
+// ==========================================
+// PORTAIL CLIENT DÉDIÉ (SERVER ACTIONS)
+// ==========================================
+
+export async function loginClientPortalAction(formData: FormData) {
+  const identifier = String(formData.get("identifier") || "").trim();
+  const code = String(formData.get("code") || "").trim();
+
+  if (!identifier || !code) {
+    return { success: false, error: "Veuillez saisir votre numéro (Téléphone ou ICE) et votre Code PIN." };
+  }
+
+  const session = getClientByPortalCode(identifier, code);
+  if (!session) {
+    return {
+      success: false,
+      error: "Identifiant ou code PIN incorrect. Veuillez vérifier ou contacter votre responsable commercial.",
+    };
+  }
+
+  await setPortalClientSession(session);
+  redirect("/espace-client");
+}
+
+export async function loginClientPortalWithTokenAction(token: string) {
+  if (!token) return { success: false, error: "Lien d'accès manquant ou expiré." };
+  const session = getClientByPortalToken(token);
+  if (!session) return { success: false, error: "Ce lien d'accès est invalide ou expiré." };
+
+  await setPortalClientSession(session);
+  return { success: true };
+}
+
+export async function logoutClientPortalAction() {
+  await clearPortalClientSession();
+  redirect("/espace-client/login");
+}
+
+export async function signClientDocumentAction(input: {
+  documentId: number;
+  signerName: string;
+  signatureData: string;
+}) {
+  const session = await getPortalClientSession();
+  if (!session) {
+    return { success: false, error: "Session expirée. Veuillez vous reconnecter." };
+  }
+
+  if (!input.signerName?.trim()) {
+    return { success: false, error: "Le nom du signataire est obligatoire." };
+  }
+
+  if (!input.signatureData || !input.signatureData.startsWith("data:image/")) {
+    return { success: false, error: "Veuillez apposer votre signature sur l'écran avant de valider." };
+  }
+
+  const result = signDocumentByClient(
+    session.clientId,
+    input.documentId,
+    input.signerName,
+    input.signatureData
+  );
+
+  if (result.success) {
+    refresh(["/espace-client", "/bons-commande", `/print/bc/${input.documentId}`]);
+  }
+
+  return result;
+}
+
+export async function regenerateClientPortalAccessAction(clientId: number) {
+  const admin = await requireAuth();
+  const res = regenerateClientPortalAccess(clientId, admin.user.id);
+  refresh(["/clients"]);
+  return { success: true, ...res };
+}
+

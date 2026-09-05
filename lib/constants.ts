@@ -124,6 +124,7 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "gestion_tva", label: "Gestion de la TVA & Taxes", description: "Activer le calcul et l'affichage de la TVA sur les articles et les documents (Devis, Factures).", category: "commercial" },
   { key: "relances", label: "Relances Automatiques & Impayés", description: "Module intelligent de relances par paliers (J-3, J+7, J+15, J+30) par WhatsApp et Email.", category: "commercial" },
   { key: "abonnements", label: "Abonnements & Facturation Récurrente", description: "Gestion des contrats périodiques, prélèvements automatiques et tableau de bord MRR/ARR.", category: "commercial" },
+  { key: "portail_client", label: "Portail Client Dédié", description: "Espace client sécurisé : solde dû, téléchargement devis/factures et signature de commandes.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -145,6 +146,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   gestion_tva: true,
   relances: true,
   abonnements: true,
+  portail_client: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
