@@ -27,6 +27,7 @@ import {
 import {
   AlertCircle,
   CalendarClock,
+  CheckCircle2,
   CircleDollarSign,
   Edit,
   FileSpreadsheet,
@@ -277,24 +278,23 @@ export function SubscriptionsManager({
   };
 
   const sortOptions = [
-    { value: "echeance_asc", label: locale === "ar" ? "أقرب تاريخ استحقاق" : "Prochaine échéance (croissant)" },
-    { value: "echeance_desc", label: locale === "ar" ? "أبعد تاريخ استحقاق" : "Prochaine échéance (décroissant)" },
-    { value: "mrr_desc", label: locale === "ar" ? "الأعلى دخلاً شهرياً (MRR)" : "MRR (décroissant)" },
-    { value: "mrr_asc", label: locale === "ar" ? "الأقل دخلاً شهرياً (MRR)" : "MRR (croissant)" },
-    { value: "ttc_desc", label: locale === "ar" ? "مبلغ الفاتورة الأكبر" : "Montant par échéance (décroissant)" },
-    { value: "client_asc", label: locale === "ar" ? "العميل (أ - ي)" : "Client (A-Z)" },
+    { value: "echeance_asc", label: locale === "ar" ? "أقرب موعد فاتورة" : "Prochaine facture (plus proche)" },
+    { value: "echeance_desc", label: locale === "ar" ? "أبعد موعد فاتورة" : "Prochaine facture (plus éloignée)" },
+    { value: "mrr_desc", label: locale === "ar" ? "المبلغ الأكبر شهرياً" : "Revenu mensuel le plus élevé" },
+    { value: "mrr_asc", label: locale === "ar" ? "المبلغ الأقل شهرياً" : "Revenu mensuel le moins élevé" },
+    { value: "client_asc", label: locale === "ar" ? "اسم العميل (أ - ي)" : "Nom du client (A-Z)" },
   ];
 
   return (
     <Stack gap="md">
-      {/* Page Heading adhering to haloui-system design tokens */}
+      {/* Friendly Page Heading */}
       <PageHeading
-        eyebrow={locale === "ar" ? "إدارة الاشتراكات والمداخيل الدورية" : "Revenus Récurrents & Abonnements"}
-        title={locale === "ar" ? "الاشتراكات والفوترة الدورية" : "Abonnements & Facturation Récurrente"}
+        eyebrow={locale === "ar" ? "العقود والخدمات الدورية" : "Contrats & Abonnements"}
+        title={locale === "ar" ? "الاشتراكات والفوترة الدورية" : "Facturation Récurrente"}
         description={
           locale === "ar"
-            ? "إدارة عقود الصيانة والخدمات الدورية، تتبع مؤشرات MRR/ARR، والتوليد الآلي للفواتير في مواعيد الاستحقاق."
-            : "Gestion des contrats périodiques (maintenance, loyers, services), pilotage du MRR/ARR et génération automatisée des factures."
+            ? "إدارة عقود الصيانة، الإيجارات والخدمات المنتظمة، وتوليد الفواتير بنقرة واحدة."
+            : "Gérez vos contrats réguliers (maintenance, loyers, services) et générez vos factures en un clic."
         }
         actions={
           <Group gap="xs">
@@ -316,8 +316,8 @@ export function SubscriptionsManager({
                 onClick={() => setBatchModalOpened(true)}
               >
                 {locale === "ar"
-                  ? `توليد الفواتير المستحقة (${stats.echus_count})`
-                  : `Générer les échéances (${stats.echus_count})`}
+                  ? `فواتير مستحقة (${stats.echus_count})`
+                  : `Facturer les échéances (${stats.echus_count})`}
               </Button>
             ) : null}
 
@@ -327,15 +327,15 @@ export function SubscriptionsManager({
               leftSection={<FileSpreadsheet size={15} />}
               onClick={handleExportCsv}
             >
-              {locale === "ar" ? "تصدير CSV" : "Exporter CSV"}
+              {locale === "ar" ? "تصدير" : "Exporter"}
             </Button>
           </Group>
         }
       />
 
-      {/* 4 Executive KPI Stat Cards matching Dashboard Paper styling */}
+      {/* 4 Clean, Human-Friendly KPI Cards */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
-        {/* MRR Card */}
+        {/* Card 1: Revenu Mensuel Régulier */}
         <Paper
           radius="xl"
           withBorder
@@ -349,14 +349,14 @@ export function SubscriptionsManager({
         >
           <Group justify="space-between" align="flex-start">
             <Stack gap={4}>
-              <Text size="xs" fw={700} tt="uppercase" c="teal" style={{ letterSpacing: "0.08em" }}>
-                {locale === "ar" ? "الدخل الشهري القار (MRR)" : "MRR (Revenu Récurrent Mensuel)"}
+              <Text size="xs" fw={700} tt="uppercase" c="teal" style={{ letterSpacing: "0.05em" }}>
+                {locale === "ar" ? "المداخيل الشهرية" : "Revenu régulier / mois"}
               </Text>
               <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "#059669" }}>
                 {formatCurrency(stats.total_mrr)}
               </Text>
               <Text size="11px" c="dimmed">
-                {locale === "ar" ? "معدل الإيراد الشهري المضمون" : "Revenu récurrent normalisé / mois"}
+                {locale === "ar" ? "مجموع العقود النشطة شهرياً" : "Total calculé par mois"}
               </Text>
             </Stack>
             <div
@@ -376,7 +376,7 @@ export function SubscriptionsManager({
           </Group>
         </Paper>
 
-        {/* ARR Card */}
+        {/* Card 2: Revenu Annuel Estimé */}
         <Paper
           radius="xl"
           withBorder
@@ -390,14 +390,14 @@ export function SubscriptionsManager({
         >
           <Group justify="space-between" align="flex-start">
             <Stack gap={4}>
-              <Text size="xs" fw={700} tt="uppercase" c="indigo" style={{ letterSpacing: "0.08em" }}>
-                {locale === "ar" ? "الدخل السنوي المتوقع (ARR)" : "ARR (Revenu Récurrent Annuel)"}
+              <Text size="xs" fw={700} tt="uppercase" c="indigo" style={{ letterSpacing: "0.05em" }}>
+                {locale === "ar" ? "المداخيل السنوية المتوقعة" : "Revenu annuel estimé"}
               </Text>
               <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "#4f46e5" }}>
                 {formatCurrency(stats.total_arr)}
               </Text>
               <Text size="11px" c="dimmed">
-                MRR × 12 {locale === "ar" ? "شهراً" : "mois"}
+                {locale === "ar" ? "تقدير على 12 شهراً" : "Projection sur 12 mois"}
               </Text>
             </Stack>
             <div
@@ -417,7 +417,7 @@ export function SubscriptionsManager({
           </Group>
         </Paper>
 
-        {/* Actifs Card */}
+        {/* Card 3: Contrats Actifs */}
         <Paper
           radius="xl"
           withBorder
@@ -431,14 +431,14 @@ export function SubscriptionsManager({
         >
           <Group justify="space-between" align="flex-start">
             <Stack gap={4}>
-              <Text size="xs" fw={700} tt="uppercase" c="blue" style={{ letterSpacing: "0.08em" }}>
-                {locale === "ar" ? "العقود النشطة" : "Abonnements Actifs"}
+              <Text size="xs" fw={700} tt="uppercase" c="blue" style={{ letterSpacing: "0.05em" }}>
+                {locale === "ar" ? "العقود الجارية" : "Contrats en cours"}
               </Text>
               <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: "#2563eb" }}>
                 {stats.actifs_count}
               </Text>
               <Text size="11px" c="dimmed">
-                {stats.total_count} {locale === "ar" ? "عقد مسجل إجمالاً" : "contrat(s) au total"}
+                {stats.total_count} {locale === "ar" ? "عقد مسجل" : "contrat(s) au total"}
               </Text>
             </Stack>
             <div
@@ -458,7 +458,7 @@ export function SubscriptionsManager({
           </Group>
         </Paper>
 
-        {/* Échéances à facturer Card */}
+        {/* Card 4: Factures à Émettre */}
         <Paper
           radius="xl"
           withBorder
@@ -472,16 +472,25 @@ export function SubscriptionsManager({
         >
           <Group justify="space-between" align="flex-start">
             <Stack gap={4}>
-              <Text size="xs" fw={700} tt="uppercase" c="red" style={{ letterSpacing: "0.08em" }}>
-                {locale === "ar" ? "فواتير جاهزة للتوليد" : "Échéances à facturer"}
+              <Text size="xs" fw={700} tt="uppercase" c={stats.echus_count > 0 ? "amber.7" : "teal"} style={{ letterSpacing: "0.05em" }}>
+                {locale === "ar" ? "فواتير بانتظار الإصدار" : "Factures à émettre"}
               </Text>
-              <Text size="xl" fw={900} style={{ letterSpacing: "-0.03em", color: stats.echus_count > 0 ? "#dc2626" : "var(--foreground)" }}>
-                {stats.echus_count} {locale === "ar" ? "فاتورة" : "prête(s)"}
+              <Text
+                size="xl"
+                fw={900}
+                style={{
+                  letterSpacing: "-0.03em",
+                  color: stats.echus_count > 0 ? "#d97706" : "#059669",
+                }}
+              >
+                {stats.echus_count > 0
+                  ? `${stats.echus_count} ${locale === "ar" ? "مستحقة" : "prête(s)"}`
+                  : (locale === "ar" ? "كل شيء محين" : "À jour")}
               </Text>
               <Text size="11px" c="dimmed">
                 {stats.echus_count > 0
-                  ? `Volume : ${formatCurrency(stats.total_echu_ttc)}`
-                  : (locale === "ar" ? "جميع العقود مفوترة في موعدها" : "Tous les contrats sont à jour")}
+                  ? `${formatCurrency(stats.total_echu_ttc)} à facturer`
+                  : (locale === "ar" ? "لا توجد أي فواتير متأخرة" : "Aucune facture en attente")}
               </Text>
             </Stack>
             <div
@@ -489,68 +498,50 @@ export function SubscriptionsManager({
                 width: 42,
                 height: 42,
                 borderRadius: 12,
-                background: stats.echus_count > 0 ? "rgba(239, 68, 68, 0.12)" : "rgba(100, 116, 139, 0.12)",
-                color: stats.echus_count > 0 ? "#dc2626" : "#64748b",
+                background: stats.echus_count > 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(16, 185, 129, 0.12)",
+                color: stats.echus_count > 0 ? "#d97706" : "#059669",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <AlertCircle size={20} strokeWidth={1.8} />
+              {stats.echus_count > 0 ? <AlertCircle size={20} strokeWidth={1.8} /> : <CheckCircle2 size={20} strokeWidth={1.8} />}
             </div>
           </Group>
         </Paper>
       </SimpleGrid>
 
-      {/* Distribution Track Paper */}
-      {stats.total_count > 0 ? (
+      {/* Helpful Action Banner (Appears only when invoices are due) */}
+      {stats.echus_count > 0 && (
         <Paper
           radius="xl"
-          shadow="xs"
           withBorder
-          p="md"
-          style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
+          p="sm"
+          style={{ background: "rgba(245, 158, 11, 0.08)", borderColor: "#f59e0b" }}
         >
-          <Stack gap="xs">
-            <Group justify="space-between" align="center">
-              <Text size="sm" fw={700} style={{ color: "var(--foreground)" }}>
-                {locale === "ar" ? "توزيع الإيرادات حسب الدورية وطريقة الأداء" : "Répartition par périodicité & modes de règlement"}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {stats.actifs_count} {locale === "ar" ? "عقد نشط مساهم في MRR" : "contrat(s) actif(s) alimentant le MRR"}
+          <Group justify="space-between" align="center" className="flex-wrap gap-2">
+            <Group gap="xs">
+              <Zap size={18} className="text-amber-600 shrink-0" />
+              <Text size="sm" fw={600} c="amber.9">
+                {locale === "ar"
+                  ? `هناك ${stats.echus_count} عقد وصل موعد استحقاقه ومستعد للفوترة بمبلغ إجمالي ${formatCurrency(stats.total_echu_ttc)}.`
+                  : `${stats.echus_count} contrat(s) sont arrivés à échéance et prêts à être facturés (${formatCurrency(stats.total_echu_ttc)}).`}
               </Text>
             </Group>
-
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-[var(--muted)] pt-0.5">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shrink-0" />
-                Mensuel : <strong className="text-[var(--foreground)]">{stats.par_periodicite.mensuel.count}</strong> ({formatCurrency(stats.par_periodicite.mensuel.mrr)} MRR)
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
-                Trimestriel : <strong className="text-[var(--foreground)]">{stats.par_periodicite.trimestriel.count}</strong> ({formatCurrency(stats.par_periodicite.trimestriel.mrr)} MRR)
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
-                Semestriel : <strong className="text-[var(--foreground)]">{stats.par_periodicite.semestriel.count}</strong> ({formatCurrency(stats.par_periodicite.semestriel.mrr)} MRR)
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0" />
-                Annuel : <strong className="text-[var(--foreground)]">{stats.par_periodicite.annuel.count}</strong> ({formatCurrency(stats.par_periodicite.annuel.mrr)} MRR)
-              </span>
-              <span className="text-[var(--border-strong)]">|</span>
-              <span className="inline-flex items-center gap-1 text-[var(--foreground)] font-medium">
-                Prélèvements : <strong>{stats.par_mode_reglement.prelevement.count}</strong>
-              </span>
-              <span className="inline-flex items-center gap-1 text-[var(--foreground)] font-medium">
-                Virements : <strong>{stats.par_mode_reglement.virement.count}</strong>
-              </span>
-            </div>
-          </Stack>
+            <Button
+              color="amber"
+              size="xs"
+              radius="md"
+              leftSection={<Zap size={14} />}
+              onClick={() => setBatchModalOpened(true)}
+            >
+              {locale === "ar" ? "إصدار جميع الفواتير بنقرة واحدة" : "Tout facturer en 1 clic"}
+            </Button>
+          </Group>
         </Paper>
-      ) : null}
+      )}
 
-      {/* Tabs & Search Controls Paper */}
+      {/* Tabs & Search Controls */}
       <Paper
         radius="xl"
         shadow="xs"
@@ -559,7 +550,7 @@ export function SubscriptionsManager({
         style={{ background: "var(--card)", borderColor: "var(--border-strong)" }}
       >
         <Stack gap="sm">
-          {/* Mantine Tabs pills */}
+          {/* Friendly Tabs */}
           <Tabs
             value={activeTab}
             onChange={(val) => setActiveTab(val || "all")}
@@ -568,19 +559,19 @@ export function SubscriptionsManager({
           >
             <Tabs.List className="flex-wrap gap-1.5 border-b border-[var(--border)] pb-2.5">
               <Tabs.Tab value="all" style={{ fontWeight: 600 }}>
-                {locale === "ar" ? "جميع العقود" : "Tous les contrats"} ({subscriptions.length})
+                {locale === "ar" ? "الكل" : "Tous"} ({subscriptions.length})
               </Tabs.Tab>
               <Tabs.Tab value="actifs" color="teal" style={{ fontWeight: 600 }}>
-                {locale === "ar" ? "العقود النشطة" : "Actifs"} ({stats.actifs_count})
+                {locale === "ar" ? "الجارية" : "En cours"} ({stats.actifs_count})
               </Tabs.Tab>
-              <Tabs.Tab value="echus" color="red" style={{ fontWeight: 600 }}>
-                {locale === "ar" ? "مستحقة الفوترة الآن" : "À facturer maintenant"} ({stats.echus_count})
+              <Tabs.Tab value="echus" color="amber" style={{ fontWeight: 600 }}>
+                {locale === "ar" ? "جاهزة للفوترة" : "À facturer"} ({stats.echus_count})
               </Tabs.Tab>
               <Tabs.Tab value="suspendus" color="orange" style={{ fontWeight: 600 }}>
-                {locale === "ar" ? "معلقة" : "Suspendus"} ({stats.suspendus_count})
+                {locale === "ar" ? "موقوفة مؤقتاً" : "En pause"} ({stats.suspendus_count})
               </Tabs.Tab>
               <Tabs.Tab value="termines" color="gray" style={{ fontWeight: 600 }}>
-                {locale === "ar" ? "منتهية ومسودات" : "Terminés"}
+                {locale === "ar" ? "المنتهية" : "Terminés"}
               </Tabs.Tab>
             </Tabs.List>
           </Tabs>
@@ -589,7 +580,7 @@ export function SubscriptionsManager({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
             <TextInput
               radius="md"
-              placeholder={locale === "ar" ? "بحث بالعميل، العنوان، المرجع..." : "Rechercher client, contrat, référence..."}
+              placeholder={locale === "ar" ? "بحث باسم العميل أو العقد..." : "Rechercher un client ou contrat..."}
               leftSection={<Search size={15} />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.currentTarget.value)}
@@ -601,13 +592,13 @@ export function SubscriptionsManager({
               data={sortOptions}
               value={sortBy}
               onChange={(val) => setSortBy(val || "echeance_asc")}
-              className="w-full sm:w-64"
+              className="w-full sm:w-72"
             />
           </div>
         </Stack>
       </Paper>
 
-      {/* Main Subscriptions Table */}
+      {/* Main Clean Table */}
       <Paper
         radius="xl"
         shadow="sm"
@@ -616,28 +607,26 @@ export function SubscriptionsManager({
         style={{ background: "var(--card)", borderColor: "var(--border-strong)", overflow: "hidden" }}
       >
         <div className="overflow-x-auto w-full min-w-0">
-          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped style={{ minWidth: 720 }}>
+          <Table highlightOnHover horizontalSpacing="md" verticalSpacing="sm" striped style={{ minWidth: 680 }}>
             <TableThead>
               <TableTr>
                 <TableTh>{locale === "ar" ? "العميل والعقد" : "Client & Contrat"}</TableTh>
-                <TableTh>{locale === "ar" ? "الدورية وطريقة الدفع" : "Périodicité & Mode"}</TableTh>
-                <TableTh>{locale === "ar" ? "الفاتورة القادمة" : "Prochaine échéance"}</TableTh>
-                <TableTh>{locale === "ar" ? "المبلغ و MRR" : "Montant & MRR"}</TableTh>
-                <TableTh>{locale === "ar" ? "الحالة" : "Statut"}</TableTh>
-                <TableTh>{locale === "ar" ? "السجل" : "Factures émises"}</TableTh>
+                <TableTh>{locale === "ar" ? "المبلغ والدورية" : "Tarif & Fréquence"}</TableTh>
+                <TableTh>{locale === "ar" ? "الفاتورة القادمة" : "Prochaine facture"}</TableTh>
+                <TableTh>{locale === "ar" ? "الحالة والسجل" : "État & Historique"}</TableTh>
                 <TableTh style={{ textAlign: locale === "ar" ? "left" : "right" }}>
-                  {locale === "ar" ? "الإجراءات" : "Actions"}
+                  {locale === "ar" ? "إجراء" : "Action"}
                 </TableTh>
               </TableTr>
             </TableThead>
             <TableTbody>
               {filteredSubscriptions.length === 0 ? (
                 <TableTr>
-                  <TableTd colSpan={7} style={{ padding: "36px", textAlign: "center" }}>
-                    <Text c="dimmed">
+                  <TableTd colSpan={5} style={{ padding: "36px", textAlign: "center" }}>
+                    <Text c="dimmed" size="sm">
                       {locale === "ar"
-                        ? "ما كاين حتى عقد اشتراك في هاد الفئة حالياً."
-                        : "Aucun contrat d'abonnement trouvé pour cette sélection."}
+                        ? "ما كاين حتى عقد في هاد القائمة حالياً."
+                        : "Aucun contrat d'abonnement dans cette liste."}
                     </Text>
                   </TableTd>
                 </TableTr>
@@ -655,7 +644,7 @@ export function SubscriptionsManager({
                           {sub.client_name}
                         </Text>
                         <Group gap={6} mt={2}>
-                          <Text size="11px" c="dimmed" fw={500}>
+                          <Text size="xs" c="dimmed" fw={500}>
                             {sub.titre}
                           </Text>
                           <Badge size="xs" variant="outline" color="gray" radius="sm">
@@ -664,75 +653,64 @@ export function SubscriptionsManager({
                         </Group>
                       </TableTd>
 
-                      {/* Périodicité & Mode */}
+                      {/* Tarif & Fréquence (Ultra Intuitive) */}
                       <TableTd>
-                        <Badge size="sm" variant="light" color="blue" radius="xl">
-                          {locale === "ar" ? periodMeta.labelAr : periodMeta.label}
-                        </Badge>
-                        <Text size="11px" c="dimmed" mt={3}>
-                          {locale === "ar" ? modeMeta.labelAr : modeMeta.label}
-                        </Text>
+                        <div>
+                          <Text fw={800} size="sm" style={{ color: "var(--foreground)" }}>
+                            {formatCurrency(sub.total_ttc)}{" "}
+                            <span className="text-xs font-semibold text-teal-700">
+                              {locale === "ar" ? periodMeta.perUnitAr : periodMeta.perUnit}
+                            </span>
+                          </Text>
+                          <Text size="11px" c="dimmed" mt={1}>
+                            {locale === "ar" ? modeMeta.labelAr : modeMeta.label}
+                            {sub.periodicite !== "mensuel" ? ` · (${formatCurrency(sub.mrr)}/mois)` : ""}
+                          </Text>
+                        </div>
                       </TableTd>
 
-                      {/* Prochaine Échéance */}
+                      {/* Prochaine Facture */}
                       <TableTd>
                         <Text fw={700} size="xs">
                           {formatDate(sub.prochaine_echeance)}
                         </Text>
-                        <div className="mt-1">
-                          {sub.est_echu ? (
-                            <Badge size="xs" color="red" variant="filled" radius="xl">
-                              {locale === "ar" ? "مستحقة للفوترة" : "À facturer maintenant"}
-                            </Badge>
-                          ) : (
-                            <Badge size="xs" color="teal" variant="light" radius="xl">
-                              {locale === "ar" ? "قيد السريان" : "Échéance à venir"}
-                            </Badge>
-                          )}
-                        </div>
+                        {sub.est_echu ? (
+                          <Badge size="xs" color="red" variant="filled" radius="xl" mt={3}>
+                            {locale === "ar" ? "مستحقة اليوم" : "À facturer"}
+                          </Badge>
+                        ) : null}
                       </TableTd>
 
-                      {/* Montant & MRR */}
+                      {/* État & Historique */}
                       <TableTd>
-                        <Text fw={800} size="sm" style={{ color: "var(--foreground)" }}>
-                          {formatCurrency(sub.total_ttc)} <span className="text-[10px] font-normal text-[var(--muted)]">TTC</span>
-                        </Text>
-                        <Text size="11px" fw={700} c="teal.7">
-                          {formatCurrency(sub.mrr)} <span className="text-[10px] font-normal">MRR</span>
-                        </Text>
-                      </TableTd>
-
-                      {/* Statut */}
-                      <TableTd>
-                        <Badge
-                          size="sm"
-                          color={statutMeta.color}
-                          variant="light"
-                          radius="xl"
-                          style={{ textTransform: "none", fontWeight: 600 }}
-                        >
-                          {locale === "ar" ? statutMeta.labelAr : statutMeta.label}
-                        </Badge>
-                      </TableTd>
-
-                      {/* Factures émises */}
-                      <TableTd>
-                        {sub.factures_count > 0 ? (
-                          <Button
-                            variant="subtle"
-                            size="compact-xs"
-                            color="indigo"
-                            radius="md"
-                            leftSection={<History size={12} />}
-                            onClick={() => handleOpenHistory(sub)}
+                        <Group gap="xs" align="center">
+                          <Badge
+                            size="sm"
+                            color={statutMeta.color}
+                            variant="light"
+                            radius="xl"
+                            style={{ textTransform: "none", fontWeight: 600 }}
                           >
-                            {sub.factures_count} {locale === "ar" ? "فاتورة" : `facture${sub.factures_count > 1 ? "s" : ""}`}
-                          </Button>
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            {locale === "ar" ? "لم تصدر بعد" : "Aucune"}
-                          </Text>
-                        )}
+                            {locale === "ar" ? statutMeta.labelAr : statutMeta.label}
+                          </Badge>
+
+                          {sub.factures_count > 0 ? (
+                            <Button
+                              variant="subtle"
+                              size="compact-xs"
+                              color="indigo"
+                              radius="md"
+                              leftSection={<History size={12} />}
+                              onClick={() => handleOpenHistory(sub)}
+                            >
+                              {sub.factures_count} {locale === "ar" ? "فاتورة" : `facture${sub.factures_count > 1 ? "s" : ""}`}
+                            </Button>
+                          ) : (
+                            <Text size="xs" c="dimmed">
+                              {locale === "ar" ? "لم تصدر بعد" : "Aucune émise"}
+                            </Text>
+                          )}
+                        </Group>
                       </TableTd>
 
                       {/* Actions */}
@@ -741,13 +719,13 @@ export function SubscriptionsManager({
                           <Button
                             size="xs"
                             radius="md"
-                            color={sub.est_echu ? "amber" : "teal"}
+                            color={sub.est_echu ? "teal" : "gray"}
                             variant={sub.est_echu ? "filled" : "light"}
                             leftSection={<Play size={12} />}
                             loading={actionLoadingId === sub.id}
                             onClick={() => handleGenerateInvoice(sub)}
                           >
-                            {locale === "ar" ? "توليد فاتورة" : "Générer"}
+                            {locale === "ar" ? "إنشاء فاتورة" : "Facturer"}
                           </Button>
 
                           <Menu position={locale === "ar" ? "bottom-start" : "bottom-end"} shadow="md" width={200}>
@@ -774,8 +752,8 @@ export function SubscriptionsManager({
                                 onClick={() => handleToggleStatus(sub)}
                               >
                                 {sub.statut === "actif"
-                                  ? (locale === "ar" ? "تعليق العقد" : "Mettre en pause")
-                                  : (locale === "ar" ? "تفعيل العقد" : "Réactiver le contrat")}
+                                  ? (locale === "ar" ? "إيقاف مؤقت" : "Mettre en pause")
+                                  : (locale === "ar" ? "إعادة التفعيل" : "Réactiver le contrat")}
                               </MenuItem>
                               <MenuItem
                                 color="red"

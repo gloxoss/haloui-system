@@ -568,12 +568,12 @@ export function SubscriptionModal({
             </Stack>
           </Paper>
 
-          {/* Financial Summary & MRR / ARR live preview */}
+          {/* Financial Summary */}
           <Paper radius="xl" withBorder p="md" style={{ background: "var(--surface-soft)", borderColor: "var(--border)" }}>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
               <div>
                 <Text size="11px" c="dimmed" fw={700} tt="uppercase">
-                  {locale === "ar" ? "إجمالي الدورة (TTC)" : "Montant par Échéance"}
+                  {locale === "ar" ? "المبلغ لكل فاتورة" : "Montant par facture"}
                 </Text>
                 <Text size="lg" fw={900} style={{ color: "var(--foreground)" }}>
                   {formatCurrency(totals.totalTtc)}
@@ -585,25 +585,25 @@ export function SubscriptionModal({
 
               <div>
                 <Text size="11px" c="teal" fw={700} tt="uppercase">
-                  {locale === "ar" ? "الدخل الشهري (MRR)" : "MRR Équivalent (Mensuel)"}
+                  {locale === "ar" ? "المعدل الشهري" : "Équivalent par mois"}
                 </Text>
                 <Text size="lg" fw={900} style={{ color: "#059669" }}>
                   {formatCurrency(totals.mrr)}
                 </Text>
                 <Text size="10px" c="dimmed">
-                  {locale === "ar" ? "معدل الإيراد الشهري" : "Normalisé par mois"}
+                  {locale === "ar" ? "المبلغ محسوب شهرياً" : "Calculé sur base mensuelle"}
                 </Text>
               </div>
 
               <div>
                 <Text size="11px" c="indigo" fw={700} tt="uppercase">
-                  {locale === "ar" ? "الدخل السنوي (ARR)" : "ARR Équivalent (Annuel)"}
+                  {locale === "ar" ? "المجموع السنوي" : "Projection annuelle"}
                 </Text>
                 <Text size="lg" fw={900} style={{ color: "#4f46e5" }}>
                   {formatCurrency(totals.arr)}
                 </Text>
                 <Text size="10px" c="dimmed">
-                  MRR × 12 mois
+                  {locale === "ar" ? "على مدار 12 شهراً" : "Sur 12 mois"}
                 </Text>
               </div>
 
@@ -628,8 +628,8 @@ export function SubscriptionModal({
             <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
               <div>
                 <Switch
-                  label={locale === "ar" ? "تفعيل التوليد التلقائي" : "Éligible au batch automatique"}
-                  description={locale === "ar" ? "تضمين العقد في التوليد الجماعي" : "Inclus lors de la facturation groupée"}
+                  label={locale === "ar" ? "الفوترة بنقرة واحدة" : "Facturation en 1 clic"}
+                  description={locale === "ar" ? "تضمين هذا العقد عند الفوترة الجماعية" : "Inclus dans la facturation groupée"}
                   checked={autoGenerer}
                   onChange={(e) => setAutoGenerer(e.currentTarget.checked)}
                 />
@@ -639,10 +639,10 @@ export function SubscriptionModal({
                 <Select
                   size="xs"
                   radius="md"
-                  label={locale === "ar" ? "حالة الفاتورة عند الإنشاء" : "Statut facture générée"}
+                  label={locale === "ar" ? "نوع الفاتورة المُنشأة" : "Type de facture créée"}
                   data={[
-                    { value: "valide", label: locale === "ar" ? "معتمدة (Validée)" : "Validée (Prête)" },
-                    { value: "brouillon", label: locale === "ar" ? "مسودة (Brouillon)" : "Brouillon" },
+                    { value: "valide", label: locale === "ar" ? "فاتورة جاهزة ومعتمدة" : "Facture validée (prête)" },
+                    { value: "brouillon", label: locale === "ar" ? "مسودة (للمراجعة)" : "Brouillon (à vérifier)" },
                   ]}
                   value={genererStatut}
                   onChange={(val) => setGenererStatut((val as any) || "valide")}

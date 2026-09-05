@@ -524,11 +524,11 @@ export const RELANCE_PALIER_LABELS: Record<string, { label: string; labelAr: str
   },
 };
 
-export const PERIODICITE_LABELS: Record<string, { label: string; labelAr: string; factor: number; code: string }> = {
-  mensuel: { label: "Mensuel", labelAr: "شهري", factor: 1, code: "M" },
-  trimestriel: { label: "Trimestriel", labelAr: "فصلي (كل 3 أشهر)", factor: 3, code: "T" },
-  semestriel: { label: "Semestriel", labelAr: "نصف سنوي (كل 6 أشهر)", factor: 6, code: "S" },
-  annuel: { label: "Annuel", labelAr: "سنوي", factor: 12, code: "A" },
+export const PERIODICITE_LABELS: Record<string, { label: string; labelAr: string; perUnit: string; perUnitAr: string; factor: number; code: string }> = {
+  mensuel: { label: "Mensuel", labelAr: "شهري", perUnit: "/ mois", perUnitAr: "/ شهر", factor: 1, code: "M" },
+  trimestriel: { label: "Trimestriel", labelAr: "فصلي (كل 3 أشهر)", perUnit: "/ trimestre", perUnitAr: "/ 3 أشهر", factor: 3, code: "T" },
+  semestriel: { label: "Semestriel", labelAr: "نصف سنوي (كل 6 أشهر)", perUnit: "/ semestre", perUnitAr: "/ 6 أشهر", factor: 6, code: "S" },
+  annuel: { label: "Annuel", labelAr: "سنوي", perUnit: "/ an", perUnitAr: "/ سنة", factor: 12, code: "A" },
 };
 
 export const SUBSCRIPTION_STATUT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
