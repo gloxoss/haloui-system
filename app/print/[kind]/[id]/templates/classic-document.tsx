@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from "@/lib/exchange-rates";
 import {
   AddressBar,
   LedgerTable,
@@ -32,6 +33,12 @@ export default function ClassicDocumentTemplate({
 }: ClassicDocumentTemplateProps) {
   const printableLines = filterPrintableLines(document.lines);
   const lineCount = printableLines.length;
+
+  const dev = document.devise || "MAD";
+  const isForeign = dev !== "MAD";
+  const curSymbol = getCurrencySymbol(dev);
+  const baseRate = Number(document.taux_change) || 1;
+  const totalBase = Number(document.total_ttc_base) || (Number(document.total_ttc) * baseRate);
 
   // Smart adaptive density to prevent unnecessary page overflows
   const isCompact = lineCount > 7;
@@ -166,14 +173,14 @@ export default function ClassicDocumentTemplate({
                     isCompact ? "px-3 py-1.5" : "px-3 py-2.5"
                   } text-right`}
                 >
-                  P.U. HT
+                  {isForeign ? `P.U. HT (${curSymbol})` : "P.U. HT"}
                 </th>
                 <th
                   className={`border-b-2 border-[var(--print-border-strong)] ${
                     isCompact ? "px-3 py-1.5" : "px-4 py-2.5"
                   } text-right`}
                 >
-                  Montant TTC
+                  {isForeign ? `Montant TTC (${curSymbol})` : "Montant TTC"}
                 </th>
               </tr>
             </thead>
@@ -279,12 +286,46 @@ export default function ClassicDocumentTemplate({
 
           <TotalsBox
             rows={[
-              { label: "TOTAL TTC", value: formatPrintAmount(document.total_ttc), strong: true },
+              {
+                label: isForeign ? `TOTAL TTC (${curSymbol})` : "TOTAL TTC",
+                value: isForeign
+                  ? `${formatPrintAmount(document.total_ttc)} ${curSymbol}`
+                  : formatPrintAmount(document.total_ttc),
+                strong: true,
+              },
               ...(Number(document.avance) > 0
-                ? [{ label: "AVANCE", value: formatPrintAmount(document.avance) }]
+                ? [
+                    {
+                      label: isForeign ? `AVANCE (${curSymbol})` : "AVANCE",
+                      value: isForeign
+                        ? `${formatPrintAmount(document.avance)} ${curSymbol}`
+                        : formatPrintAmount(document.avance),
+                    },
+                  ]
                 : []),
               ...(Number(document.avance) > 0
-                ? [{ label: "RESTE À PAYER", value: formatPrintAmount(document.reste), strong: true }]
+                ? [
+                    {
+                      label: isForeign ? `RESTE À PAYER (${curSymbol})` : "RESTE À PAYER",
+                      value: isForeign
+                        ? `${formatPrintAmount(document.reste)} ${curSymbol}`
+                        : formatPrintAmount(document.reste),
+                      strong: true,
+                    },
+                  ]
+                : []),
+              ...(isForeign
+                ? [
+                    {
+                      label: "TAUX DE CHANGE",
+                      value: `1 ${dev} = ${baseRate.toFixed(4)} MAD`,
+                    },
+                    {
+                      label: "TOTAL CONVERTI MAD",
+                      value: `${formatPrintAmount(totalBase)} DH`,
+                      strong: true,
+                    },
+                  ]
                 : []),
             ]}
           />

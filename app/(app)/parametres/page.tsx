@@ -11,6 +11,7 @@ import { PageHeading } from "@/components/page-heading";
 import { ProductUnitsEditor } from "@/components/product-units-editor";
 import { RelancesSettingsPanel } from "@/components/relances/relances-settings-panel";
 import { ThemeSelectorForm } from "@/components/theme-selector-form";
+import { PortalSyncCard } from "@/components/settings/portal-sync-card";
 import { UploadField } from "@/components/upload-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +27,7 @@ import {
   FEATURE_TOGGLE_DEFINITIONS,
 } from "@/lib/constants";
 import { getActiveCompany } from "@/lib/company";
-import { getFeatureFlags, getProductUnits, getRelanceSettings, getThemeSettings, listBranches } from "@/lib/data";
+import { getFeatureFlags, getPortalSyncSettings, getProductUnits, getRelanceSettings, getThemeSettings, listBranches } from "@/lib/data";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
@@ -104,6 +105,7 @@ export default async function ParametresPage() {
   const themeSettings = getThemeSettings();
   const productUnits = getProductUnits();
   const relanceSettings = getRelanceSettings(company.id);
+  const portalSyncSettings = isSuperadmin ? getPortalSyncSettings() : null;
 
   const eyebrow = isSuperadmin
     ? dict.settings.superadminSection
@@ -304,6 +306,11 @@ export default async function ParametresPage() {
 
             <ThemeSelectorForm initialSettings={themeSettings} />
           </Card>
+
+          {/* Card: Portail Client & Synchronisation Cloud (Superadmin) */}
+          {isSuperadmin && portalSyncSettings ? (
+            <PortalSyncCard initialSettings={portalSyncSettings} locale={locale} />
+          ) : null}
 
           {/* Card: Modules & Licences */}
           {isSuperadmin ? (

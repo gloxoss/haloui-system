@@ -26,6 +26,8 @@ import {
   generateSubscriptionInvoice,
   getClientByPortalCode,
   getClientByPortalToken,
+  getPortalSyncExportPayload,
+  getPortalSyncSettings,
   getRelanceSettings,
   getRelancesLogByDocument,
   getUserById,
@@ -40,6 +42,7 @@ import {
   saveEmployee,
   saveEntity,
   saveFeatureFlags,
+  savePortalSyncSettings,
   saveProduct,
   saveProductUnits,
   saveRelanceSettings,
@@ -54,12 +57,70 @@ import {
   updateDocumentStatus,
   updateProfile,
   upsertRevenueEntry,
+  applyPortalSyncIncomingPull,
+  saveBankAccount,
+  importBankStatementData,
+  autoReconcileStatement,
+  reconcileBankOperation,
+  unreconcileBankOperation,
+  createExpenseFromBankOperation,
+  deleteBankStatement,
+  saveExchangeRate,
+  getExchangeRate,
+  syncCompanyExchangeRates,
+  deleteForexTransaction,
 } from "@/lib/data";
 import {
   clearPortalClientSession,
   getPortalClientSession,
   setPortalClientSession,
 } from "@/lib/portal-auth";
+import {
+  saveStockTransfertDraft,
+  expedierStockTransfert,
+  receptionnerStockTransfert,
+  annulerStockTransfert,
+  ajusterStockDepot,
+  getDepotStockMap,
+  getStockTransfertById,
+} from "@/lib/stock-transferts";
+import {
+  creerInventaireSession,
+  enregistrerComptageLigne,
+  scanCodeBarreInventaire,
+  alignerLignesTheorique,
+  cloturerInventaire,
+  annulerInventaire,
+} from "@/lib/inventaires";
+import {
+  creerLot,
+  creerSerie,
+  bloquerLotQuarantaine,
+  changerStatutSerie,
+} from "@/lib/lots-series";
+import {
+  calculerBesoinsApprovisionnement,
+  getReapproKPIs,
+  genererBonsCommandeFournisseur,
+  mettreAJourSeuilsProduit,
+} from "@/lib/reapprovisionnement";
+import {
+  listEmplacements,
+  creerEmplacement,
+  genererMatriceEmplacements,
+  listProduitsEmplacements,
+  assignerProduitEmplacement,
+  retirerProduitEmplacement,
+  getWmsKPIs,
+  genererPickingList,
+} from "@/lib/wms";
+import {
+  type InventaireType,
+  type SerieStatut,
+  type EmplacementType,
+  type EmplacementStatut,
+  type ReapproUrgence,
+} from "@/lib/types";
 import { createDatabaseBackup } from "@/lib/db";
 import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
 import {
@@ -514,6 +575,8 @@ export async function saveDocumentAction(formData: FormData) {
       notes: String(formData.get("notes") || ""),
       avance: toNumber(formData.get("avance")),
       status: String(formData.get("status") || "brouillon") as DocumentStatus,
+      devise: String(formData.get("devise") || "MAD").trim().toUpperCase(),
+      taux_change: Number(formData.get("taux_change")) > 0 ? Number(formData.get("taux_change")) : 1.0,
       lines,
     },
     session.user.id,
@@ -1027,6 +1090,7 @@ export async function signClientDocumentAction(input: {
   documentId: number;
   signerName: string;
   signatureData: string;
+  documentType?: string;
 }) {
   const session = await getPortalClientSession();
   if (!session) {
@@ -1049,7 +1113,14 @@ export async function signClientDocumentAction(input: {
   );
 
   if (result.success) {
-    refresh(["/espace-client", "/bons-commande", `/print/bc/${input.documentId}`]);
+    const docKind = input.documentType || "bc";
+    refresh([
+      "/espace-client",
+      "/bons-commande",
+      "/devis",
+      "/bons-livraison",
+      `/print/${docKind}/${input.documentId}`,
+    ]);
   }
 
   return result;
@@ -1070,4 +1141,1005 @@ export async function regenerateClientPortalAccessAction(clientId: number) {
   refresh(["/clients"]);
   return { success: true as const, ...res };
 }
+
+// ==========================================
+// PORTAIL CLIENT CLOUD SYNC SERVER ACTIONS
+// ==========================================
+
+export async function savePortalSyncSettingsAction(formData: FormData) {
+  const session = await requireAuth();
+  if (session.user.role !== "superadmin") {
+    return { success: false as const, error: "Accès refusé : Seul le super-administrateur peut configurer la synchronisation cloud." };
+  }
+
+  const publicUrl = String(formData.get("public_url") || "").trim();
+  const syncSecret = String(formData.get("sync_secret") || "").trim();
+  const autoSync = formData.get("auto_sync") === "1";
+
+  savePortalSyncSettings({ publicUrl, syncSecret, autoSync }, session.user.id);
+  refresh(["/parametres", "/clients"]);
+  return { success: true as const, message: "Paramètres de synchronisation cloud enregistrés avec succès." };
+}
+
+export async function regeneratePortalSyncSecretAction() {
+  const session = await requireAuth();
+  if (session.user.role !== "superadmin") {
+    return { success: false as const, error: "Accès refusé : Seul le super-administrateur peut régénérer la clé secrète." };
+  }
+
+  const crypto = await import("crypto");
+  const newSecret = crypto.randomBytes(16).toString("hex");
+  savePortalSyncSettings({ syncSecret: newSecret }, session.user.id);
+  refresh(["/parametres"]);
+  return { success: true as const, syncSecret: newSecret };
+}
+
+export async function testPortalCloudConnectionAction() {
+  const session = await requireAuth();
+  if (session.user.role !== "superadmin") {
+    return { success: false as const, error: "Accès refusé : Réservé au super-administrateur." };
+  }
+
+  const settings = getPortalSyncSettings();
+  if (!settings.publicUrl) {
+    return { success: false as const, error: "Veuillez d'abord configurer l'URL publique de votre portail client." };
+  }
+
+  try {
+    const target = `${settings.publicUrl.replace(/\/+$/, "")}/api/portal/sync`;
+    const res = await fetch(target, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${settings.syncSecret}`,
+      },
+      cache: "no-store",
+    });
+
+    if (res.status === 401) {
+      return {
+        success: false as const,
+        error: "Échec d'authentification : La clé secrète ne correspond pas à celle configurée sur le serveur distant.",
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        success: false as const,
+        error: `Le serveur distant a renvoyé le statut HTTP ${res.status}.`,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: true as const,
+      message: `Connexion établie avec succès ! (${data.service || "Portail Déployé"})`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false as const,
+      error: `Impossible de contacter l'adresse ${settings.publicUrl} (${msg}). Vérifiez que le serveur distant est bien en ligne.`,
+    };
+  }
+}
+
+export async function triggerPortalSyncAction() {
+  const session = await requireAuth();
+  if (session.user.role !== "superadmin") {
+    return { success: false as const, error: "Accès refusé : Réservé au super-administrateur." };
+  }
+
+  const settings = getPortalSyncSettings();
+  if (!settings.publicUrl) {
+    return {
+      success: false as const,
+      error: "Veuillez configurer l'URL publique de votre portail client avant de synchroniser.",
+    };
+  }
+
+  try {
+    const payload = getPortalSyncExportPayload();
+    const target = `${settings.publicUrl.replace(/\/+$/, "")}/api/portal/sync`;
+
+    const res = await fetch(target, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.syncSecret}`,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    if (res.status === 401) {
+      return {
+        success: false as const,
+        error: "Erreur d'authentification : La clé secrète est rejetée par le serveur distant.",
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        success: false as const,
+        error: `Erreur du serveur distant : statut HTTP ${res.status}.`,
+      };
+    }
+
+    const responseData = await res.json();
+    if (!responseData.success) {
+      return { success: false as const, error: responseData.error || "Erreur lors de la synchronisation." };
+    }
+
+    // Apply remote signatures and logins into local SQLite
+    const { updatedSignatures } = applyPortalSyncIncomingPull(responseData);
+
+    refresh(["/parametres", "/clients", "/bons-commande", "/espace-client"]);
+
+    return {
+      success: true as const,
+      syncedDocuments: payload.documents.length,
+      syncedClients: payload.clients.length,
+      updatedSignatures,
+      lastSyncedAt: new Date().toISOString(),
+      message: `Synchronisation réussie ! ${payload.documents.length} document(s) et ${payload.clients.length} client(s) envoyés. ${updatedSignatures} signature(s) rapatriée(s).`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false as const,
+      error: `Erreur de connexion : ${msg}`,
+    };
+  }
+}
+
+// ============================================================================
+// ACTIONS RAPPROCHEMENT BANCAIRE
+// ============================================================================
+
+export async function saveBankAccountAction(formData: FormData) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+
+  const id = formData.get("id") ? Number(formData.get("id")) : undefined;
+  const nomBanque = String(formData.get("nom_banque") || "").trim();
+  const intitule = String(formData.get("intitule_compte") || "").trim();
+  const rib = String(formData.get("rib") || "").trim();
+  const iban = String(formData.get("iban") || "").trim();
+  const bicSwift = String(formData.get("bic_swift") || "").trim();
+  const devise = String(formData.get("devise") || "MAD").trim();
+  const soldeInitial = Number(formData.get("solde_initial") || 0);
+
+  if (!nomBanque || !intitule) {
+    return { success: false as const, error: "Le nom de la banque et l'intitulé du compte sont obligatoires." };
+  }
+
+  saveBankAccount(
+    {
+      id,
+      company_id: companyId,
+      nom_banque: nomBanque,
+      intitule_compte: intitule,
+      rib,
+      iban,
+      bic_swift: bicSwift,
+      devise,
+      solde_initial: soldeInitial,
+    },
+    session.user.id,
+  );
+
+  refresh(["/rapprochement-bancaire", "/chiffre-affaires"]);
+  return { success: true as const, message: "Compte bancaire enregistré avec succès." };
+}
+
+export async function importBankStatementAction(formData: FormData) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+
+  const accountId = Number(formData.get("bank_account_id"));
+  if (!accountId) {
+    return { success: false as const, error: "Veuillez sélectionner un compte bancaire." };
+  }
+
+  const file = formData.get("file") as File | null;
+  const rawText = formData.get("raw_content") as string | null;
+
+  let fileName = "releve.csv";
+  let content = "";
+
+  if (file && file.size > 0) {
+    fileName = file.name;
+    content = await file.text();
+  } else if (rawText && rawText.trim()) {
+    content = rawText.trim();
+    fileName = String(formData.get("file_name") || "import-manuel.csv");
+  } else {
+    return { success: false as const, error: "Aucun fichier ou contenu de relevé fourni." };
+  }
+
+  try {
+    const result = importBankStatementData(
+      {
+        accountId,
+        companyId,
+        fileName,
+        rawContent: content,
+      },
+      session.user.id,
+    );
+
+    refresh(["/rapprochement-bancaire"]);
+    return {
+      success: true as const,
+      statementId: result.statementId,
+      nbOperations: result.nbOperations,
+      message: `Relevé importé avec succès : ${result.nbOperations} opération(s) bancaire(s) extraite(s).`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur d'import : ${msg}` };
+  }
+}
+
+export async function autoReconcileAction(statementId: number, minScore = 85) {
+  const session = await requireAuth();
+
+  try {
+    const result = autoReconcileStatement(statementId, minScore, session.user.id);
+    refresh(["/rapprochement-bancaire", "/factures"]);
+    return {
+      success: true as const,
+      reconciledCount: result.reconciledCount,
+      message:
+        result.reconciledCount > 0
+          ? `Rapprochement automatique terminé : ${result.reconciledCount} opération(s) lettrée(s) avec succès.`
+          : "Aucune nouvelle opération correspondant aux critères de confiance élevée n'a été trouvée.",
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur de rapprochement : ${msg}` };
+  }
+}
+
+export async function reconcileOperationAction(
+  operationId: number,
+  documentId: number,
+  documentType: string,
+) {
+  const session = await requireAuth();
+
+  try {
+    const ok = reconcileBankOperation(operationId, documentId, documentType, session.user.id);
+    if (!ok) {
+      return { success: false as const, error: "Opération ou document introuvable." };
+    }
+    refresh(["/rapprochement-bancaire", "/factures", "/chiffre-affaires"]);
+    return { success: true as const, message: "Opération rapprochée avec succès." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function unreconcileOperationAction(operationId: number) {
+  await requireAuth();
+
+  try {
+    const ok = unreconcileBankOperation(operationId);
+    if (!ok) {
+      return { success: false as const, error: "Impossible d'annuler le rapprochement pour cette opération." };
+    }
+    refresh(["/rapprochement-bancaire", "/factures", "/chiffre-affaires"]);
+    return { success: true as const, message: "Rapprochement annulé avec succès." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function createExpenseFromBankOpAction(formData: FormData) {
+  const session = await requireAuth();
+
+  const operationId = Number(formData.get("operation_id"));
+  const motif = String(formData.get("motif") || "").trim();
+  const branchId = formData.get("branch_id") ? Number(formData.get("branch_id")) : undefined;
+
+  if (!operationId) {
+    return { success: false as const, error: "Opération bancaire requise." };
+  }
+
+  try {
+    const expenseId = createExpenseFromBankOperation(operationId, motif, branchId, session.user.id);
+    refresh(["/rapprochement-bancaire", "/chiffre-affaires"]);
+    return { success: true as const, expenseId, message: "Dépense créée et opération réconciliée avec succès." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function deleteBankStatementAction(statementId: number) {
+  await requireAdmin();
+
+  try {
+    const ok = deleteBankStatement(statementId);
+    if (!ok) {
+      return { success: false as const, error: "Relevé bancaire introuvable." };
+    }
+    refresh(["/rapprochement-bancaire", "/factures"]);
+    return { success: true as const, message: "Relevé bancaire supprimé et écritures restaurées." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function saveExchangeRateAction(input: {
+  code: string;
+  nom: string;
+  nom_ar?: string;
+  symbole?: string;
+  taux: number;
+  taux_achat?: number;
+  taux_vente?: number;
+  source?: "auto_api" | "bam" | "manuel";
+  est_actif?: number;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const saved = saveExchangeRate(companyId, input, session.user.id);
+    refresh(["/devises", "/factures", "/devis", "/bons-commande", "/parametres"]);
+    return { success: true as const, rate: saved };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function syncExchangeRatesAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = await syncCompanyExchangeRates(companyId);
+    refresh(["/devises", "/factures", "/devis", "/bons-commande", "/parametres"]);
+    return res;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}`, count: 0 };
+  }
+}
+
+export async function recordPaymentWithForexAction(input: {
+  documentId: number;
+  montant: number;
+  modePaiement: string;
+  notes?: string;
+  tauxReglement?: number;
+}) {
+  const session = await requireAuth();
+  try {
+    const res = enregistrerReglementRapide(
+      input.documentId,
+      input.montant,
+      input.modePaiement,
+      input.notes || "",
+      session.user.id,
+      input.tauxReglement
+    );
+    refresh(["/factures", "/bons-commande", "/relances", "/devises", "/chiffre-affaires", "/rapprochement-bancaire"]);
+    return res;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function deleteForexTransactionAction(id: number) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ok = deleteForexTransaction(id, companyId, session.user.id);
+    refresh(["/devises"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur : ${msg}` };
+  }
+}
+
+export async function getExchangeRateForCurrencyAction(code: string) {
+  const companyId = await getActiveCompanyId();
+  const rate = getExchangeRate(companyId, code.toUpperCase());
+  return { rate: rate ? Number(rate.taux) : 1.0 };
+}
+
+/* ==========================================================================
+   Stock Transfers (Transferts Inter-Dépôts) Actions
+   ========================================================================== */
+
+export async function saveStockTransfertDraftAction(input: {
+  id?: number;
+  sourceBranchId: number;
+  destinationBranchId: number;
+  chauffeurNom?: string;
+  vehiculeMatricule?: string;
+  bonTransportRef?: string;
+  notes?: string;
+  dateTransfert?: string;
+  lignes: Array<{
+    produitId: number;
+    designation: string;
+    unite?: string;
+    quantiteExpediee: number;
+  }>;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+
+  if (input.sourceBranchId === input.destinationBranchId) {
+    return { success: false as const, error: "Le dépôt source et le dépôt de destination doivent être différents." };
+  }
+
+  if (!input.lignes || input.lignes.length === 0) {
+    return { success: false as const, error: "Veuillez ajouter au moins un article au bon de transfert." };
+  }
+
+  try {
+    const id = saveStockTransfertDraft(
+      {
+        ...input,
+        companyId,
+      },
+      session.user.id
+    );
+
+    refresh(["/transferts", "/bons-sortie"]);
+    return { success: true as const, id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur lors de l'enregistrement : ${msg}` };
+  }
+}
+
+export async function expedierStockTransfertAction(
+  id: number,
+  transportData?: {
+    chauffeurNom?: string;
+    vehiculeMatricule?: string;
+    bonTransportRef?: string;
+    notes?: string;
+  }
+) {
+  const session = await requireAuth();
+  try {
+    const userFullName = (session.user as any).full_name || session.user.name || session.user.username || "Expéditeur";
+    const ok = expedierStockTransfert(id, transportData, session.user.id, userFullName);
+    refresh(["/transferts", "/bons-sortie", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur d'expédition : ${msg}` };
+  }
+}
+
+export async function receptionnerStockTransfertAction(
+  id: number,
+  receptionLines: Array<{
+    lineId: number;
+    quantiteRecue: number;
+    motifEcart?: string;
+  }>,
+  motifGlobal?: string
+) {
+  const session = await requireAuth();
+  try {
+    const userFullName = (session.user as any).full_name || session.user.name || session.user.username || "Réceptionnaire";
+    const ok = receptionnerStockTransfert(
+      id,
+      receptionLines,
+      session.user.id,
+      userFullName,
+      motifGlobal
+    );
+    refresh(["/transferts", "/bons-sortie", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur de réception : ${msg}` };
+  }
+}
+
+export async function annulerStockTransfertAction(id: number) {
+  const session = await requireAuth();
+  try {
+    const ok = annulerStockTransfert(id, session.user.id);
+    refresh(["/transferts", "/bons-sortie", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur d'annulation : ${msg}` };
+  }
+}
+
+export async function ajusterStockDepotAction(
+  branchId: number,
+  produitId: number,
+  nouvelleQuantite: number,
+  motif: string
+) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ok = ajusterStockDepot(
+      companyId,
+      branchId,
+      produitId,
+      nouvelleQuantite,
+      motif,
+      session.user.id
+    );
+    refresh(["/transferts", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: `Erreur d'ajustement : ${msg}` };
+  }
+}
+
+export async function getBranchStockMapAction(branchId: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const map = getDepotStockMap(companyId, branchId);
+    return { success: true as const, stockMap: map };
+  } catch (err) {
+    return { success: false as const, stockMap: {} };
+  }
+}
+
+// ============================================================
+// SERVER ACTIONS : INVENTAIRES TOURNANTS & PÉRIODIQUES
+// ============================================================
+
+export async function creerInventaireSessionAction(data: {
+  branchId: number;
+  titre: string;
+  typeInventaire: InventaireType;
+  critereFiltre?: string;
+  notes?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const userFullName = (session.user as any).full_name || session.user.name || session.user.username;
+    const inv = creerInventaireSession({
+      ...data,
+      companyId,
+      userId: session.user.id,
+      userFullName,
+    });
+    refresh(["/inventaires", "/transferts", "/produits"]);
+    return { success: true as const, inventaire: inv };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function enregistrerComptageLigneAction(
+  ligneId: number,
+  stockPhysique: number,
+  motifEcart?: string
+) {
+  await requireAuth();
+  try {
+    const ok = enregistrerComptageLigne(ligneId, stockPhysique, motifEcart);
+    refresh(["/inventaires"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function scanCodeBarreInventaireAction(
+  inventaireId: number,
+  codeBarre: string,
+  quantiteAjout: number = 1
+) {
+  await requireAuth();
+  try {
+    const res = scanCodeBarreInventaire(inventaireId, codeBarre, quantiteAjout);
+    refresh(["/inventaires"]);
+    return res;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, message: msg };
+  }
+}
+
+export async function alignerLignesTheoriqueAction(
+  inventaireId: number,
+  mode: "non_comptes" | "tous" = "non_comptes"
+) {
+  await requireAuth();
+  try {
+    const ok = alignerLignesTheorique(inventaireId, mode);
+    refresh(["/inventaires"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function cloturerInventaireAction(inventaireId: number) {
+  const session = await requireAuth();
+  try {
+    const userFullName = (session.user as any).full_name || session.user.name || session.user.username;
+    const ok = cloturerInventaire(inventaireId, session.user.id, userFullName);
+    refresh(["/inventaires", "/transferts", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function annulerInventaireAction(inventaireId: number) {
+  const session = await requireAuth();
+  try {
+    const ok = annulerInventaire(inventaireId, session.user.id);
+    refresh(["/inventaires"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================
+// SERVER ACTIONS : TRAÇABILITÉ DES LOTS & SÉRIES (DLC / DLUO)
+// ============================================================
+
+export async function creerLotAction(data: {
+  branchId: number;
+  produitId: number;
+  numeroLot: string;
+  dateFabrication?: string;
+  datePeremption: string;
+  quantiteInitiale: number;
+  coutUnitaireHt?: number;
+  fournisseurId?: number;
+  notes?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const lot = creerLot({ ...data, companyId });
+    refresh(["/lots-series", "/produits", "/transferts"]);
+    return { success: true as const, lot };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function creerSerieAction(data: {
+  branchId: number;
+  produitId: number;
+  numeroSerie: string;
+  documentAchatRef?: string;
+  garantieFinDate?: string;
+  notes?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const serie = creerSerie({ ...data, companyId });
+    refresh(["/lots-series", "/produits", "/transferts"]);
+    return { success: true as const, serie };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function bloquerLotQuarantaineAction(lotId: number, motif: string) {
+  const session = await requireAuth();
+  try {
+    const ok = bloquerLotQuarantaine(lotId, motif, session.user.id);
+    refresh(["/lots-series", "/produits", "/transferts", "/inventaires"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function changerStatutSerieAction(
+  serieId: number,
+  statut: SerieStatut,
+  motif?: string
+) {
+  const session = await requireAuth();
+  try {
+    const ok = changerStatutSerie(serieId, statut, motif, session.user.id);
+    refresh(["/lots-series", "/produits"]);
+    return { success: Boolean(ok) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ==========================================
+// RÉAPPROVISIONNEMENT INTELLIGENT ACTIONS
+// ==========================================
+
+export async function calculerBesoinsApprovisionnementAction(options?: {
+  branchId?: number;
+  horizonJours?: number;
+  categorie?: string;
+  fournisseurId?: number;
+  urgence?: ReapproUrgence;
+  search?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const suggestions = calculerBesoinsApprovisionnement({
+      ...options,
+      companyId,
+    });
+    return { success: true as const, suggestions };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, suggestions: [] };
+  }
+}
+
+export async function getReapproKPIsAction(options?: {
+  branchId?: number;
+  horizonJours?: number;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const kpis = getReapproKPIs({
+      ...options,
+      companyId,
+    });
+    return { success: true as const, kpis };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false as const,
+      error: msg,
+      kpis: {
+        articlesEnRupture: 0,
+        articlesACommander: 0,
+        articlesSurstock: 0,
+        budgetReapproEstimeHT: 0,
+        fournisseursConcernes: 0,
+      },
+    };
+  }
+}
+
+export async function genererBonsCommandeFournisseurAction(
+  items: Array<{ produitId: number; quantite: number; prixUnitaireHT?: number }>,
+  options: {
+    branchId?: number;
+    dateLivraisonSouhaitee?: string;
+    notes?: string;
+  }
+) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const bcs = genererBonsCommandeFournisseur(items, {
+      ...options,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/reapprovisionnement", "/bons-commande", "/produits", "/transferts"]);
+    return { success: true as const, bcs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, bcs: [] };
+  }
+}
+
+export async function mettreAJourSeuilsProduitAction(
+  produitId: number,
+  data: {
+    stock_minimum?: number;
+    stock_maximum?: number;
+    delai_livraison_jours?: number;
+    fournisseur_principal_id?: number | null;
+    conditionnement_achat?: number;
+    emplacement_code?: string;
+  }
+) {
+  await requireAuth();
+  try {
+    mettreAJourSeuilsProduit(produitId, data);
+    refresh(["/reapprovisionnement", "/produits", "/emplacements"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ==========================================
+// WMS & EMPLACEMENTS ACTIONS
+// ==========================================
+
+export async function listEmplacementsAction(options?: {
+  branchId?: number;
+  zone?: string;
+  type?: EmplacementType;
+  statut?: EmplacementStatut;
+  search?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const emplacements = listEmplacements({
+      ...options,
+      companyId,
+    });
+    return { success: true as const, emplacements };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, emplacements: [] };
+  }
+}
+
+export async function creerEmplacementAction(data: {
+  branchId: number;
+  zone: string;
+  allee: string;
+  travee: string;
+  niveau: string;
+  bac: string;
+  type_emplacement?: EmplacementType;
+  capacite_max_kg?: number;
+  statut?: EmplacementStatut;
+  notes?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const emplacement = creerEmplacement({
+      ...data,
+      companyId,
+    });
+    refresh(["/emplacements", "/produits"]);
+    return { success: true as const, emplacement };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function genererMatriceEmplacementsAction(data: {
+  branchId: number;
+  zone: string;
+  allees: string[];
+  nbTravees: number;
+  nbNiveaux: number;
+  bacsParNiveau: string[];
+  type_emplacement?: EmplacementType;
+  capacite_max_kg?: number;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = genererMatriceEmplacements({
+      ...data,
+      companyId,
+    });
+    refresh(["/emplacements", "/produits"]);
+    return { success: true as const, totalCrees: res.totalCrees };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, totalCrees: 0 };
+  }
+}
+
+export async function listProduitsEmplacementsAction(options?: {
+  branchId?: number;
+  produitId?: number;
+  emplacementId?: number;
+  search?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const list = listProduitsEmplacements({
+      ...options,
+      companyId,
+    });
+    return { success: true as const, list };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, list: [] };
+  }
+}
+
+export async function assignerProduitEmplacementAction(data: {
+  branchId: number;
+  produitId: number;
+  emplacementId: number;
+  quantite?: number;
+  capaciteMax?: number;
+  estPrincipal?: boolean;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    assignerProduitEmplacement({
+      ...data,
+      companyId,
+    });
+    refresh(["/emplacements", "/produits"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function retirerProduitEmplacementAction(produitEmplacementId: number) {
+  await requireAuth();
+  try {
+    retirerProduitEmplacement(produitEmplacementId);
+    refresh(["/emplacements", "/produits"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getWmsKPIsAction(options?: { branchId?: number }) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const kpis = getWmsKPIs({
+      ...options,
+      companyId,
+    });
+    return { success: true as const, kpis };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false as const,
+      error: msg,
+      kpis: {
+        totalEmplacements: 0,
+        emplacementsOccupes: 0,
+        emplacementsVides: 0,
+        tauxOccupation: 0,
+        totalProduitsCartographies: 0,
+      },
+    };
+  }
+}
+
+export async function genererPickingListAction(documentId: number) {
+  await requireAuth();
+  try {
+    const pickingList = genererPickingList(documentId);
+    return { success: true as const, pickingList };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { loginClientPortalAction } from "@/app/actions";
+import { Lock, ShieldCheck, ArrowRight, Smartphone, KeyRound, AlertCircle, Loader2 } from "lucide-react";
 
 export default function ClientPortalLoginPage() {
   const [lang, setLang] = useState<"fr" | "ar">("fr");
@@ -22,7 +23,6 @@ export default function ClientPortalLoginPage() {
         setIsLoading(false);
       }
     } catch (err: any) {
-      // Next.js redirect throws NEXT_REDIRECT which is normal
       if (err?.message === "NEXT_REDIRECT") {
         return;
       }
@@ -33,72 +33,78 @@ export default function ClientPortalLoginPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] px-4 py-12 transition-colors"
+      className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] px-4 py-12 selection:bg-[var(--accent-soft)]"
       dir={isArabic ? "rtl" : "ltr"}
     >
-      {/* Language Switch */}
+      {/* Top Bar with Language Switcher */}
       <div className="absolute top-6 right-6">
         <button
           type="button"
           onClick={() => setLang(isArabic ? "fr" : "ar")}
-          className="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] text-xs font-semibold text-[var(--foreground)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all shadow-2xs cursor-pointer"
         >
-          {isArabic ? "Français (FR)" : "العربية (AR)"}
+          <span>{isArabic ? "Français" : "العربية"}</span>
         </button>
       </div>
 
-      <div className="w-full max-w-md space-y-6">
-        {/* Branding */}
+      <div className="w-full max-w-sm space-y-6">
+        {/* Header Branding */}
         <div className="text-center space-y-2">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white font-black text-2xl shadow-lg shadow-blue-600/20 mb-2">
-            H
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--foreground)] text-[var(--background)] font-black text-lg shadow-sm mb-1">
+            <Lock className="h-5 w-5" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-[var(--foreground)]">
-            {isArabic ? "بوابة الزبون الآمنة" : "Espace Client Sécurisé"}
+          <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
+            {isArabic ? "فضاء الزبون" : "Espace Client"}
           </h1>
-          <p className="text-xs sm:text-sm text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)] leading-relaxed max-w-xs mx-auto">
             {isArabic
-              ? "الاطلاع الفوري على فواتيرك، عروض الأسعار، وتوقيع طلبات الشراء إلكترونياً."
-              : "Consultez vos devis et factures, suivez votre solde et signez vos bons de commande en ligne."}
+              ? "الاطلاع على الفواتير، عروض الأسعار وتوقيع التوصيل والطلبيات إلكترونياً."
+              : "Consultez vos factures et devis, et signez vos bons de livraison ou de commande."}
           </p>
         </div>
 
-        {/* Login Card */}
-        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6 sm:p-8 shadow-xl">
+        {/* Login Form Card */}
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-xs">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Phone or ICE */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                {isArabic ? "رقم الهاتف أو المعرف الموحد (ICE)" : "Téléphone ou N° ICE"}
+              <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--muted-strong)]">
+                <Smartphone className="h-3.5 w-3.5 text-[var(--muted)]" />
+                <span>{isArabic ? "رقم الهاتف أو المعرف الموحد (ICE)" : "Téléphone ou Identifiant ICE"}</span>
               </label>
               <input
                 type="text"
                 name="identifier"
                 required
-                placeholder={isArabic ? "مثال: 0535662101 أو ICE" : "Ex: 05 35 66 21 01 ou ICE"}
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-medium text-[var(--foreground)] placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                autoFocus
+                placeholder={isArabic ? "05 35 66 21 01 أو رقم ICE" : "05 35 66 21 01 ou ICE"}
+                className="w-full h-10 rounded-xl border border-[var(--border)] bg-[var(--background-alt)] px-3.5 text-sm font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--card)] transition-colors"
               />
             </div>
 
             {/* PIN Code */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                {isArabic ? "الرمز السري (Code PIN مكون من 6 أرقام)" : "Code PIN d'accès (6 chiffres)"}
+              <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--muted-strong)]">
+                <KeyRound className="h-3.5 w-3.5 text-[var(--muted)]" />
+                <span>{isArabic ? "الرمز السري (Code PIN)" : "Code PIN confidentiel (6 chiffres)"}</span>
               </label>
               <input
                 type="password"
                 name="code"
                 required
-                maxLength={10}
+                maxLength={8}
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="••••••"
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-mono tracking-widest text-[var(--foreground)] placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 text-center text-lg"
+                className="w-full h-10 rounded-xl border border-[var(--border)] bg-[var(--background-alt)] px-3.5 text-sm font-mono tracking-widest text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--card)] text-center text-base transition-colors"
               />
             </div>
 
-            {/* Error banner */}
+            {/* Error message */}
             {error && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold">
-                ⚠️ {error}
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
@@ -106,41 +112,33 @@ export default function ClientPortalLoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-3 text-white font-black text-sm shadow-md hover:shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
+              className="w-full h-11 rounded-xl bg-[var(--foreground)] text-[var(--background)] hover:opacity-90 disabled:opacity-50 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.99]"
             >
               {isLoading ? (
-                <>
-                  <span className="inline-block animate-spin">⏳</span>
-                  <span>{isArabic ? "جاري الدخول..." : "Connexion en cours..."}</span>
-                </>
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  <span>🔐</span>
-                  <span>{isArabic ? "تسجيل الدخول" : "Accéder à mon espace"}</span>
+                  <span>{isArabic ? "الدخول إلى حسابي" : "Accéder à mon espace"}</span>
+                  <ArrowRight className={`h-3.5 w-3.5 ${isArabic ? "rotate-180" : ""}`} />
                 </>
               )}
             </button>
           </form>
 
-          {/* Help & Support Note */}
-          <div className="mt-6 pt-4 border-t border-[var(--border)] text-center text-xs text-[var(--muted)] space-y-1">
+          {/* Footer Assistance */}
+          <div className="mt-5 pt-4 border-t border-[var(--border)] text-center text-[11px] text-[var(--muted)] leading-relaxed">
             <p>
               {isArabic
-                ? "هل نسيت رمز PIN أو لا تملكه بعد ؟"
-                : "Vous n'avez pas encore votre code PIN d'accès ?"}
-            </p>
-            <p className="font-semibold text-zinc-700 dark:text-zinc-300">
-              {isArabic
-                ? "تواصل مع مصلحة الزبناء أو المحاسبة لتسلم رابطك المباشر."
-                : "Contactez votre responsable commercial pour recevoir votre lien sécurisé."}
+                ? "رمز الدخول PIN يتم تسليمه من طرف مسؤول المبيعات."
+                : "Votre code PIN vous est transmis par votre responsable commercial."}
             </p>
           </div>
         </div>
 
-        {/* Security badge */}
-        <div className="flex items-center justify-center gap-2 text-xs text-[var(--muted)] font-medium">
-          <span>🛡️</span>
-          <span>{isArabic ? "اتصال مشفر وآمن 256-bit SSL" : "Connexion sécurisée et chiffrée SSL"}</span>
+        {/* Trust & Security Tag */}
+        <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--muted)]">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span>{isArabic ? "ولوج آمن ومشفر بروتوكول SSL 256-bit" : "Session chiffrée & authentifiée de bout en bout"}</span>
         </div>
       </div>
     </div>

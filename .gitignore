@@ -52,6 +52,7 @@ next-env.d.ts
 # IDE & System
 .vscode/
 .idea/
+.agents/
 Thumbs.db
 .DS_Store
 *.swp

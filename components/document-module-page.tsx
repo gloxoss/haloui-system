@@ -17,7 +17,7 @@ import {
   TableTr,
   Text,
 } from "@mantine/core";
-import { Eye, MoreHorizontal, Plus, Printer } from "lucide-react";
+import { ArrowLeftRight, Eye, MoreHorizontal, Plus, Printer } from "lucide-react";
 
 import { DocumentFilterBar } from "@/components/document-filter-bar";
 import { PageHeading } from "@/components/page-heading";
@@ -114,14 +114,28 @@ export async function DocumentModulePage({
             : "Retrouvez, filtrez et ouvrez vos documents."
         }
         actions={
-          <Button
-            component={Link}
-            href={`/${slug}/new`}
-            radius="md"
-            leftSection={<Plus size={15} />}
-          >
-            {locale === "ar" ? `+ إضافة ${getDocTypeName()}` : `Nouveau ${DOCUMENT_TYPE_COMPACT_LABELS[type]}`}
-          </Button>
+          <Group gap="xs">
+            {type === "bs" && (
+              <Button
+                component={Link}
+                href="/transferts"
+                variant="light"
+                color="blue"
+                radius="md"
+                leftSection={<ArrowLeftRight size={15} />}
+              >
+                {locale === "ar" ? "التحويلات بين المخازن (مرحلتين)" : "Transferts inter-dépôts (2 étapes)"}
+              </Button>
+            )}
+            <Button
+              component={Link}
+              href={`/${slug}/new`}
+              radius="md"
+              leftSection={<Plus size={15} />}
+            >
+              {locale === "ar" ? `+ إضافة ${getDocTypeName()}` : `Nouveau ${DOCUMENT_TYPE_COMPACT_LABELS[type]}`}
+            </Button>
+          </Group>
         }
       />
 

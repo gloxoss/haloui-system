@@ -61,6 +61,7 @@ export type TranslationDictionary = {
     clients: string;
     fournisseurs: string;
     caisse: string;
+    rapprochement: string;
     personnel: string;
     parametres: string;
     utilisateurs: string;

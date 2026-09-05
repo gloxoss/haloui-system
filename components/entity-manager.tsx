@@ -9,7 +9,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getAuthSession } from "@/lib/auth";
-import { listEntities } from "@/lib/data";
+import { getPortalSyncSettings, listEntities } from "@/lib/data";
 import { requirePartyFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { type PartyType } from "@/lib/types";
@@ -31,6 +31,7 @@ export async function EntityManager({
   const dict = getServerDictionary(locale);
   const session = await getAuthSession();
   const isSuperadmin = session?.user?.role === "superadmin";
+  const portalSettings = type === "clients" ? getPortalSyncSettings() : null;
 
   const saveAction = saveEntityAction.bind(null, type);
   const deleteAction = deleteEntityAction.bind(null, type);
@@ -179,7 +180,7 @@ export async function EntityManager({
                           </div>
                         </form>
                         {type === "clients" && isSuperadmin && (
-                          <ClientPortalAdminActions client={item} locale={locale} />
+                          <ClientPortalAdminActions client={item} locale={locale} publicUrl={portalSettings?.publicUrl} />
                         )}
                       </details>
                     </TD>
@@ -191,7 +192,11 @@ export async function EntityManager({
                             PIN: {item.portal_access_code || "—"}
                           </span>
                           <a
-                            href={`/espace-client?token=${item.portal_token}`}
+                            href={
+                              portalSettings?.publicUrl?.trim()
+                                ? `${portalSettings.publicUrl.trim().replace(/\/+$/, "")}/espace-client?token=${item.portal_token}`
+                                : `/espace-client?token=${item.portal_token}`
+                            }
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"

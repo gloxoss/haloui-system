@@ -61,6 +61,7 @@ export const fr: TranslationDictionary = {
     clients: "Clients",
     fournisseurs: "Fournisseurs",
     caisse: "Chiffre d'affaires & Caisse",
+    rapprochement: "Rapprochement bancaire",
     personnel: "Personnel & Salaires",
     parametres: "Paramètres",
     utilisateurs: "Utilisateurs",

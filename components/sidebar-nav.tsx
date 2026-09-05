@@ -3,20 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ArrowLeftRight,
   BellRing,
+  Boxes,
   Building2,
   CalendarClock,
   ChevronDown,
   ClipboardList,
+  Coins,
   FileSpreadsheet,
   FileText,
+  Landmark,
   LayoutDashboard,
+  MapPin,
   MoreHorizontal,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
   Receipt,
+  ScanBarcode,
   ShieldCheck,
+  ShoppingCart,
   SlidersHorizontal,
   TrendingUp,
   Truck,
@@ -49,9 +56,16 @@ const navIcons = {
   "/relances": BellRing,
   "/personnel": Users,
   "/chiffre-affaires": TrendingUp,
+  "/rapprochement-bancaire": Landmark,
+  "/devises": Coins,
   "/bons-livraison": Truck,
   "/bons-sortie": FileSpreadsheet,
   "/bons-commande": ClipboardList,
+  "/transferts": ArrowLeftRight,
+  "/inventaires": ScanBarcode,
+  "/lots-series": Boxes,
+  "/reapprovisionnement": ShoppingCart,
+  "/emplacements": MapPin,
   "/produits": Package,
   "/clients": UserRound,
   "/fournisseurs": Building2,
@@ -135,9 +149,16 @@ export function SidebarNav({
       case "/relances": return t.nav.relances;
       case "/personnel": return t.nav.personnel;
       case "/chiffre-affaires": return t.nav.caisse;
+      case "/rapprochement-bancaire": return locale === "ar" ? "المطابقة البنكية" : "Rapprochement bancaire";
+      case "/devises": return locale === "ar" ? "العملات والصرف" : "Devises & Changes";
       case "/bons-livraison": return t.nav.bl;
       case "/bons-sortie": return t.nav.bs;
       case "/bons-commande": return t.nav.bc;
+      case "/transferts": return locale === "ar" ? "تحويلات المخزون" : "Transferts stock";
+      case "/inventaires": return locale === "ar" ? "الجرد والتسوية" : "Inventaires & Comptage";
+      case "/lots-series": return locale === "ar" ? "الدفعات وتواريخ الصلاحية" : "Lots, Séries & DLC";
+      case "/reapprovisionnement": return locale === "ar" ? "إعادة التموين الذكية" : "Réapprovisionnement";
+      case "/emplacements": return locale === "ar" ? "إدارة المواقع والالتقاط" : "Emplacements & WMS";
       case "/produits": return t.nav.produits;
       case "/clients": return t.nav.clients;
       case "/fournisseurs": return t.nav.fournisseurs;

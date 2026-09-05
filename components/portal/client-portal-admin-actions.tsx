@@ -7,11 +7,13 @@ import { type EntityRecord } from "@/lib/types";
 interface ClientPortalAdminActionsProps {
   client: EntityRecord;
   locale?: string;
+  publicUrl?: string;
 }
 
 export function ClientPortalAdminActions({
   client,
   locale = "fr",
+  publicUrl,
 }: ClientPortalAdminActionsProps) {
   const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -21,10 +23,12 @@ export function ClientPortalAdminActions({
   const isArabic = locale === "ar";
 
   const getPortalUrl = () => {
-    if (typeof window === "undefined") {
-      return `/espace-client?token=${currentToken}`;
-    }
-    return `${window.location.origin}/espace-client?token=${currentToken}`;
+    const base = publicUrl?.trim()
+      ? publicUrl.trim().replace(/\/+$/, "")
+      : typeof window !== "undefined"
+        ? window.location.origin
+        : "";
+    return `${base}/espace-client?token=${currentToken}`;
   };
 
   const handleCopy = async () => {

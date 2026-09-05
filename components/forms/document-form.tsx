@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { startTransition, useMemo, useState, useTransition } from "react";
-import { Building2, Check, Package, Plus, Search, UserPlus } from "lucide-react";
+import { Building2, Check, Coins, Package, Plus, RefreshCw, Search, UserPlus } from "lucide-react";
 
 import {
   convertDocumentAction,
+  getExchangeRateForCurrencyAction,
   quickCreateEntityAction,
   saveDocumentAction,
   updateDocumentStatusAction,
@@ -23,10 +24,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_PRODUCT_UNITS,
   DEFAULT_TVA_RATE,
+  DEVISES_STANDARDS,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_COMPACT_LABELS,
   DOCUMENT_TYPE_LABELS,
 } from "@/lib/constants";
+import { getCurrencySymbol } from "@/lib/exchange-rates";
 import { computeDocumentTotals } from "@/lib/totals";
 import { type DocumentLineInput, type PartyType } from "@/lib/types";
 import { useTranslation } from "@/lib/i18n";
@@ -104,7 +107,29 @@ export function DocumentForm({
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [date, setDate] = useState(toInputDate(document?.date));
   const [notes, setNotes] = useState(document?.notes ?? "");
+  const [devise, setDevise] = useState<string>(document?.devise || "MAD");
+  const [tauxChange, setTauxChange] = useState<number>(Number(document?.taux_change) || 1.0);
+  const [isFetchingRate, setIsFetchingRate] = useState<boolean>(false);
   const [advanceValue, setAdvanceValue] = useState<number>(Number(document?.avance ?? 0));
+
+  const handleDeviseChange = async (newDevise: string) => {
+    setDevise(newDevise);
+    if (newDevise === "MAD") {
+      setTauxChange(1.0);
+      return;
+    }
+    setIsFetchingRate(true);
+    try {
+      const res = await getExchangeRateForCurrencyAction(newDevise);
+      if (res?.rate && res.rate > 0) {
+        setTauxChange(res.rate);
+      }
+    } catch (err) {
+      console.error("Erreur récupération taux devise:", err);
+    } finally {
+      setIsFetchingRate(false);
+    }
+  };
   const [branchId, setBranchId] = useState(stringValue(document?.branch_id) || (branches[0] ? String(branches[0].id) : ""));
   const [sourceBranchId, setSourceBranchId] = useState(stringValue(document?.source_branch_id));
   const [destinationBranchId, setDestinationBranchId] = useState(stringValue(document?.destination_branch_id));
@@ -407,6 +432,85 @@ export function DocumentForm({
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+
+  const renderCurrencySection = () => (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)]/50 p-4 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--accent)] shadow-2xs">
+            <Coins size={20} strokeWidth={2} />
+          </div>
+          <div>
+            <h4 className="text-sm font-extrabold text-[var(--foreground)]">
+              {locale === "ar" ? "عملة الفوترة والصرف" : "Devise de facturation & Taux de change"}
+            </h4>
+            <p className="text-xs text-[var(--muted)]">
+              {locale === "ar"
+                ? "دعم المعاملات بالعملات الأجنبية مع التحويل التلقائي للدرهم"
+                : "Facturation en devises avec conversion automatique vers la devise de base (MAD)"}
+            </p>
+          </div>
+        </div>
+        {devise !== "MAD" ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+            <span>1 {devise} = {tauxChange.toFixed(4)} MAD</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label={locale === "ar" ? "العملة" : "Devise"}>
+          <Select value={devise} onValueChange={handleDeviseChange} disabled={locked}>
+            <SelectTrigger className="h-10 rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DEVISES_STANDARDS.map((d) => (
+                <SelectItem key={d.code} value={d.code}>
+                  {d.nom} ({d.code} - {d.symbole})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {devise !== "MAD" ? (
+          <>
+            <Field label={locale === "ar" ? `سعر الصرف (1 ${devise} بالدرهم)` : `Taux de change (1 ${devise} en MAD)`}>
+              <div className="relative">
+                <Input
+                  type="number"
+                  step="0.0001"
+                  value={tauxChange}
+                  disabled={locked}
+                  onChange={(e) => setTauxChange(Number(e.target.value) || 1)}
+                  className="h-10 rounded-xl pr-9 font-mono font-bold"
+                />
+                <button
+                  type="button"
+                  disabled={isFetchingRate || locked}
+                  onClick={() => handleDeviseChange(devise)}
+                  title="Réactualiser le cours"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw size={14} className={isFetchingRate ? "animate-spin" : ""} />
+                </button>
+              </div>
+            </Field>
+
+            <div className="flex flex-col justify-end">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs">
+                <span className="text-[var(--muted)]">Contre-valeur totale TTC : </span>
+                <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                  {formatCurrency((tvaEnabled ? computed.totals.total_ttc : computed.totals.total_ht) * tauxChange)}
+                </strong>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 
@@ -840,8 +944,14 @@ export function DocumentForm({
               <th className="pb-2.5">Article</th>
               <th className="pb-2.5">{type === "bs" ? "Designation" : "Libelle"}</th>
               <th className="pb-2.5">Qte</th>
-              {type === "bs" ? <th className="pb-2.5">Unite</th> : <th className="pb-2.5">PU</th>}
-              <th className="pb-2.5">{type === "bs" ? "Resume" : "PT"}</th>
+              {type === "bs" ? (
+                <th className="pb-2.5">Unite</th>
+              ) : (
+                <th className="pb-2.5">PU {devise !== "MAD" ? `(${curSymbol})` : ""}</th>
+              )}
+              <th className="pb-2.5">
+                {type === "bs" ? "Resume" : `PT ${devise !== "MAD" ? `(${curSymbol})` : ""}`}
+              </th>
               <th className="pb-2.5"></th>
             </tr>
           </thead>
@@ -905,7 +1015,7 @@ export function DocumentForm({
                   <td className="py-2.5 pr-2.5 font-semibold">
                     {type === "bs"
                       ? `${Number(line.quantite) || 0} ${line.unite || "u"}`
-                      : formatCurrency(lineTotals.total_ttc)}
+                      : formatDocAmount(lineTotals.total_ttc)}
                   </td>
                   <td className="py-2.5">
                     {!locked ? (
@@ -923,26 +1033,41 @@ export function DocumentForm({
     </Card>
   );
 
+  const curSymbol = getCurrencySymbol(devise);
+  const formatDocAmount = (amount: number) => {
+    if (devise === "MAD") {
+      return formatCurrency(amount);
+    }
+    return `${formatCurrency(amount).replace("DH", "").trim()} ${curSymbol}`;
+  };
+
   const renderTotalsCard = () => (
     <Card>
-      <h3 className="text-base font-black">Montants</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-black">Montants</h3>
+        {devise !== "MAD" ? (
+          <span className="rounded-md bg-amber-100 dark:bg-amber-950/50 px-2 py-0.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+            {devise} ({curSymbol})
+          </span>
+        ) : null}
+      </div>
       <div className="mt-3.5 grid gap-2.5 text-[13px]">
         <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
           <span>{locale === "ar" ? "المجموع الإجمالي (HT)" : "Total Brut HT"}</span>
-          <strong>{formatCurrency(computed.totals.total_ht + computed.totals.remise)}</strong>
+          <strong>{formatDocAmount(computed.totals.total_ht + computed.totals.remise)}</strong>
         </div>
         {type === "bs" ? null : (
           <>
             <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
               <span>{locale === "ar" ? "تخفيض (Remise)" : "Remise (réduction)"}</span>
               <strong className={computed.totals.remise > 0 ? "text-[var(--danger)]" : ""}>
-                {computed.totals.remise > 0 ? `-${formatCurrency(computed.totals.remise)}` : formatCurrency(0)}
+                {computed.totals.remise > 0 ? `-${formatDocAmount(computed.totals.remise)}` : formatDocAmount(0)}
               </strong>
             </div>
             {tvaEnabled && (
               <div className="flex items-center justify-between rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
                 <span>{locale === "ar" ? "مجموع الضريبة (TVA)" : "Total TVA"}</span>
-                <strong>{formatCurrency(computed.totals.total_tva)}</strong>
+                <strong>{formatDocAmount(computed.totals.total_tva)}</strong>
               </div>
             )}
             <div className="flex items-center justify-between rounded-xl border bg-[var(--accent)] px-3 py-3 text-[var(--accent-foreground)]">
@@ -952,9 +1077,19 @@ export function DocumentForm({
                   : (locale === "ar" ? "المجموع الصافي" : "Total Net")}
               </span>
               <strong className="text-lg">
-                {formatCurrency(tvaEnabled ? computed.totals.total_ttc : computed.totals.total_ht)}
+                {formatDocAmount(tvaEnabled ? computed.totals.total_ttc : computed.totals.total_ht)}
               </strong>
             </div>
+            {devise !== "MAD" ? (
+              <div className="flex items-center justify-between rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <span className="font-semibold text-xs">
+                  {locale === "ar" ? "المقابل بالدرهم (MAD)" : "Contre-valeur dirhams (MAD)"}
+                </span>
+                <strong className="text-sm font-black">
+                  {formatCurrency((tvaEnabled ? computed.totals.total_ttc : computed.totals.total_ht) * tauxChange)}
+                </strong>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -965,7 +1100,7 @@ export function DocumentForm({
     <Card>
       <h3 className="text-base font-black">Paiement</h3>
       <div className="mt-3.5 grid gap-3">
-        <Field label="Avance">
+        <Field label={devise !== "MAD" ? `Avance (${curSymbol})` : "Avance"}>
           <Input
             name={isWizard ? undefined : "avance"}
             type="number"
@@ -977,8 +1112,16 @@ export function DocumentForm({
         </Field>
         <div className="rounded-xl border bg-[var(--background-alt)] px-3 py-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Reste</p>
-          <p className="mt-1 text-base font-bold">{formatCurrency(reste)}</p>
+          <p className="mt-1 text-base font-bold">{formatDocAmount(reste)}</p>
         </div>
+        {devise !== "MAD" ? (
+          <div className="rounded-xl border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] flex items-center justify-between">
+            <span>{locale === "ar" ? "الباقي بالدرهم :" : "Reste en MAD :"}</span>
+            <strong className="text-xs font-bold text-[var(--foreground)]">
+              {formatCurrency(reste * tauxChange)}
+            </strong>
+          </div>
+        ) : null}
       </div>
       {submitLabel && !locked ? (
         <div className="mt-4">
@@ -1387,6 +1530,8 @@ export function DocumentForm({
         <input type="hidden" name="status" value={document?.status ?? "brouillon"} />
         <input type="hidden" name="parent_document_id" value={document?.parent_document_id ?? ""} />
         <input type="hidden" name="lines_json" value={JSON.stringify(lines)} />
+        <input type="hidden" name="devise" value={devise} />
+        <input type="hidden" name="taux_change" value={String(tauxChange)} />
 
         {isWizard ? (
           <>
@@ -1505,6 +1650,8 @@ export function DocumentForm({
                   renderPartyField()
                 )}
 
+                {type !== "bs" ? renderCurrencySection() : null}
+
                 <div className="rounded-[20px] border bg-[var(--background-alt)] px-4 py-3 text-sm text-[var(--muted)]">
                   {type === "bs" ? (
                     sourceBranchId && destinationBranchId ? (
@@ -1561,6 +1708,16 @@ export function DocumentForm({
                         {type === "bs" ? selectedDestinationBranch?.name || "—" : selectedParty?.name || "—"}
                       </p>
                     </div>
+                    {devise !== "MAD" ? (
+                      <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/30 px-3 py-2.5">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                          Devise & Cours
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-amber-950 dark:text-amber-100">
+                          {devise} (1 {devise} = {tauxChange.toFixed(4)} MAD)
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
 
                   <Field label="Notes">
@@ -1688,6 +1845,8 @@ export function DocumentForm({
                   {renderPartyField()}
                 </div>
               )}
+
+              {type !== "bs" ? renderCurrencySection() : null}
 
               <Field label="Notes">
                 <Textarea

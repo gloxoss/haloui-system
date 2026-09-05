@@ -7,6 +7,9 @@ import BonSortieTemplate from "@/app/print/[kind]/[id]/templates/bs";
 import DevisTemplate from "@/app/print/[kind]/[id]/templates/devis";
 import FactureTemplate from "@/app/print/[kind]/[id]/templates/facture";
 import FichePersonnelTemplate from "@/app/print/[kind]/[id]/templates/fiche-personnel";
+import BonTransfertTemplate from "@/app/print/[kind]/[id]/templates/bt";
+import InventaireTemplate from "@/app/print/[kind]/[id]/templates/inventaire";
+import PickingTemplate from "@/app/print/[kind]/[id]/templates/picking";
 import { type PrintableAttestation, type PrintableDocument } from "@/app/print/[kind]/[id]/templates/shared";
 import { PrintTrigger } from "@/components/print/print-trigger";
 import {
@@ -17,6 +20,9 @@ import {
   getEntityById,
   listBranches,
 } from "@/lib/data";
+import { getStockTransfertById } from "@/lib/stock-transferts";
+import { getInventaireById } from "@/lib/inventaires";
+import { genererPickingList } from "@/lib/wms";
 
 import { getAuthSession } from "@/lib/auth";
 import { getPortalClientSession } from "@/lib/portal-auth";
@@ -151,5 +157,71 @@ export default async function PrintPage({
     );
   }
 
+  if (kind === "bt" || kind === "bon-transfert" || kind === "transfert" || kind === "transferts") {
+    const transfert = getStockTransfertById(Number(id));
+    if (!transfert) {
+      notFound();
+    }
+
+    const company = getCompany(transfert.company_id || activeCompanyId);
+    const branches = listBranches();
+    const sourceBranch = branches.find((b) => b.id === transfert.source_branch_id) ?? null;
+    const destinationBranch = branches.find((b) => b.id === transfert.destination_branch_id) ?? null;
+
+    return (
+      <>
+        <PrintTrigger />
+        <BonTransfertTemplate
+          company={company}
+          transfert={transfert}
+          sourceBranch={sourceBranch}
+          destinationBranch={destinationBranch}
+        />
+      </>
+    );
+  }
+
+  if (kind === "inventaire" || kind === "inventaires") {
+    const inventaire = getInventaireById(Number(id));
+    if (!inventaire) {
+      notFound();
+    }
+
+    const company = getCompany(inventaire.company_id || activeCompanyId);
+    const branches = listBranches();
+    const branch = branches.find((b) => b.id === inventaire.branch_id) ?? null;
+
+    return (
+      <>
+        <PrintTrigger />
+        <InventaireTemplate
+          company={company}
+          inventaire={inventaire}
+          branch={branch}
+        />
+      </>
+    );
+  }
+
+  if (kind === "picking" || kind === "picking-list") {
+    try {
+      const pickingList = genererPickingList(Number(id));
+      const company = getCompany(activeCompanyId);
+
+      return (
+        <>
+          <PrintTrigger />
+          <PickingTemplate
+            company={company}
+            pickingList={pickingList}
+          />
+        </>
+      );
+    } catch {
+      notFound();
+    }
+  }
+
   notFound();
 }
+

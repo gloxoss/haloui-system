@@ -76,9 +76,22 @@ import {
   type SubscriptionStats,
   type SubscriptionStatut,
   type Periodicite,
+  type PortalSyncSettings,
+  type PortalSyncExportPayload,
+  type PortalSyncResponse,
+  type BankAccountRecord,
+  type BankStatementRecord,
+  type BankOperationRecord,
+  type ReconciliationStats,
+  type ParsedBankStatement,
+  type CurrencyRecord,
+  type ForexTransactionRecord,
+  type ForexSummary,
   type ThemeSettings,
   type UserRecord,
 } from "@/lib/types";
+import { parseBankStatementFile } from "@/lib/bank-parsers";
+import { computeForexGainLoss, fetchLiveExchangeRates } from "@/lib/exchange-rates";
 
 type SaveEntityInput = Omit<EntityRecord, "id"> & { id?: number };
 type SaveProductInput = Omit<ProductRecord, "id" | "active"> & { id?: number; active?: number };
@@ -111,6 +124,8 @@ type SaveDocumentInput = {
   notes?: string;
   avance?: number;
   status?: DocumentStatus;
+  devise?: string;
+  taux_change?: number;
   lines: Array<Omit<DocumentLineInput, "total_ht">>;
 };
 
@@ -1163,7 +1178,7 @@ export function getDocumentById(id: number) {
   return {
     ...document,
     lines,
-    amount_in_words: amountToFrenchWords(document.total_ttc),
+    amount_in_words: amountToFrenchWords(document.total_ttc, (document as any).devise || "MAD"),
   };
 }
 
@@ -1195,6 +1210,15 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
   );
 
   const avance = toNumber(input.avance);
+  const devise = (input.devise || "MAD").trim().toUpperCase();
+  const tauxChange = Number(input.taux_change) > 0 ? Number(input.taux_change) : 1.0;
+  const reste = Math.max(totals.total_ttc - avance, 0);
+
+  const totalHtBase = Math.round(totals.total_ht * tauxChange * 100) / 100;
+  const totalTtcBase = Math.round(totals.total_ttc * tauxChange * 100) / 100;
+  const avanceBase = Math.round(avance * tauxChange * 100) / 100;
+  const resteBase = Math.round(reste * tauxChange * 100) / 100;
+
   const documentPayload = {
     company_id: input.company_id ?? 1,
     type: input.type,
@@ -1211,7 +1235,13 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
     total_ttc: totals.total_ttc,
     remise: totals.remise,
     avance,
-    reste: Math.max(totals.total_ttc - avance, 0),
+    reste,
+    devise,
+    taux_change: tauxChange,
+    total_ht_base: totalHtBase,
+    total_ttc_base: totalTtcBase,
+    avance_base: avanceBase,
+    reste_base: resteBase,
     notes: input.notes ?? "",
     status: input.status ?? "brouillon",
   };
@@ -1239,6 +1269,12 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
               remise = @remise,
               avance = @avance,
               reste = @reste,
+              devise = @devise,
+              taux_change = @taux_change,
+              total_ht_base = @total_ht_base,
+              total_ttc_base = @total_ttc_base,
+              avance_base = @avance_base,
+              reste_base = @reste_base,
               notes = @notes,
               status = @status,
               updated_by = @updated_by,
@@ -1257,10 +1293,14 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
         `
           INSERT INTO documents (
             company_id, type, numero, date, date_echeance, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
-            parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste, notes, status, created_by, updated_by
+            parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste,
+            devise, taux_change, total_ht_base, total_ttc_base, avance_base, reste_base,
+            notes, status, created_by, updated_by
           ) VALUES (
             @company_id, @type, @numero, @date, @date_echeance, @branch_id, @source_branch_id, @destination_branch_id, @client_id, @fournisseur_id,
-            @parent_document_id, @total_ht, @total_tva, @total_ttc, @remise, @avance, @reste, @notes, @status, @created_by, @updated_by
+            @parent_document_id, @total_ht, @total_tva, @total_ttc, @remise, @avance, @reste,
+            @devise, @taux_change, @total_ht_base, @total_ttc_base, @avance_base, @reste_base,
+            @notes, @status, @created_by, @updated_by
           )
         `,
       ).run({
@@ -1725,10 +1765,18 @@ export function saveSortieCaisse(
     beneficiaire?: string;
     preuve_path?: string;
     notes?: string;
+    devise?: string;
+    taux_change?: number;
+    montant_devise?: number;
   },
   userId: number,
 ) {
   const db = getDb();
+  const devise = (input.devise || "MAD").trim().toUpperCase();
+  const tauxChange = Number(input.taux_change) > 0 ? Number(input.taux_change) : 1.0;
+  const montantDevise = Number(input.montant_devise) > 0 ? Number(input.montant_devise) : (devise !== "MAD" ? Number(input.montant) : 0);
+  const montantBase = montantDevise > 0 ? Math.round(montantDevise * tauxChange * 100) / 100 : Number(input.montant) || 0;
+
   if (input.id) {
     db.prepare(`
       UPDATE sorties_caisse
@@ -1739,6 +1787,9 @@ export function saveSortieCaisse(
           beneficiaire = @beneficiaire,
           preuve_path = COALESCE(NULLIF(@preuve_path, ''), preuve_path),
           notes = @notes,
+          devise = @devise,
+          taux_change = @taux_change,
+          montant_devise = @montant_devise,
           updated_by = @userId,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = @id
@@ -1746,11 +1797,14 @@ export function saveSortieCaisse(
       id: input.id,
       branch_id: input.branch_id,
       date: input.date,
-      montant: input.montant,
+      montant: montantBase,
       motif: input.motif,
       beneficiaire: input.beneficiaire || "",
       preuve_path: input.preuve_path || "",
       notes: input.notes || "",
+      devise,
+      taux_change: tauxChange,
+      montant_devise: montantDevise,
       userId,
     });
     logAudit(userId, "update", "sortie_caisse", input.id, input);
@@ -1758,16 +1812,25 @@ export function saveSortieCaisse(
   }
 
   const result = db.prepare(`
-    INSERT INTO sorties_caisse (branch_id, date, montant, motif, beneficiaire, preuve_path, notes, created_by, updated_by)
-    VALUES (@branch_id, @date, @montant, @motif, @beneficiaire, @preuve_path, @notes, @userId, @userId)
+    INSERT INTO sorties_caisse (
+      branch_id, date, montant, motif, beneficiaire, preuve_path, notes,
+      devise, taux_change, montant_devise, created_by, updated_by
+    )
+    VALUES (
+      @branch_id, @date, @montant, @motif, @beneficiaire, @preuve_path, @notes,
+      @devise, @taux_change, @montant_devise, @userId, @userId
+    )
   `).run({
     branch_id: input.branch_id,
     date: input.date,
-    montant: input.montant,
+    montant: montantBase,
     motif: input.motif,
     beneficiaire: input.beneficiaire || "",
     preuve_path: input.preuve_path || "",
     notes: input.notes || "",
+    devise,
+    taux_change: tauxChange,
+    montant_devise: montantDevise,
     userId,
   });
 
@@ -2652,12 +2715,13 @@ export function enregistrerReglementRapide(
   montant: number,
   modePaiement: string,
   notes: string,
-  userId: number
+  userId: number,
+  tauxReglement?: number
 ) {
   const db = getDb();
   const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(documentId) as DocumentRecord | undefined;
   if (!doc) {
-    throw new Error("Facture introuvable.");
+    throw new Error("Document introuvable.");
   }
 
   const versement = Math.max(0, Number(montant) || 0);
@@ -2668,19 +2732,88 @@ export function enregistrerReglementRapide(
   const nouvelleAvance = Number(doc.avance || 0) + versement;
   const nouveauReste = Math.max(0, Number(doc.total_ttc) - nouvelleAvance);
 
+  const docCurrency = (doc.devise || "MAD").toUpperCase();
+  const tauxDoc = Number(doc.taux_change) > 0 ? Number(doc.taux_change) : 1.0;
+  const settlementRate = Number(tauxReglement) > 0 ? Number(tauxReglement) : tauxDoc;
+
+  let forexDescription = "";
+  let forexResult: ReturnType<typeof computeForexGainLoss> | null = null;
+
+  if (docCurrency !== "MAD") {
+    forexResult = computeForexGainLoss({
+      typeOperation: doc.type === "bc" ? "achat" : "vente",
+      montantDevise: versement,
+      tauxInitial: tauxDoc,
+      tauxReglement: settlementRate,
+    });
+
+    if (forexResult.typeResultat !== "nul") {
+      forexDescription = ` [${forexResult.description}]`;
+
+      let tiersNom = "";
+      if (doc.client_id) {
+        const cl = db.prepare("SELECT name FROM clients WHERE id = ?").get(doc.client_id) as { name: string } | undefined;
+        tiersNom = cl?.name || "";
+      } else if (doc.fournisseur_id) {
+        const fr = db.prepare("SELECT name FROM fournisseurs WHERE id = ?").get(doc.fournisseur_id) as { name: string } | undefined;
+        tiersNom = fr?.name || "";
+      }
+
+      const refPiece = `${doc.type.toUpperCase()}-${doc.numero}`;
+
+      db.prepare(`
+        INSERT INTO forex_transactions (
+          company_id, type_operation, document_id, tiers_nom, reference_piece,
+          date_operation, date_reglement, devise, montant_devise, taux_initial, taux_reglement,
+          montant_initial_base, montant_regle_base, ecart_change, type_resultat, compte_comptable,
+          notes, created_by
+        ) VALUES (
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?
+        )
+      `).run(
+        doc.company_id || 1,
+        doc.type === "bc" ? "achat" : "vente",
+        documentId,
+        tiersNom,
+        refPiece,
+        doc.date,
+        todayIso(),
+        docCurrency,
+        versement,
+        tauxDoc,
+        settlementRate,
+        forexResult.montantInitialBase,
+        forexResult.montantRegleBase,
+        forexResult.ecartChange,
+        forexResult.typeResultat,
+        forexResult.compteComptable,
+        notes?.trim() || "",
+        userId
+      );
+    }
+  }
+
   const updatedNotes = notes?.trim()
-    ? `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} MAD (${modePaiement}). Note: ${notes.trim()}`
-    : `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} MAD (${modePaiement})`;
+    ? `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} ${docCurrency} (${modePaiement})${forexDescription}. Note: ${notes.trim()}`
+    : `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} ${docCurrency} (${modePaiement})${forexDescription}`;
+
+  const nouvelleAvanceBase = Math.round(nouvelleAvance * tauxDoc * 100) / 100;
+  const nouveauResteBase = Math.round(nouveauReste * tauxDoc * 100) / 100;
 
   db.prepare(`
     UPDATE documents
     SET avance = ?,
         reste = ?,
+        avance_base = ?,
+        reste_base = ?,
         notes = ?,
         updated_by = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(nouvelleAvance, nouveauReste, updatedNotes, userId, documentId);
+  `).run(nouvelleAvance, nouveauReste, nouvelleAvanceBase, nouveauResteBase, updatedNotes, userId, documentId);
 
   if (nouveauReste === 0) {
     db.prepare(`
@@ -2692,12 +2825,16 @@ export function enregistrerReglementRapide(
 
   logAudit(userId, "payment", "document", documentId, {
     montant: versement,
+    devise: docCurrency,
+    tauxDoc,
+    settlementRate,
+    forex: forexResult,
     modePaiement,
     nouvelleAvance,
     nouveauReste,
   });
 
-  return { success: true, nouveauReste };
+  return { success: true, nouveauReste, forex: forexResult };
 }
 
 // ==========================================
@@ -3432,8 +3569,9 @@ export function signDocumentByClient(
     return { success: false, error: "Document introuvable ou non autorisé." };
   }
 
-  if (doc.type !== "bc") {
-    return { success: false, error: "Seuls les bons de commande peuvent être signés." };
+  const signableTypes = new Set(["bc", "bon-commande", "bons-commande", "devis", "bl", "bon-livraison", "bons-livraison"]);
+  if (!signableTypes.has(doc.type.toLowerCase())) {
+    return { success: false, error: "Seuls les devis, bons de commande et bons de livraison peuvent être signés électroniquement." };
   }
 
   if (doc.signed_at) {
@@ -3477,4 +3615,1187 @@ export function regenerateClientPortalAccess(clientId: number, actorId?: number)
   logAudit(actorId ?? null, "update", "client_portal_access", clientId, { newPin });
   return { portal_access_code: newPin, portal_token: newToken };
 }
+
+// ==========================================
+// PORTAIL CLIENT CLOUD SYNC (DESKTOP <-> DEPLOYED PORTAL)
+// ==========================================
+
+export function getPortalSyncSettings(): PortalSyncSettings {
+  const db = getDb();
+  const rows = db
+    .prepare(`
+      SELECT key, value
+      FROM app_settings
+      WHERE key IN ('portal.public_url', 'portal.sync_secret', 'portal.auto_sync', 'portal.last_synced_at')
+    `)
+    .all() as Array<{ key: string; value: string }>;
+
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+
+  let syncSecret = map.get("portal.sync_secret");
+  if (!syncSecret) {
+    syncSecret = crypto.randomBytes(16).toString("hex");
+    db.prepare(`
+      INSERT OR REPLACE INTO app_settings (key, value)
+      VALUES ('portal.sync_secret', ?)
+    `).run(syncSecret);
+  }
+
+  return {
+    publicUrl: map.get("portal.public_url") || "",
+    syncSecret,
+    autoSync: map.get("portal.auto_sync") === "1",
+    lastSyncedAt: map.get("portal.last_synced_at") || undefined,
+  };
+}
+
+export function savePortalSyncSettings(
+  input: Partial<PortalSyncSettings>,
+  userId?: number
+): PortalSyncSettings {
+  const db = getDb();
+  const insert = db.prepare(`
+    INSERT INTO app_settings (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+
+  const runTx = db.transaction(() => {
+    if (input.publicUrl !== undefined) {
+      insert.run("portal.public_url", input.publicUrl.trim());
+    }
+    if (input.syncSecret !== undefined && input.syncSecret.trim()) {
+      insert.run("portal.sync_secret", input.syncSecret.trim());
+    }
+    if (input.autoSync !== undefined) {
+      insert.run("portal.auto_sync", input.autoSync ? "1" : "0");
+    }
+    if (input.lastSyncedAt !== undefined) {
+      insert.run("portal.last_synced_at", input.lastSyncedAt);
+    }
+  });
+
+  runTx();
+  logAudit(userId ?? null, "update", "portal_sync_settings", null, input);
+  return getPortalSyncSettings();
+}
+
+export function getPortalSyncExportPayload(): PortalSyncExportPayload {
+  const db = getDb();
+  const company = getCompany();
+
+  const clients = db
+    .prepare(`
+      SELECT id, name, ice, address, phone, email, notes, portal_enabled, portal_access_code, portal_token, portal_last_login
+      FROM clients
+      WHERE portal_enabled = 1
+    `)
+    .all() as PortalSyncExportPayload["clients"];
+
+  const documents = db
+    .prepare(`
+      SELECT id, company_id, client_id, type, numero, date, date_echeance, total_ht, total_tva, total_ttc, avance, reste, status,
+             signed_at, signed_by_name, signature_data, notes
+      FROM documents
+      WHERE client_id IS NOT NULL AND client_id > 0
+      ORDER BY id ASC
+    `)
+    .all() as PortalSyncExportPayload["documents"];
+
+  const document_lines = db
+    .prepare(`
+      SELECT dl.id, dl.document_id, dl.reference, dl.description, dl.quantite, dl.unite, dl.prix_unitaire_ht, dl.taux_tva, dl.total_ht, dl.total_ttc
+      FROM document_lines dl
+      JOIN documents d ON d.id = dl.document_id
+      WHERE d.client_id IS NOT NULL AND d.client_id > 0
+      ORDER BY dl.id ASC
+    `)
+    .all() as PortalSyncExportPayload["document_lines"];
+
+  return {
+    version: "1.0",
+    source: "desktop",
+    exportedAt: new Date().toISOString(),
+    company: company
+      ? {
+          id: company.id,
+          name: company.name,
+          arabic_name: company.arabic_name,
+          address: company.address,
+          phone: company.phone,
+          gsm: company.gsm,
+          rc: company.rc,
+          if_number: company.if_number,
+          tp: company.tp,
+          ice: company.ice,
+          legal_notice: company.legal_notice,
+          logo_path: company.logo_path,
+        }
+      : undefined,
+    clients,
+    documents,
+    document_lines,
+  };
+}
+
+export function applyPortalSyncIncomingPush(payload: PortalSyncExportPayload) {
+  const db = getDb();
+
+  const runSync = db.transaction(() => {
+    // 1. Upsert Clients
+    const upsertClient = db.prepare(`
+      INSERT INTO clients (id, name, ice, address, phone, email, notes, portal_enabled, portal_access_code, portal_token, portal_last_login, created_by, updated_by)
+      VALUES (@id, @name, @ice, @address, @phone, @email, @notes, @portal_enabled, @portal_access_code, @portal_token, @portal_last_login, 1, 1)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        ice = excluded.ice,
+        address = excluded.address,
+        phone = excluded.phone,
+        email = excluded.email,
+        notes = excluded.notes,
+        portal_enabled = excluded.portal_enabled,
+        portal_access_code = COALESCE(NULLIF(excluded.portal_access_code, ''), clients.portal_access_code),
+        portal_token = COALESCE(NULLIF(excluded.portal_token, ''), clients.portal_token),
+        updated_at = CURRENT_TIMESTAMP
+    `);
+
+    for (const c of payload.clients) {
+      upsertClient.run({
+        id: c.id,
+        name: c.name,
+        ice: c.ice || "",
+        address: c.address || "",
+        phone: c.phone || "",
+        email: c.email || "",
+        notes: c.notes || "",
+        portal_enabled: c.portal_enabled ?? 1,
+        portal_access_code: c.portal_access_code || "",
+        portal_token: c.portal_token || "",
+        portal_last_login: c.portal_last_login || "",
+      });
+    }
+
+    // 2. Upsert Documents
+    const upsertDoc = db.prepare(`
+      INSERT INTO documents (
+        id, company_id, client_id, type, numero, date, date_echeance, total_ht, total_tva, total_ttc, avance, reste, status,
+        signed_at, signed_by_name, signature_data, notes, created_by, updated_by
+      )
+      VALUES (
+        @id, @company_id, @client_id, @type, @numero, @date, @date_echeance, @total_ht, @total_tva, @total_ttc, @avance, @reste, @status,
+        @signed_at, @signed_by_name, @signature_data, @notes, 1, 1
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        type = excluded.type,
+        numero = excluded.numero,
+        date = excluded.date,
+        date_echeance = excluded.date_echeance,
+        total_ht = excluded.total_ht,
+        total_tva = excluded.total_tva,
+        total_ttc = excluded.total_ttc,
+        avance = excluded.avance,
+        reste = excluded.reste,
+        notes = excluded.notes,
+        status = CASE WHEN documents.signed_at IS NOT NULL THEN documents.status ELSE excluded.status END,
+        signed_at = COALESCE(documents.signed_at, excluded.signed_at),
+        signed_by_name = COALESCE(documents.signed_by_name, excluded.signed_by_name),
+        signature_data = COALESCE(documents.signature_data, excluded.signature_data),
+        updated_at = CURRENT_TIMESTAMP
+    `);
+
+    for (const doc of payload.documents) {
+      upsertDoc.run({
+        id: doc.id,
+        company_id: doc.company_id || 1,
+        client_id: doc.client_id,
+        type: doc.type,
+        numero: doc.numero,
+        date: doc.date,
+        date_echeance: doc.date_echeance || "",
+        total_ht: doc.total_ht || 0,
+        total_tva: doc.total_tva || 0,
+        total_ttc: doc.total_ttc || 0,
+        avance: doc.avance || 0,
+        reste: doc.reste || 0,
+        status: doc.status || "valide",
+        signed_at: doc.signed_at || null,
+        signed_by_name: doc.signed_by_name || null,
+        signature_data: doc.signature_data || null,
+        notes: doc.notes || "",
+      });
+    }
+
+    // 3. Upsert Document Lines
+    if (payload.document_lines && payload.document_lines.length > 0) {
+      const docIds = [...new Set(payload.document_lines.map((l) => l.document_id))];
+      if (docIds.length > 0) {
+        db.prepare(
+          `DELETE FROM document_lines WHERE document_id IN (${docIds.map(() => "?").join(",")})`
+        ).run(...docIds);
+      }
+
+      const insertLine = db.prepare(`
+        INSERT INTO document_lines (id, document_id, reference, description, quantite, unite, prix_unitaire_ht, taux_tva, total_ht, total_ttc)
+        VALUES (@id, @document_id, @reference, @description, @quantite, @unite, @prix_unitaire_ht, @taux_tva, @total_ht, @total_ttc)
+      `);
+
+      for (const line of payload.document_lines) {
+        insertLine.run({
+          id: line.id,
+          document_id: line.document_id,
+          reference: line.reference || "",
+          description: line.description,
+          quantite: line.quantite,
+          unite: line.unite || "",
+          prix_unitaire_ht: line.prix_unitaire_ht,
+          taux_tva: line.taux_tva,
+          total_ht: line.total_ht,
+          total_ttc: line.total_ttc,
+        });
+      }
+    }
+  });
+
+  runSync();
+}
+
+export function applyPortalSyncIncomingPull(response: PortalSyncResponse) {
+  const db = getDb();
+  let updatedSignatures = 0;
+
+  const runPull = db.transaction(() => {
+    if (response.signedDocuments && response.signedDocuments.length > 0) {
+      const updateDoc = db.prepare(`
+        UPDATE documents
+        SET signed_at = @signed_at,
+            signed_by_name = @signed_by_name,
+            signature_data = @signature_data,
+            status = CASE WHEN status = 'brouillon' THEN 'valide' ELSE status END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = @id AND (signed_at IS NULL OR signed_at = '')
+      `);
+
+      for (const item of response.signedDocuments) {
+        const res = updateDoc.run(item);
+        if (res.changes > 0) {
+          updatedSignatures++;
+        }
+      }
+    }
+
+    if (response.clientLastLogins && response.clientLastLogins.length > 0) {
+      const updateLogin = db.prepare(`
+        UPDATE clients
+        SET portal_last_login = ?
+        WHERE id = ?
+      `);
+
+      for (const item of response.clientLastLogins) {
+        updateLogin.run(item.portal_last_login, item.id);
+      }
+    }
+
+    db.prepare(`
+      INSERT INTO app_settings (key, value)
+      VALUES ('portal.last_synced_at', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(new Date().toISOString());
+  });
+
+  runPull();
+  return { updatedSignatures };
+}
+
+// ============================================================================
+// GESTION DU RAPPROCHEMENT BANCAIRE AUTOMATISÉ (OFX, QIF, CSV)
+// ============================================================================
+
+export function listBankAccounts(companyId = 1): BankAccountRecord[] {
+  const db = getDb();
+  return db
+    .prepare(`
+      SELECT *
+      FROM bank_accounts
+      WHERE company_id = ? AND statut != 'archive'
+      ORDER BY id ASC
+    `)
+    .all(companyId) as BankAccountRecord[];
+}
+
+export function getBankAccountById(id: number): BankAccountRecord | null {
+  const db = getDb();
+  const res = db.prepare("SELECT * FROM bank_accounts WHERE id = ?").get(id);
+  return (res as BankAccountRecord) ?? null;
+}
+
+export function saveBankAccount(
+  input: {
+    id?: number;
+    company_id?: number;
+    nom_banque: string;
+    intitule_compte: string;
+    rib?: string;
+    iban?: string;
+    bic_swift?: string;
+    devise?: string;
+    solde_initial?: number;
+    statut?: "actif" | "archive";
+  },
+  actorId?: number,
+): BankAccountRecord {
+  const db = getDb();
+  const companyId = input.company_id ?? 1;
+  const nomBanque = input.nom_banque.trim();
+  const intitule = input.intitule_compte.trim();
+  const rib = (input.rib ?? "").trim();
+  const iban = (input.iban ?? "").trim();
+  const bic = (input.bic_swift ?? "").trim();
+  const devise = input.devise?.trim() || "MAD";
+  const soldeInitial = Number(input.solde_initial ?? 0);
+  const statut = input.statut ?? "actif";
+
+  if (input.id) {
+    db.prepare(`
+      UPDATE bank_accounts
+      SET nom_banque = ?,
+          intitule_compte = ?,
+          rib = ?,
+          iban = ?,
+          bic_swift = ?,
+          devise = ?,
+          solde_initial = ?,
+          statut = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(nomBanque, intitule, rib, iban, bic, devise, soldeInitial, statut, input.id);
+    return getBankAccountById(input.id)!;
+  }
+
+  const result = db.prepare(`
+    INSERT INTO bank_accounts (
+      company_id, nom_banque, intitule_compte, rib, iban, bic_swift,
+      devise, solde_initial, solde_actuel, solde_rapproche, statut, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(companyId, nomBanque, intitule, rib, iban, bic, devise, soldeInitial, soldeInitial, soldeInitial, statut, actorId ?? null);
+
+  return getBankAccountById(Number(result.lastInsertRowid))!;
+}
+
+function updateBankAccountReconciledBalance(accountId: number) {
+  const db = getDb();
+  const account = getBankAccountById(accountId);
+  if (!account) return;
+
+  const totals = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN type_mouvement = 'credit' THEN montant ELSE 0 END), 0) as total_credits,
+      COALESCE(SUM(CASE WHEN type_mouvement = 'debit' THEN montant ELSE 0 END), 0) as total_debits
+    FROM bank_operations
+    WHERE bank_account_id = ? AND statut_rapprochement = 'rapproche'
+  `).get(accountId) as { total_credits: number; total_debits: number };
+
+  const soldeRapproche = account.solde_initial + totals.total_credits - totals.total_debits;
+
+  db.prepare(`
+    UPDATE bank_accounts
+    SET solde_rapproche = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(soldeRapproche, accountId);
+}
+
+function hydrateOperationMatches(ops: BankOperationRecord[], companyId: number): BankOperationRecord[] {
+  const db = getDb();
+
+  const invoices = db
+    .prepare(`
+      SELECT d.id, d.numero, d.type, d.date, d.total_ttc, d.reste, d.avance,
+             c.name as client_name, c.ice as client_ice
+      FROM documents d
+      LEFT JOIN clients c ON d.client_id = c.id
+      WHERE d.company_id = ? AND d.type = 'facture' AND d.status = 'valide'
+    `)
+    .all(companyId) as Array<{
+      id: number;
+      numero: number;
+      type: string;
+      date: string;
+      total_ttc: number;
+      reste: number;
+      avance: number;
+      client_name?: string;
+      client_ice?: string;
+    }>;
+
+  const expenses = db
+    .prepare(`
+      SELECT sc.id, sc.date, sc.montant, sc.motif, sc.beneficiaire
+      FROM sorties_caisse sc
+      ORDER BY sc.date DESC
+      LIMIT 200
+    `)
+    .all() as Array<{
+      id: number;
+      date: string;
+      montant: number;
+      motif: string;
+      beneficiaire: string;
+    }>;
+
+  return ops.map((op) => {
+    if (op.statut_rapprochement === "rapproche" && op.document_id) {
+      if (op.document_type === "facture") {
+        const doc = invoices.find((inv) => inv.id === op.document_id);
+        if (doc) {
+          return {
+            ...op,
+            matched_document: {
+              id: doc.id,
+              numero: doc.numero,
+              type: doc.type,
+              date: doc.date,
+              total_ttc: doc.total_ttc,
+              reste: doc.reste,
+              client_name: doc.client_name,
+            },
+          };
+        }
+      }
+      return op;
+    }
+
+    const libelleNorm = (op.libelle || "").toLowerCase();
+
+    if (op.type_mouvement === "credit") {
+      let bestScore = 0;
+      let bestMatch: any = null;
+      let matchMotif = "";
+
+      for (const inv of invoices) {
+        let score = 0;
+        const numStr = String(inv.numero);
+        const facCode = `fac-${numStr.padStart(4, "0")}`.toLowerCase();
+        const clientNorm = (inv.client_name || "").toLowerCase();
+
+        const amountExactMatch = Math.abs(inv.reste - op.montant) < 0.01 || Math.abs(inv.total_ttc - op.montant) < 0.01;
+        const hasNum = libelleNorm.includes(facCode) || libelleNorm.includes(`fac-${numStr}`) || libelleNorm.includes(`fac ${numStr}`) || libelleNorm.includes(`facture ${numStr}`);
+        const hasClient = clientNorm && clientNorm.length > 3 && libelleNorm.includes(clientNorm);
+
+        if (amountExactMatch && (hasNum || hasClient)) {
+          score = 100;
+          matchMotif = hasNum ? `Facture #${inv.numero} mentionnée et montant exact` : `Client ${inv.client_name} et montant exact`;
+        } else if (amountExactMatch) {
+          score = 85;
+          matchMotif = `Montant identique (${op.montant.toFixed(2)} MAD) avec Facture #${inv.numero}`;
+        } else if (hasNum) {
+          score = 75;
+          matchMotif = `Règlement partiel détecté pour Facture #${inv.numero}`;
+        } else if (hasClient) {
+          score = 60;
+          matchMotif = `Virement du client ${inv.client_name}`;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = inv;
+        }
+      }
+
+      if (bestMatch && bestScore >= 60) {
+        return {
+          ...op,
+          statut_rapprochement: op.statut_rapprochement === "non_rapproche" ? "suggere" : op.statut_rapprochement,
+          rapprochement_score: bestScore,
+          suggestion: {
+            document_id: bestMatch.id,
+            document_numero: bestMatch.numero,
+            document_type: "facture",
+            document_date: bestMatch.date,
+            entity_name: bestMatch.client_name || `Facture #${bestMatch.numero}`,
+            montant: bestMatch.total_ttc,
+            score: bestScore,
+            motif: matchMotif,
+          },
+        };
+      }
+    } else if (op.type_mouvement === "debit") {
+      for (const exp of expenses) {
+        if (Math.abs(exp.montant - op.montant) < 0.01) {
+          return {
+            ...op,
+            statut_rapprochement: op.statut_rapprochement === "non_rapproche" ? "suggere" : op.statut_rapprochement,
+            rapprochement_score: 85,
+            suggestion: {
+              document_id: exp.id,
+              document_numero: exp.id,
+              document_type: "sortie_caisse",
+              document_date: exp.date,
+              entity_name: exp.motif || exp.beneficiaire || "Dépense enregistrée",
+              montant: exp.montant,
+              score: 85,
+              motif: `Montant identique avec dépense caisse du ${exp.date}`,
+            },
+          };
+        }
+      }
+    }
+
+    return op;
+  });
+}
+
+export function listBankStatements(accountId?: number, companyId = 1): BankStatementRecord[] {
+  const db = getDb();
+  if (accountId) {
+    return db
+      .prepare(`
+        SELECT *
+        FROM bank_statements
+        WHERE bank_account_id = ?
+        ORDER BY date_import DESC, id DESC
+      `)
+      .all(accountId) as BankStatementRecord[];
+  }
+
+  return db
+    .prepare(`
+      SELECT *
+      FROM bank_statements
+      WHERE company_id = ?
+      ORDER BY date_import DESC, id DESC
+    `)
+    .all(companyId) as BankStatementRecord[];
+}
+
+export function getBankStatementWithOperations(statementId: number): {
+  statement: BankStatementRecord;
+  operations: BankOperationRecord[];
+  stats: ReconciliationStats;
+  account: BankAccountRecord;
+} | null {
+  const db = getDb();
+  const statement = db.prepare("SELECT * FROM bank_statements WHERE id = ?").get(statementId) as BankStatementRecord | undefined;
+  if (!statement) return null;
+
+  const account = getBankAccountById(statement.bank_account_id);
+  if (!account) return null;
+
+  const rawOps = db
+    .prepare(`
+      SELECT *
+      FROM bank_operations
+      WHERE statement_id = ?
+      ORDER BY date_operation DESC, id DESC
+    `)
+    .all(statementId) as BankOperationRecord[];
+
+  const operations = hydrateOperationMatches(rawOps, statement.company_id);
+
+  const totalOperations = operations.length;
+  const nbRapprochees = operations.filter((op) => op.statut_rapprochement === "rapproche").length;
+  const nbSuggeres = operations.filter((op) => op.statut_rapprochement === "suggere").length;
+  const nbEnAttente = totalOperations - nbRapprochees;
+
+  const creditsRapproches = operations
+    .filter((op) => op.statut_rapprochement === "rapproche" && op.type_mouvement === "credit")
+    .reduce((sum, op) => sum + op.montant, 0);
+
+  const debitsRapproches = operations
+    .filter((op) => op.statut_rapprochement === "rapproche" && op.type_mouvement === "debit")
+    .reduce((sum, op) => sum + op.montant, 0);
+
+  const soldeRapproche = account.solde_initial + creditsRapproches - debitsRapproches;
+  const soldeReleve = statement.solde_final || (statement.solde_initial + statement.total_credits - statement.total_debits);
+  const soldeComptable = account.solde_actuel;
+  const ecartRapprochement = Math.round((soldeReleve - soldeRapproche) * 100) / 100;
+  const tauxRapprochementPercent = totalOperations > 0 ? Math.round((nbRapprochees / totalOperations) * 100) : 100;
+
+  const stats: ReconciliationStats = {
+    totalOperations,
+    nbRapprochees,
+    nbSuggeres,
+    nbEnAttente,
+    soldeReleve,
+    soldeRapproche,
+    soldeComptable,
+    ecartRapprochement,
+    tauxRapprochementPercent,
+  };
+
+  return { statement, operations, stats, account };
+}
+
+export function importBankStatementData(
+  input: {
+    accountId: number;
+    companyId?: number;
+    fileName: string;
+    format?: "OFX" | "QIF" | "CSV";
+    rawContent: string;
+  },
+  actorId?: number,
+): { statementId: number; nbOperations: number } {
+  const db = getDb();
+  const companyId = input.companyId ?? 1;
+  const account = getBankAccountById(input.accountId);
+  if (!account) throw new Error("Compte bancaire introuvable.");
+
+  const parsed = parseBankStatementFile(input.fileName, input.rawContent);
+  if (!parsed.operations || parsed.operations.length === 0) {
+    throw new Error("Aucune opération bancaire n'a pu être extraite du fichier.");
+  }
+
+  const totalDebits = parsed.operations
+    .filter((op) => op.type === "debit")
+    .reduce((sum, op) => sum + op.montant, 0);
+
+  const totalCredits = parsed.operations
+    .filter((op) => op.type === "credit")
+    .reduce((sum, op) => sum + op.montant, 0);
+
+  const soldeInitial = parsed.soldeInitial ?? account.solde_actuel;
+  const soldeFinal = parsed.soldeFinal ?? (soldeInitial + totalCredits - totalDebits);
+
+  const insertStatement = db.prepare(`
+    INSERT INTO bank_statements (
+      company_id, bank_account_id, nom_fichier, format_fichier,
+      date_debut, date_fin, solde_initial, solde_final,
+      total_debits, total_credits, nb_operations, nb_rapprochees,
+      statut, imported_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'en_cours', ?)
+  `);
+
+  const insertOp = db.prepare(`
+    INSERT INTO bank_operations (
+      company_id, statement_id, bank_account_id, date_operation, date_valeur,
+      libelle, reference_bancaire, type_mouvement, montant, categorie,
+      statut_rapprochement, rapprochement_score
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'non_rapproche', 0)
+  `);
+
+  let statementId = 0;
+
+  const runImport = db.transaction(() => {
+    const res = insertStatement.run(
+      companyId,
+      input.accountId,
+      input.fileName,
+      parsed.format,
+      parsed.dateDebut || "",
+      parsed.dateFin || "",
+      soldeInitial,
+      soldeFinal,
+      totalDebits,
+      totalCredits,
+      parsed.operations.length,
+      actorId ?? null,
+    );
+
+    statementId = Number(res.lastInsertRowid);
+
+    for (const op of parsed.operations) {
+      insertOp.run(
+        companyId,
+        statementId,
+        input.accountId,
+        op.date,
+        op.dateValeur || "",
+        op.libelle,
+        op.reference || "",
+        op.type,
+        op.montant,
+        op.categorie || "",
+      );
+    }
+
+    db.prepare(`
+      UPDATE bank_accounts
+      SET solde_actuel = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(soldeFinal, input.accountId);
+  });
+
+  runImport();
+  return { statementId, nbOperations: parsed.operations.length };
+}
+
+export function autoReconcileStatement(
+  statementId: number,
+  minScore = 85,
+  actorId?: number,
+): { reconciledCount: number } {
+  const statementData = getBankStatementWithOperations(statementId);
+  if (!statementData) throw new Error("Relevé bancaire introuvable.");
+
+  const db = getDb();
+  let reconciledCount = 0;
+
+  const eligibleOps = statementData.operations.filter(
+    (op) =>
+      op.statut_rapprochement !== "rapproche" &&
+      op.suggestion &&
+      op.suggestion.score >= minScore,
+  );
+
+  if (eligibleOps.length === 0) {
+    return { reconciledCount: 0 };
+  }
+
+  const runAuto = db.transaction(() => {
+    const updateOp = db.prepare(`
+      UPDATE bank_operations
+      SET statut_rapprochement = 'rapproche',
+          rapprochement_score = ?,
+          document_id = ?,
+          document_type = ?,
+          rapproche_le = CURRENT_TIMESTAMP,
+          rapproche_par = ?
+      WHERE id = ?
+    `);
+
+    for (const op of eligibleOps) {
+      const sug = op.suggestion!;
+      updateOp.run(sug.score, sug.document_id, sug.document_type, actorId ?? null, op.id);
+
+      if (sug.document_type === "facture") {
+        db.prepare(`
+          UPDATE documents
+          SET avance = MIN(total_ttc, avance + ?),
+              reste = MAX(0, total_ttc - (avance + ?)),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(op.montant, op.montant, sug.document_id);
+      }
+
+      reconciledCount++;
+    }
+
+    db.prepare(`
+      UPDATE bank_statements
+      SET nb_rapprochees = (
+        SELECT COUNT(*) FROM bank_operations
+        WHERE statement_id = ? AND statut_rapprochement = 'rapproche'
+      )
+      WHERE id = ?
+    `).run(statementId, statementId);
+
+    updateBankAccountReconciledBalance(statementData.account.id);
+  });
+
+  runAuto();
+  return { reconciledCount };
+}
+
+export function reconcileBankOperation(
+  operationId: number,
+  documentId: number,
+  documentType: string,
+  actorId?: number,
+): boolean {
+  const db = getDb();
+  const op = db.prepare("SELECT * FROM bank_operations WHERE id = ?").get(operationId) as BankOperationRecord | undefined;
+  if (!op) return false;
+
+  const runReconcile = db.transaction(() => {
+    db.prepare(`
+      UPDATE bank_operations
+      SET statut_rapprochement = 'rapproche',
+          rapprochement_score = 100,
+          document_id = ?,
+          document_type = ?,
+          rapproche_le = CURRENT_TIMESTAMP,
+          rapproche_par = ?
+      WHERE id = ?
+    `).run(documentId, documentType, actorId ?? null, operationId);
+
+    if (documentType === "facture") {
+      db.prepare(`
+        UPDATE documents
+        SET avance = MIN(total_ttc, avance + ?),
+            reste = MAX(0, total_ttc - (avance + ?)),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(op.montant, op.montant, documentId);
+    }
+
+    db.prepare(`
+      UPDATE bank_statements
+      SET nb_rapprochees = (
+        SELECT COUNT(*) FROM bank_operations
+        WHERE statement_id = ? AND statut_rapprochement = 'rapproche'
+      )
+      WHERE id = ?
+    `).run(op.statement_id, op.statement_id);
+
+    updateBankAccountReconciledBalance(op.bank_account_id);
+  });
+
+  runReconcile();
+  return true;
+}
+
+export function unreconcileBankOperation(operationId: number): boolean {
+  const db = getDb();
+  const op = db.prepare("SELECT * FROM bank_operations WHERE id = ?").get(operationId) as BankOperationRecord | undefined;
+  if (!op || op.statut_rapprochement !== "rapproche") return false;
+
+  const runUnreconcile = db.transaction(() => {
+    if (op.document_id && op.document_type === "facture") {
+      db.prepare(`
+        UPDATE documents
+        SET avance = MAX(0, avance - ?),
+            reste = MIN(total_ttc, total_ttc - (avance - ?)),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(op.montant, op.montant, op.document_id);
+    }
+
+    db.prepare(`
+      UPDATE bank_operations
+      SET statut_rapprochement = 'non_rapproche',
+          rapprochement_score = 0,
+          document_id = NULL,
+          document_type = '',
+          rapproche_le = NULL,
+          rapproche_par = NULL
+      WHERE id = ?
+    `).run(operationId);
+
+    db.prepare(`
+      UPDATE bank_statements
+      SET nb_rapprochees = (
+        SELECT COUNT(*) FROM bank_operations
+        WHERE statement_id = ? AND statut_rapprochement = 'rapproche'
+      )
+      WHERE id = ?
+    `).run(op.statement_id, op.statement_id);
+
+    updateBankAccountReconciledBalance(op.bank_account_id);
+  });
+
+  runUnreconcile();
+  return true;
+}
+
+export function createExpenseFromBankOperation(
+  operationId: number,
+  motif: string,
+  branchId?: number,
+  actorId?: number,
+): number {
+  const db = getDb();
+  const op = db.prepare("SELECT * FROM bank_operations WHERE id = ?").get(operationId) as BankOperationRecord | undefined;
+  if (!op) throw new Error("Opération bancaire introuvable.");
+
+  let expenseId = 0;
+
+  const runExpense = db.transaction(() => {
+    const firstBranch = branchId || (db.prepare("SELECT id FROM branches ORDER BY id ASC LIMIT 1").get() as any)?.id || 1;
+    const finalMotif = motif.trim() || op.libelle;
+
+    const res = db.prepare(`
+      INSERT INTO sorties_caisse (
+        branch_id, date, montant, motif, beneficiaire, notes, created_by, updated_by
+      ) VALUES (?, ?, ?, ?, ?, 'Généré automatiquement par rapprochement bancaire', ?, ?)
+    `).run(firstBranch, op.date_operation, op.montant, finalMotif, op.libelle, actorId ?? null, actorId ?? null);
+
+    expenseId = Number(res.lastInsertRowid);
+
+    db.prepare(`
+      UPDATE bank_operations
+      SET statut_rapprochement = 'rapproche',
+          rapprochement_score = 100,
+          document_id = ?,
+          document_type = 'sortie_caisse',
+          rapproche_le = CURRENT_TIMESTAMP,
+          rapproche_par = ?
+      WHERE id = ?
+    `).run(expenseId, actorId ?? null, operationId);
+
+    db.prepare(`
+      UPDATE bank_statements
+      SET nb_rapprochees = (
+        SELECT COUNT(*) FROM bank_operations
+        WHERE statement_id = ? AND statut_rapprochement = 'rapproche'
+      )
+      WHERE id = ?
+    `).run(op.statement_id, op.statement_id);
+
+    updateBankAccountReconciledBalance(op.bank_account_id);
+  });
+
+  runExpense();
+  return expenseId;
+}
+
+export function deleteBankStatement(statementId: number): boolean {
+  const db = getDb();
+  const statement = db.prepare("SELECT * FROM bank_statements WHERE id = ?").get(statementId) as BankStatementRecord | undefined;
+  if (!statement) return false;
+
+  const runDelete = db.transaction(() => {
+    const ops = db
+      .prepare("SELECT * FROM bank_operations WHERE statement_id = ? AND statut_rapprochement = 'rapproche'")
+      .all(statementId) as BankOperationRecord[];
+
+    for (const op of ops) {
+      if (op.document_id && op.document_type === "facture") {
+        db.prepare(`
+          UPDATE documents
+          SET avance = MAX(0, avance - ?),
+              reste = MIN(total_ttc, total_ttc - (avance - ?)),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(op.montant, op.montant, op.document_id);
+      }
+    }
+
+    db.prepare("DELETE FROM bank_statements WHERE id = ?").run(statementId);
+    updateBankAccountReconciledBalance(statement.bank_account_id);
+  });
+
+  runDelete();
+  return true;
+}
+
+export function getReconciliationSummary(accountId?: number, companyId = 1): ReconciliationStats {
+  const db = getDb();
+  const targetAccount = accountId ? getBankAccountById(accountId) : listBankAccounts(companyId)[0] || null;
+
+  if (!targetAccount) {
+    return {
+      totalOperations: 0,
+      nbRapprochees: 0,
+      nbSuggeres: 0,
+      nbEnAttente: 0,
+      soldeReleve: 0,
+      soldeRapproche: 0,
+      soldeComptable: 0,
+      ecartRapprochement: 0,
+      tauxRapprochementPercent: 100,
+    };
+  }
+
+  const opsCount = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      COALESCE(SUM(CASE WHEN statut_rapprochement = 'rapproche' THEN 1 ELSE 0 END), 0) as nb_rapprochees,
+      COALESCE(SUM(CASE WHEN statut_rapprochement = 'suggere' THEN 1 ELSE 0 END), 0) as nb_suggeres
+    FROM bank_operations
+    WHERE bank_account_id = ?
+  `).get(targetAccount.id) as { total: number; nb_rapprochees: number; nb_suggeres: number };
+
+  const totalOperations = opsCount?.total || 0;
+  const nbRapprochees = opsCount?.nb_rapprochees || 0;
+  const nbSuggeres = opsCount?.nb_suggeres || 0;
+  const nbEnAttente = totalOperations - nbRapprochees;
+
+  const soldeReleve = targetAccount.solde_actuel;
+  const soldeRapproche = targetAccount.solde_rapproche;
+  const soldeComptable = targetAccount.solde_actuel;
+  const ecartRapprochement = Math.round((soldeReleve - soldeRapproche) * 100) / 100;
+  const tauxRapprochementPercent = totalOperations > 0 ? Math.round((nbRapprochees / totalOperations) * 100) : 100;
+
+  return {
+    totalOperations,
+    nbRapprochees,
+    nbSuggeres,
+    nbEnAttente,
+    soldeReleve,
+    soldeRapproche,
+    soldeComptable,
+    ecartRapprochement,
+    tauxRapprochementPercent,
+  };
+}
+
+// ==========================================
+// MULTI-DEVISES, TAUX DE CHANGE & GAINS/PERTES FOREX
+// ==========================================
+
+export function listExchangeRates(companyId = 1): CurrencyRecord[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT * FROM exchange_rates
+    WHERE company_id = ?
+    ORDER BY est_devise_base DESC, code ASC
+  `).all(companyId) as CurrencyRecord[];
+  return rows;
+}
+
+export function getExchangeRate(companyId: number, code: string): CurrencyRecord | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT * FROM exchange_rates
+    WHERE company_id = ? AND code = ?
+  `).get(companyId, code.toUpperCase()) as CurrencyRecord | undefined;
+  return row || null;
+}
+
+export function saveExchangeRate(
+  companyId: number,
+  input: {
+    code: string;
+    nom: string;
+    nom_ar?: string;
+    symbole?: string;
+    taux: number;
+    taux_achat?: number;
+    taux_vente?: number;
+    source?: "auto_api" | "bam" | "manuel";
+    est_actif?: number;
+    est_devise_base?: number;
+  },
+  actorId?: number | null
+): CurrencyRecord {
+  const db = getDb();
+  const code = input.code.trim().toUpperCase();
+  const nom = input.nom.trim();
+  const nomAr = input.nom_ar?.trim() || nom;
+  const symbole = input.symbole?.trim() || code;
+  const taux = Number(input.taux) > 0 ? Number(input.taux) : 1.0;
+  const tauxAchat = Number(input.taux_achat) > 0 ? Number(input.taux_achat) : Math.round(taux * 0.99 * 10000) / 10000;
+  const tauxVente = Number(input.taux_vente) > 0 ? Number(input.taux_vente) : Math.round(taux * 1.01 * 10000) / 10000;
+  const source = input.source || "manuel";
+  const estActif = input.est_actif !== undefined ? input.est_actif : 1;
+  const estBase = input.est_devise_base ? 1 : 0;
+
+  db.prepare(`
+    INSERT INTO exchange_rates (
+      company_id, code, nom, nom_ar, symbole, taux, taux_achat, taux_vente,
+      source, est_actif, est_devise_base, derniere_mise_a_jour
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+    )
+    ON CONFLICT(company_id, code) DO UPDATE SET
+      nom = excluded.nom,
+      nom_ar = excluded.nom_ar,
+      symbole = excluded.symbole,
+      taux = excluded.taux,
+      taux_achat = excluded.taux_achat,
+      taux_vente = excluded.taux_vente,
+      source = excluded.source,
+      est_actif = excluded.est_actif,
+      est_devise_base = excluded.est_devise_base,
+      derniere_mise_a_jour = CURRENT_TIMESTAMP
+  `).run(companyId, code, nom, nomAr, symbole, taux, tauxAchat, tauxVente, source, estActif, estBase);
+
+  if (actorId) {
+    logAudit(actorId, "update", "exchange_rate", 0, { companyId, code, taux, source });
+  }
+
+  return getExchangeRate(companyId, code)!;
+}
+
+export async function syncCompanyExchangeRates(companyId = 1): Promise<{ success: boolean; updatedCount: number; rates: Record<string, number> }> {
+  const db = getDb();
+  const live = await fetchLiveExchangeRates("MAD");
+  let updatedCount = 0;
+
+  if (live.rates && Object.keys(live.rates).length > 0) {
+    const updateStmt = db.prepare(`
+      UPDATE exchange_rates
+      SET taux = ?,
+          taux_achat = ?,
+          taux_vente = ?,
+          source = 'auto_api',
+          derniere_mise_a_jour = CURRENT_TIMESTAMP
+      WHERE company_id = ? AND code = ? AND est_devise_base = 0
+    `);
+
+    for (const [code, rate] of Object.entries(live.rates)) {
+      if (code !== "MAD" && rate > 0) {
+        const achat = Math.round(rate * 0.99 * 10000) / 10000;
+        const vente = Math.round(rate * 1.01 * 10000) / 10000;
+        const res = updateStmt.run(rate, achat, vente, companyId, code);
+        if (res.changes > 0) {
+          updatedCount += res.changes;
+        }
+      }
+    }
+  }
+
+  return {
+    success: live.success,
+    updatedCount,
+    rates: live.rates,
+  };
+}
+
+export function listForexTransactions(
+  companyId = 1,
+  options?: {
+    typeOperation?: string;
+    typeResultat?: string;
+    limit?: number;
+  }
+): ForexTransactionRecord[] {
+  const db = getDb();
+  let query = "SELECT * FROM forex_transactions WHERE company_id = ?";
+  const params: any[] = [companyId];
+
+  if (options?.typeOperation) {
+    query += " AND type_operation = ?";
+    params.push(options.typeOperation);
+  }
+
+  if (options?.typeResultat) {
+    query += " AND type_resultat = ?";
+    params.push(options.typeResultat);
+  }
+
+  query += " ORDER BY date_reglement DESC, id DESC";
+
+  if (options?.limit && options.limit > 0) {
+    query += " LIMIT ?";
+    params.push(options.limit);
+  }
+
+  return db.prepare(query).all(...params) as ForexTransactionRecord[];
+}
+
+export function getForexSummary(companyId = 1): ForexSummary {
+  const db = getDb();
+
+  const stats = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN type_resultat = 'gain' THEN ecart_change ELSE 0 END), 0) as total_gains,
+      COALESCE(SUM(CASE WHEN type_resultat = 'perte' THEN ABS(ecart_change) ELSE 0 END), 0) as total_pertes,
+      COUNT(*) as count_transactions
+    FROM forex_transactions
+    WHERE company_id = ?
+  `).get(companyId) as { total_gains: number; total_pertes: number; count_transactions: number };
+
+  const docsInDevise = db.prepare(`
+    SELECT COALESCE(SUM(total_ttc_base), 0) as total_base
+    FROM documents
+    WHERE company_id = ? AND devise != 'MAD'
+  `).get(companyId) as { total_base: number };
+
+  const totalGains = Math.round((stats?.total_gains || 0) * 100) / 100;
+  const totalPertes = Math.round((stats?.total_pertes || 0) * 100) / 100;
+  const resultatNet = Math.round((totalGains - totalPertes) * 100) / 100;
+  const totalDevisesFactureesBase = Math.round((docsInDevise?.total_base || 0) * 100) / 100;
+
+  return {
+    totalGains,
+    totalPertes,
+    resultatNet,
+    totalDevisesFactureesBase,
+    countTransactions: stats?.count_transactions || 0,
+  };
+}
+
+export function deleteForexTransaction(id: number, companyId: number, userId: number): boolean {
+  const db = getDb();
+  const tx = db.prepare("SELECT * FROM forex_transactions WHERE id = ? AND company_id = ?").get(id, companyId);
+  if (!tx) return false;
+
+  db.prepare("DELETE FROM forex_transactions WHERE id = ?").run(id);
+  logAudit(userId, "delete", "forex_transaction", id, tx);
+  return true;
+}
+
+
 

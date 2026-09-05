@@ -108,24 +108,88 @@ function integerToFrench(value: number): string {
   return parts.join(" ");
 }
 
-export function amountToFrenchWords(value: number) {
+export function amountToFrenchWords(value: number, currencyCode = "MAD") {
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
-  const dirhams = Math.floor(rounded);
-  const centimes = Math.round((rounded - dirhams) * 100);
+  const major = Math.floor(rounded);
+  const minor = Math.round((rounded - major) * 100);
 
-  const dirhamsPart =
-    dirhams === 1
-      ? "un dirham"
-      : `${integerToFrench(dirhams)} dirhams`;
+  const cur = (currencyCode || "MAD").toUpperCase();
 
-  if (centimes === 0) {
-    return dirhamsPart;
+  let singularMajor = "dirham";
+  let pluralMajor = "dirhams";
+  let singularMinor = "centime";
+  let pluralMinor = "centimes";
+
+  switch (cur) {
+    case "EUR":
+      singularMajor = "euro";
+      pluralMajor = "euros";
+      singularMinor = "cent";
+      pluralMinor = "cents";
+      break;
+    case "USD":
+      singularMajor = "dollar américain";
+      pluralMajor = "dollars américains";
+      singularMinor = "cent";
+      pluralMinor = "cents";
+      break;
+    case "GBP":
+      singularMajor = "livre sterling";
+      pluralMajor = "livres sterling";
+      singularMinor = "penny";
+      pluralMinor = "pence";
+      break;
+    case "CHF":
+      singularMajor = "franc suisse";
+      pluralMajor = "francs suisses";
+      singularMinor = "centime";
+      pluralMinor = "centimes";
+      break;
+    case "CAD":
+      singularMajor = "dollar canadien";
+      pluralMajor = "dollars canadiens";
+      singularMinor = "cent";
+      pluralMinor = "cents";
+      break;
+    case "AED":
+      singularMajor = "dirham des émirats";
+      pluralMajor = "dirhams des émirats";
+      singularMinor = "fils";
+      pluralMinor = "fils";
+      break;
+    case "SAR":
+      singularMajor = "riyal saoudien";
+      pluralMajor = "riyals saoudiens";
+      singularMinor = "halala";
+      pluralMinor = "halalas";
+      break;
+    case "CNY":
+      singularMajor = "yuan";
+      pluralMajor = "yuans";
+      singularMinor = "fen";
+      pluralMinor = "fens";
+      break;
+    default:
+      singularMajor = "dirham";
+      pluralMajor = "dirhams";
+      singularMinor = "centime";
+      pluralMinor = "centimes";
+      break;
   }
 
-  const centimesPart =
-    centimes === 1
-      ? "un centime"
-      : `${integerToFrench(centimes)} centimes`;
+  const majorPart =
+    major === 1
+      ? `un ${singularMajor}`
+      : `${integerToFrench(major)} ${pluralMajor}`;
 
-  return `${dirhamsPart} et ${centimesPart}`;
+  if (minor === 0) {
+    return majorPart;
+  }
+
+  const minorPart =
+    minor === 1
+      ? `un ${singularMinor}`
+      : `${integerToFrench(minor)} ${pluralMinor}`;
+
+  return `${majorPart} et ${minorPart}`;
 }

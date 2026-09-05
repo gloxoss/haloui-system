@@ -61,6 +61,7 @@ export const ar: TranslationDictionary = {
     clients: "الكليان (Clients)",
     fournisseurs: "الفورنيسور (Fournisseurs)",
     caisse: "المداخيل ولاكيس (Caisse)",
+    rapprochement: "المطابقة البنكية (Rapprochement)",
     personnel: "المستخدمين والشهادات",
     parametres: "الإعدادات (Paramètres)",
     utilisateurs: "المستخدمين والصلاحيات",

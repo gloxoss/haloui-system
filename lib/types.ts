@@ -20,7 +20,14 @@ export type FeatureKey =
   | "gestion_tva"
   | "relances"
   | "abonnements"
-  | "portail_client";
+  | "portail_client"
+  | "rapprochement_bancaire"
+  | "multi_devises"
+  | "transferts_stock"
+  | "inventaires_stock"
+  | "lots_series"
+  | "reappro_intelligent"
+  | "wms_emplacements";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -137,6 +144,7 @@ export type BranchRecord = {
   phone: string;
   active: number;
 };
+export type Branch = BranchRecord;
 
 export type EntityRecord = {
   id: number;
@@ -157,11 +165,17 @@ export type ProductRecord = {
   company_id?: number;
   ref: string;
   designation: string;
+  code_barre?: string;
+  categorie?: string;
+  rayon?: string;
+  gestion_mode?: "standard" | "lot_dlc" | "numero_serie";
+  seuil_alerte_dlc_jours?: number;
   unite: string;
   prix_ht: number;
   tva_rate: number;
   active: number;
 };
+export type Product = ProductRecord;
 
 export type UserRecord = {
   id: number;
@@ -209,6 +223,10 @@ export type DocumentRecord = {
   reste: number;
   notes: string;
   status: DocumentStatus;
+  devise?: string;
+  taux_change?: number;
+  total_ttc_base?: number;
+  reste_base?: number;
   signed_at?: string;
   signed_by_name?: string;
   signature_data?: string;
@@ -575,5 +593,615 @@ export type SignDocumentInput = {
   documentId: number;
   signerName: string;
   signatureData: string;
+};
+
+export type PortalSyncSettings = {
+  publicUrl: string;
+  syncSecret: string;
+  autoSync: boolean;
+  lastSyncedAt?: string;
+};
+
+export type PortalSyncExportPayload = {
+  version: string;
+  source: "desktop" | "cloud";
+  exportedAt: string;
+  company?: {
+    id: number;
+    name: string;
+    arabic_name?: string;
+    address?: string;
+    phone?: string;
+    gsm?: string;
+    rc?: string;
+    if_number?: string;
+    tp?: string;
+    ice?: string;
+    legal_notice?: string;
+    logo_path?: string;
+  };
+  clients: Array<{
+    id: number;
+    name: string;
+    ice?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+    portal_enabled: number;
+    portal_access_code: string;
+    portal_token: string;
+    portal_last_login?: string;
+  }>;
+  documents: Array<{
+    id: number;
+    company_id: number;
+    client_id: number;
+    type: string;
+    numero: string;
+    date: string;
+    date_echeance?: string;
+    total_ht: number;
+    total_tva: number;
+    total_ttc: number;
+    avance: number;
+    reste: number;
+    status: string;
+    signed_at?: string;
+    signed_by_name?: string;
+    signature_data?: string;
+    notes?: string;
+  }>;
+  document_lines: Array<{
+    id: number;
+    document_id: number;
+    reference?: string;
+    description: string;
+    quantite: number;
+    unite?: string;
+    prix_unitaire_ht: number;
+    taux_tva: number;
+    total_ht: number;
+    total_ttc: number;
+  }>;
+};
+
+export type PortalSyncResponse = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  timestamp?: string;
+  signedDocuments?: Array<{
+    id: number;
+    signed_at: string;
+    signed_by_name: string;
+    signature_data: string;
+    status: string;
+  }>;
+  clientLastLogins?: Array<{
+    id: number;
+    portal_last_login: string;
+  }>;
+};
+
+export type BankAccountRecord = {
+  id: number;
+  company_id: number;
+  nom_banque: string;
+  intitule_compte: string;
+  rib: string;
+  iban?: string;
+  bic_swift?: string;
+  devise: string;
+  solde_initial: number;
+  solde_actuel: number;
+  solde_rapproche: number;
+  statut: "actif" | "archive";
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BankStatementRecord = {
+  id: number;
+  company_id: number;
+  bank_account_id: number;
+  nom_fichier: string;
+  format_fichier: "OFX" | "QIF" | "CSV";
+  date_import: string;
+  date_debut?: string;
+  date_fin?: string;
+  solde_initial: number;
+  solde_final: number;
+  total_debits: number;
+  total_credits: number;
+  nb_operations: number;
+  nb_rapprochees: number;
+  statut: "en_cours" | "valide" | "archive";
+  imported_by?: number | null;
+  created_at: string;
+};
+
+export type BankOperationStatus = "non_rapproche" | "suggere" | "rapproche" | "ignore";
+
+export type BankOperationRecord = {
+  id: number;
+  company_id: number;
+  statement_id: number;
+  bank_account_id: number;
+  date_operation: string;
+  date_valeur?: string;
+  libelle: string;
+  reference_bancaire?: string;
+  type_mouvement: "credit" | "debit";
+  montant: number;
+  categorie?: string;
+  statut_rapprochement: BankOperationStatus;
+  rapprochement_score: number;
+  document_id?: number | null;
+  document_type?: string;
+  rapproche_le?: string;
+  rapproche_par?: number | null;
+  created_at: string;
+  matched_document?: {
+    id: number;
+    numero: number;
+    type: string;
+    date: string;
+    total_ttc: number;
+    reste: number;
+    client_name?: string;
+    fournisseur_name?: string;
+  };
+  suggestion?: {
+    document_id: number;
+    document_numero: number;
+    document_type: string;
+    document_date: string;
+    entity_name: string;
+    montant: number;
+    score: number;
+    motif: string;
+  };
+};
+
+export type CurrencyRecord = {
+  id: number;
+  company_id: number;
+  code: string;
+  nom: string;
+  nom_ar: string;
+  symbole: string;
+  taux: number;
+  taux_achat?: number;
+  taux_vente?: number;
+  source: "auto_api" | "bam" | "manuel";
+  est_actif: number;
+  est_devise_base: number;
+  derniere_mise_a_jour: string;
+  created_at: string;
+};
+
+export type ForexTransactionRecord = {
+  id: number;
+  company_id: number;
+  type_operation: "vente" | "achat";
+  document_id?: number | null;
+  sortie_caisse_id?: number | null;
+  tiers_nom: string;
+  reference_piece: string;
+  date_operation: string;
+  date_reglement: string;
+  devise: string;
+  montant_devise: number;
+  taux_initial: number;
+  taux_reglement: number;
+  montant_initial_base: number;
+  montant_regle_base: number;
+  ecart_change: number;
+  type_resultat: "gain" | "perte" | "nul";
+  compte_comptable: string;
+  notes?: string;
+  created_by?: number | null;
+  created_at: string;
+};
+
+export type ForexSummary = {
+  totalGains: number;
+  totalPertes: number;
+  resultatNet: number;
+  totalDevisesFactureesBase: number;
+  countTransactions: number;
+};
+
+export type ReconciliationStats = {
+  totalOperations: number;
+  nbRapprochees: number;
+  nbSuggeres: number;
+  nbEnAttente: number;
+  soldeReleve: number;
+  soldeRapproche: number;
+  soldeComptable: number;
+  ecartRapprochement: number;
+  tauxRapprochementPercent: number;
+};
+
+export type ParsedBankStatement = {
+  format: "OFX" | "QIF" | "CSV";
+  nomFichier: string;
+  dateDebut?: string;
+  dateFin?: string;
+  soldeInitial?: number;
+  soldeFinal?: number;
+  devise?: string;
+  operations: Array<{
+    date: string;
+    dateValeur?: string;
+    libelle: string;
+    reference?: string;
+    type: "credit" | "debit";
+    montant: number;
+    categorie?: string;
+  }>;
+};
+
+export type StockTransfertStatut = "brouillon" | "en_transit" | "recu" | "annule";
+
+export type StockTransfertLine = {
+  id: number;
+  transfert_id?: number;
+  produit_id: number;
+  produit_ref?: string;
+  designation: string;
+  unite: string;
+  quantite_expediee: number;
+  quantite_recue: number;
+  ecart: number;
+  motif_ecart?: string;
+};
+
+export type StockTransfertRecord = {
+  id: number;
+  company_id: number;
+  numero: string;
+  date_transfert: string;
+  source_branch_id: number;
+  destination_branch_id: number;
+  source_branch_name?: string;
+  destination_branch_name?: string;
+  chauffeur_nom: string;
+  vehicule_matricule: string;
+  bon_transport_ref: string;
+  notes: string;
+  statut: StockTransfertStatut;
+  date_expedition?: string;
+  expedie_par_id?: number | null;
+  expedie_par_nom?: string;
+  date_reception?: string;
+  recu_par_id?: number | null;
+  recu_par_nom?: string;
+  total_articles: number;
+  total_quantite_expediee: number;
+  total_quantite_recue: number;
+  total_ecart: number;
+  motif_ecart_global?: string;
+  created_by?: number | null;
+  updated_by?: number | null;
+  created_at: string;
+  updated_at: string;
+  lignes?: StockTransfertLine[];
+};
+
+export type StockDepotRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  produit_id: number;
+  produit_ref?: string;
+  produit_designation?: string;
+  produit_unite?: string;
+  quantite: number;
+  quantite_en_transit: number;
+  seuil_alerte: number;
+  updated_at: string;
+};
+
+export type StockMouvementRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  produit_id: number;
+  produit_designation?: string;
+  type_mouvement: "transfert_sortie" | "transfert_entree" | "perte_transport" | "initialisation" | "ajustement";
+  quantite: number;
+  stock_avant: number;
+  stock_apres: number;
+  reference_document: string;
+  transfert_id?: number | null;
+  motif?: string;
+  user_id?: number | null;
+  user_nom?: string;
+  created_at: string;
+};
+
+export type StockTransfertKPIs = {
+  totalTransferts: number;
+  enTransitCount: number;
+  enTransitArticlesCount: number;
+  enAttenteReceptionCount: number;
+  recusCount: number;
+  recusConformesCount: number;
+  totalPiecesManquantes: number;
+  tauxConformite: number;
+};
+
+// ============================================================
+// INVENTAIRES TOURNANTS & PÉRIODIQUES
+// ============================================================
+
+export type InventaireStatut = "en_cours" | "cloture" | "annule";
+export type InventaireType = "general" | "tournant_famille" | "tournant_rayon";
+export type ComptageLigneStatut = "non_compte" | "conforme" | "ecart";
+
+export type InventaireLigneRecord = {
+  id?: number;
+  inventaire_id: number;
+  produit_id: number;
+  designation: string;
+  ref: string;
+  produit_ref?: string;
+  rayon?: string;
+  categorie?: string;
+  code_barre?: string;
+  unite: string;
+  prix_unitaire_ht: number;
+  stock_theorique: number;
+  stock_physique: number;
+  ecart_quantite: number;
+  valeur_ecart_ht: number;
+  statut_comptage: ComptageLigneStatut;
+  motif_ecart?: string;
+  compte_at?: string;
+};
+
+export type InventaireRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  numero: string;
+  titre: string;
+  type_inventaire: InventaireType;
+  critere_filtre?: string;
+  statut: InventaireStatut;
+  date_debut: string;
+  date_cloture?: string;
+  total_articles: number;
+  total_comptes: number;
+  total_ecarts_qte: number;
+  total_valeur_ecart_ht: number;
+  notes?: string;
+  created_by?: number;
+  cloture_par_id?: number;
+  cloture_par_nom?: string;
+  created_at: string;
+  updated_at?: string;
+  lignes?: InventaireLigneRecord[];
+};
+
+export type InventaireKPIs = {
+  sessionsEnCours: number;
+  sessionsCloturees: number;
+  tauxConformiteMoyen: number;
+  totalEcartsQuantite: number;
+  totalValeurEcartsMAD: number;
+  totalArticlesEcart?: number;
+  dernierInventaireCloture?: {
+    numero: string;
+    titre: string;
+    date: string;
+    tauxConformite: number;
+  };
+};
+
+// ============================================================
+// TRAÇABILITÉ DES LOTS & SÉRIES (DLC / DLUO)
+// ============================================================
+
+export type LotStatut = "actif" | "alerte_peremption" | "perime" | "quarantaine" | "epuise";
+
+export type ProduitLotRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  produit_id: number;
+  produit_designation?: string;
+  produit_ref?: string;
+  code_barre?: string;
+  unite?: string;
+  numero_lot: string;
+  date_fabrication?: string;
+  date_peremption: string;
+  jours_restants?: number;
+  quantite_initiale: number;
+  quantite_restante: number;
+  statut: LotStatut;
+  cout_unitaire_ht: number;
+  valeur_stock_ht?: number;
+  fournisseur_id?: number;
+  fournisseur_nom?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type SerieStatut = "en_stock" | "vendu" | "en_transit" | "sav" | "defectueux";
+
+export type ProduitSerieRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  produit_id: number;
+  produit_designation?: string;
+  produit_ref?: string;
+  code_barre?: string;
+  numero_serie: string;
+  statut: SerieStatut;
+  document_achat_ref?: string;
+  document_vente_id?: number;
+  document_vente_numero?: string;
+  date_entree: string;
+  date_sortie?: string;
+  garantie_fin_date?: string;
+  jours_garantie_restants?: number;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type LotsSeriesKPIs = {
+  totalLotsActifs: number;
+  lotsPerimes: number;
+  lotsAlerteUrgent: number;
+  lotsAlerteAttention: number;
+  valeurStockPerimeMAD: number;
+  totalSeriesActives: number;
+  seriesSousGarantie: number;
+  seriesEnSav: number;
+};
+
+// --- GESTION DES EMPLACEMENTS WMS ---
+export type EmplacementType =
+  | "picking"
+  | "reserve"
+  | "quarantaine"
+  | "transit";
+
+export type EmplacementStatut = "actif" | "inactif";
+
+export type EmplacementRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  zone: string;
+  allee: string;
+  travee: string;
+  niveau: string;
+  bac: string;
+  code_emplacement: string;
+  type_emplacement: EmplacementType;
+  capacite_max_kg: number;
+  statut: EmplacementStatut;
+  notes?: string;
+  nb_articles_assignes?: number;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type ProduitEmplacementRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  produit_id: number;
+  produit_designation?: string;
+  produit_ref?: string;
+  code_barre?: string;
+  emplacement_id: number;
+  emplacement_code: string;
+  zone?: string;
+  allee?: string;
+  travee?: string;
+  niveau?: string;
+  bac?: string;
+  quantite: number;
+  capacite_max: number;
+  est_principal: boolean;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type WmsKPIs = {
+  totalEmplacements: number;
+  emplacementsOccupes: number;
+  emplacementsVides: number;
+  tauxOccupation: number;
+  totalProduitsCartographies: number;
+};
+
+export type PickingListItem = {
+  produit_id: number;
+  produit_ref: string;
+  produit_designation: string;
+  unite: string;
+  quantite_demandee: number;
+  quantite_prelevee?: number;
+  emplacement_code: string;
+  zone: string;
+  allee: string;
+  travee: string;
+  niveau: string;
+  bac: string;
+  ordre_picking: number;
+  code_barre?: string;
+  numero_lot?: string;
+};
+
+export type PickingListRecord = {
+  document_id: number;
+  document_type: "bl" | "bs" | "bc" | "bt";
+  document_numero: string;
+  date_document: string;
+  client_ou_destinataire?: string;
+  depot_source_nom?: string;
+  total_lignes: number;
+  total_articles: number;
+  items: PickingListItem[];
+};
+
+// --- RÉAPPROVISIONNEMENT INTELLIGENT ---
+export type ReapproUrgence =
+  | "rupture"
+  | "critique"
+  | "a_commander"
+  | "optimal"
+  | "surstock";
+
+export type ReapproSuggestionRecord = {
+  produit_id: number;
+  reference: string;
+  designation: string;
+  categorie: string;
+  unite: string;
+  stock_actuel: number;
+  stock_minimum: number;
+  stock_maximum: number;
+  quantite_en_commande: number;
+  delai_livraison_jours: number;
+  fournisseur_id?: number;
+  fournisseur_nom?: string;
+  fournisseur_delai?: number;
+  fournisseur_franco_ht?: number;
+  prix_achat_ht: number;
+  conditionnement_achat: number;
+  emplacement_code?: string;
+  vmj: number; // Vente Moyenne Journalière
+  rop: number; // Point de Commande (Reorder Point)
+  quantite_suggeree: number;
+  montant_estime_ht: number;
+  urgence: ReapproUrgence;
+  jours_autonomie: number;
+};
+
+export type ReapproKPIs = {
+  articlesEnRupture: number;
+  articlesACommander: number;
+  articlesSurstock: number;
+  budgetReapproEstimeHT: number;
+  fournisseursConcernes: number;
 };
 

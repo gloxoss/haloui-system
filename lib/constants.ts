@@ -125,6 +125,13 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "relances", label: "Relances Automatiques & Impayés", description: "Module intelligent de relances par paliers (J-3, J+7, J+15, J+30) par WhatsApp et Email.", category: "commercial" },
   { key: "abonnements", label: "Abonnements & Facturation Récurrente", description: "Gestion des contrats périodiques, prélèvements automatiques et tableau de bord MRR/ARR.", category: "commercial" },
   { key: "portail_client", label: "Portail Client Dédié", description: "Espace client sécurisé : solde dû, téléchargement devis/factures et signature de commandes.", category: "commercial" },
+  { key: "rapprochement_bancaire", label: "Rapprochement Bancaire", description: "Import des relevés bancaires (OFX, QIF, CSV) et réconciliation automatique avec les factures et dépenses.", category: "caisse" },
+  { key: "multi_devises", label: "Multi-Devises & Taux de Change", description: "Facturation et achats en devises étrangères (EUR, USD, GBP) avec taux en direct et calcul automatique des gains/pertes de change.", category: "commercial" },
+  { key: "transferts_stock", label: "Transferts Inter-Dépôts & Bons BT", description: "Mouvements de stock entre magasins avec validation en 2 étapes (expédition puis réception physique).", category: "commercial" },
+  { key: "inventaires_stock", label: "Inventaires Tournants & Périodiques", description: "Comptages physiques par rayon/code-barres, détection d'écarts et clôture avec ajustements automatiques.", category: "commercial" },
+  { key: "lots_series", label: "Lots, Séries & DLC/DLUO", description: "Traçabilité des produits sensibles, suivi des numéros de lot et de série avec alertes d'expiration.", category: "commercial" },
+  { key: "reappro_intelligent", label: "Réapprovisionnement Intelligent", description: "Calcul automatique des commandes fournisseurs basé sur les seuils, délais de livraison et vitesse d'écoulement (VMJ).", category: "commercial" },
+  { key: "wms_emplacements", label: "Gestion des Emplacements WMS", description: "Cartographie détaillée (Allée/Travée/Niveau/Bac) et génération optimisée des listes de picking en serpentin.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -147,6 +154,13 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   relances: true,
   abonnements: true,
   portail_client: true,
+  rapprochement_bancaire: true,
+  multi_devises: true,
+  transferts_stock: true,
+  inventaires_stock: true,
+  lots_series: true,
+  reappro_intelligent: true,
+  wms_emplacements: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -556,13 +570,110 @@ export const PRIMARY_NAV_ITEMS = [
   { href: "/relances", label: "Relances & Impayés", feature: "relances" as const },
   { href: "/personnel", label: "Personnel", feature: "personnel" as const },
   { href: "/chiffre-affaires", label: "Chiffre d'affaires", feature: "chiffre_affaires" as const },
+  { href: "/rapprochement-bancaire", label: "Rapprochement bancaire", feature: "rapprochement_bancaire" as const },
+  { href: "/devises", label: "Devises & Change", feature: "multi_devises" as const },
+] as const;
+
+export const DEVISES_STANDARDS = [
+  { code: "MAD", nom: "Dirham Marocain", nomAr: "درهم مغربي", symbole: "DH", tauxDefaut: 1.0, estBase: true },
+  { code: "EUR", nom: "Euro", nomAr: "يورو", symbole: "€", tauxDefaut: 10.87, estBase: false },
+  { code: "USD", nom: "Dollar Américain", nomAr: "دولار أمريكي", symbole: "$", tauxDefaut: 9.36, estBase: false },
+  { code: "GBP", nom: "Livre Sterling", nomAr: "جنيه إسترليني", symbole: "£", tauxDefaut: 12.65, estBase: false },
+  { code: "CHF", nom: "Franc Suisse", nomAr: "فرنك سويسري", symbole: "CHF", tauxDefaut: 11.20, estBase: false },
+  { code: "CAD", nom: "Dollar Canadien", nomAr: "دولار كندي", symbole: "$ CA", tauxDefaut: 7.25, estBase: false },
+  { code: "AED", nom: "Dirham des Émirats", nomAr: "درهم إماراتي", symbole: "AED", tauxDefaut: 2.71, estBase: false },
+  { code: "SAR", nom: "Riyal Saoudien", nomAr: "ريال سعودي", symbole: "SAR", tauxDefaut: 2.65, estBase: false },
+  { code: "CNY", nom: "Yuan Chinois", nomAr: "يوان صيني", symbole: "¥", tauxDefaut: 1.38, estBase: false },
+  { code: "TRY", nom: "Livre Turque", nomAr: "ليرة تركية", symbole: "₺", tauxDefaut: 0.28, estBase: false },
+] as const;
+
+export const BANQUES_MAROCAINES = [
+  { code: "007", nom: "Attijariwafa Bank", nomAr: "التجاري وفا بنك", logo: "AWB" },
+  { code: "101", nom: "Banque Populaire (BCP)", nomAr: "البنك الشعبي", logo: "BCP" },
+  { code: "011", nom: "Bank of Africa (BMCE)", nomAr: "بنك أفريقيا", logo: "BOA" },
+  { code: "230", nom: "CIH Bank", nomAr: "بنك القرض العقاري والسياحي", logo: "CIH" },
+  { code: "022", nom: "Société Générale Maroc (SGMB)", nomAr: "الشركة العامة المغرب", logo: "SGMB" },
+  { code: "013", nom: "BMCI (BNP Paribas)", nomAr: "البنك المغربي للتجارة والصناعة", logo: "BMCI" },
+  { code: "225", nom: "Crédit Agricole du Maroc (CAM)", nomAr: "القرض الفلاحي للمغرب", logo: "CAM" },
+  { code: "021", nom: "Crédit du Maroc (CDM)", nomAr: "مصرف المغرب", logo: "CDM" },
+  { code: "350", nom: "Al Barid Bank", nomAr: "بريد بنك", logo: "ABB" },
+  { code: "050", nom: "CFG Bank", nomAr: "سي إف جي بنك", logo: "CFG" },
+  { code: "999", nom: "Autre établissement / Compte international", nomAr: "مؤسسة أخرى / حساب دولي", logo: "AUTRE" },
 ] as const;
 
 export const BONS_NAV_ITEMS = [
   { href: "/bons-livraison", label: "Bons de livraison", feature: "bons_livraison" as const },
   { href: "/bons-sortie", label: "Bons de sortie", feature: "bons_sortie" as const },
   { href: "/bons-commande", label: "Bons de commande", feature: "bons_commande" as const },
+  { href: "/transferts", label: "Transferts inter-dépôts", feature: "transferts_stock" as const },
+  { href: "/inventaires", label: "Inventaires & Comptage", feature: "inventaires_stock" as const },
+  { href: "/lots-series", label: "Lots, Séries & DLC", feature: "lots_series" as const },
+  { href: "/reapprovisionnement", label: "Réapprovisionnement", feature: "reappro_intelligent" as const },
+  { href: "/emplacements", label: "Emplacements & WMS", feature: "wms_emplacements" as const },
 ] as const;
+
+export const INVENTAIRE_TYPE_LABELS: Record<string, { label: string; labelAr: string; color: string; description: string }> = {
+  general: {
+    label: "Inventaire Général",
+    labelAr: "جرد عام شامل",
+    color: "indigo",
+    description: "Comptage complet de tous les articles du magasin / dépôt",
+  },
+  tournant_famille: {
+    label: "Tournant par Famille",
+    labelAr: "جرد دوري حسب الصنف",
+    color: "teal",
+    description: "Comptage ciblé d'une catégorie spécifique (Alimentaire, Lubrifiants...)",
+  },
+  tournant_rayon: {
+    label: "Tournant par Rayon",
+    labelAr: "جرد دوري حسب الجناح",
+    color: "blue",
+    description: "Comptage ciblé d'un emplacement / rayon physique",
+  },
+};
+
+export const INVENTAIRE_STATUT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  en_cours: { label: "En cours de comptage", labelAr: "قيد الجرد", color: "blue" },
+  cloture: { label: "Clôturé & Ajusté", labelAr: "مغلق ومصحح", color: "teal" },
+  annule: { label: "Annulé", labelAr: "ملغى", color: "gray" },
+};
+
+export const MOTIFS_ECART_INVENTAIRE = [
+  { value: "Casse / Avarie en rayon", label: "Casse / Avarie constatée en rayon" },
+  { value: "Vol / Démarque inconnue", label: "Vol / Démarque inconnue" },
+  { value: "Péremption / Date dépassée", label: "Péremption / Produit périmé retiré" },
+  { value: "Erreur de saisie précédente", label: "Erreur d'écriture / Comptage antérieur" },
+  { value: "Surplus / Retrouvé en réserve", label: "Surplus / Colis retrouvé en réserve" },
+  { value: "Don / Dégustation / Offert", label: "Échantillon offert / Dégustation café" },
+  { value: "Autre motif", label: "Autre justification" },
+];
+
+export const RAYONS_MAGASIN = [
+  "Boutique - Rayon Frais",
+  "Boutique - Boissons",
+  "Boutique - Épicerie & Snacks",
+  "Café Station",
+  "Baie d'Entretien",
+  "Baie Pièces & Équipements",
+  "Pistes Carburants",
+  "Dépôt Matériaux",
+];
+
+export const CATEGORIES_PRODUIT = [
+  "Alimentaire & Frais",
+  "Alimentaire & Boissons",
+  "Café & Épicerie",
+  "Carburants & Énergies",
+  "Lubrifiants & Fluides",
+  "Équipements & Batteries",
+  "Équipements & Outillage",
+  "Matériaux BTP",
+  "Services Entretien",
+  "Logistique",
+  "Général",
+];
+
 
 export const MORE_NAV_ITEMS = [
   { href: "/produits", label: "Produits", feature: "produits" as const },
@@ -579,4 +690,28 @@ export function getDocumentModule(slug: string) {
 export function getModuleSlugByType(type: DocumentType) {
   return DOCUMENT_MODULES.find((module) => module.type === type)?.slug ?? "devis";
 }
+
+export const TYPES_EMPLACEMENT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  picking: { label: "Picking (Préparation)", labelAr: "منطقة الالتقاط", color: "blue" },
+  reserve: { label: "Réserve (Racks Hauts)", labelAr: "مخزون احتياطي", color: "teal" },
+  quarantaine: { label: "Quarantaine (Contrôle)", labelAr: "منطقة الحجر الصحي", color: "red" },
+  transit: { label: "Transit (Quai Réception)", labelAr: "منطقة العبور", color: "orange" },
+};
+
+export const REAPPRO_URGENCE_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  rupture: { label: "Rupture de stock", labelAr: "نفاد المخزون", color: "red" },
+  critique: { label: "Stock critique", labelAr: "حرج (تحت حد الأمان)", color: "orange" },
+  a_commander: { label: "À commander", labelAr: "يجب الطلب", color: "yellow" },
+  optimal: { label: "Optimal", labelAr: "مخزون كافٍ", color: "teal" },
+  surstock: { label: "Surstock", labelAr: "فائض عن الحاجة", color: "indigo" },
+};
+
+export const ZONES_ENTREPOT_DEFAULT = [
+  "Zone A (Frais / Boissons)",
+  "Zone B (Épicerie & Sec)",
+  "Zone C (Lubrifiants & Fluides)",
+  "Zone D (Batteries & Outillage)",
+  "Zone E (Matériaux & Extérieur)",
+];
+
 
