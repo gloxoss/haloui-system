@@ -132,6 +132,8 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "lots_series", label: "Lots, Séries & DLC/DLUO", description: "Traçabilité des produits sensibles, suivi des numéros de lot et de série avec alertes d'expiration.", category: "commercial" },
   { key: "reappro_intelligent", label: "Réapprovisionnement Intelligent", description: "Calcul automatique des commandes fournisseurs basé sur les seuils, délais de livraison et vitesse d'écoulement (VMJ).", category: "commercial" },
   { key: "wms_emplacements", label: "Gestion des Emplacements WMS", description: "Cartographie détaillée (Allée/Travée/Niveau/Bac) et génération optimisée des listes de picking en serpentin.", category: "commercial" },
+  { key: "nomenclatures_fabrication", label: "Nomenclatures & Kits (BOM)", description: "Produits composés (Kits/Packs), calcul du coût de revient, déstockage des composants et ordres de fabrication.", category: "commercial" },
+  { key: "etiquettes_codes_barres", label: "Étiquettes & Codes-Barres", description: "Édition et impression en masse d'étiquettes de prix (EAN-13, Code 128, QR Code) pour imprimantes thermiques et A4.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -161,6 +163,8 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   lots_series: true,
   reappro_intelligent: true,
   wms_emplacements: true,
+  nomenclatures_fabrication: true,
+  etiquettes_codes_barres: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -610,6 +614,8 @@ export const BONS_NAV_ITEMS = [
   { href: "/lots-series", label: "Lots, Séries & DLC", feature: "lots_series" as const },
   { href: "/reapprovisionnement", label: "Réapprovisionnement", feature: "reappro_intelligent" as const },
   { href: "/emplacements", label: "Emplacements & WMS", feature: "wms_emplacements" as const },
+  { href: "/nomenclatures", label: "Nomenclatures & Kits", feature: "nomenclatures_fabrication" as const },
+  { href: "/etiquettes", label: "Étiquettes & Codes-Barres", feature: "etiquettes_codes_barres" as const },
 ] as const;
 
 export const INVENTAIRE_TYPE_LABELS: Record<string, { label: string; labelAr: string; color: string; description: string }> = {
@@ -712,6 +718,169 @@ export const ZONES_ENTREPOT_DEFAULT = [
   "Zone C (Lubrifiants & Fluides)",
   "Zone D (Batteries & Outillage)",
   "Zone E (Matériaux & Extérieur)",
+];
+
+export const NATURE_PRODUIT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  simple: { label: "Article standard (Simple)", labelAr: "منتج بسيط قياسي", color: "gray" },
+  kit: { label: "Pack / Kit composé", labelAr: "حزمة / طقم مجمّع", color: "indigo" },
+  composant: { label: "Composant élémentaire", labelAr: "مكوّن أولي", color: "teal" },
+};
+
+export const MODE_DESTOCKAGE_LABELS: Record<string, { label: string; labelAr: string; description: string }> = {
+  composants: {
+    label: "À la commande (Déstocker les composants)",
+    labelAr: "عند الطلب (خصم المكونات)",
+    description: "Le pack n'est pas assemblé d'avance. La vente décrémente chaque composant élémentaire.",
+  },
+  produit_fini: {
+    label: "Pré-assemblé (Déstocker le kit fini)",
+    labelAr: "مجمّع مسبقاً (خصم المنتج التام)",
+    description: "Le pack est fabriqué au préalable via un Ordre de Fabrication en atelier.",
+  },
+};
+
+export const ORDRE_FABRICATION_STATUT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  planifie: { label: "Planifié", labelAr: "مخطط له", color: "blue" },
+  en_cours: { label: "En cours d'assemblage", labelAr: "قيد التجميع", color: "orange" },
+  termine: { label: "Terminé", labelAr: "مكتمل", color: "teal" },
+  annule: { label: "Annulé", labelAr: "ملغى", color: "gray" },
+};
+
+export const BARCODE_SYMBOLOGY_LABELS: Record<string, { label: string; labelAr: string; description: string }> = {
+  ean13: {
+    label: "EAN-13 (Standard Rayon)",
+    labelAr: "EAN-13 (قياسي رفوف)",
+    description: "Code à 13 chiffres universel pour la grande distribution et les supermarchés.",
+  },
+  code128: {
+    label: "Code 128 (Logistique Alphanumérique)",
+    labelAr: "Code 128 (لوجستي نصي)",
+    description: "Code-barres haute densité acceptant lettres et chiffres pour références internes.",
+  },
+  qrcode: {
+    label: "QR Code (2D Haute Densité)",
+    labelAr: "QR Code (رمز استجابة سريعة)",
+    description: "Matrice 2D scannable par smartphone et douchette 2D.",
+  },
+};
+
+export const ETIQUETTES_FORMATS_PRESETS = [
+  // Thermiques Rouleau
+  {
+    id: "zebra_50x30",
+    nom: "Zebra 50 x 30 mm (Standard Rayon)",
+    nomAr: "زيبرا 50 × 30 مم (قياسي)",
+    imprimanteCible: "Zebra" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 50,
+    hauteurMm: 30,
+  },
+  {
+    id: "zebra_70x35",
+    nom: "Zebra 70 x 35 mm (Gondole & Carton)",
+    nomAr: "زيبرا 70 × 35 مم (رف كرتون)",
+    imprimanteCible: "Zebra" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 70,
+    hauteurMm: 35,
+  },
+  {
+    id: "zebra_100x50",
+    nom: "Zebra 100 x 50 mm (Logistique Palette)",
+    nomAr: "زيبرا 100 × 50 مم (لوجستي)",
+    imprimanteCible: "Zebra" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 100,
+    hauteurMm: 50,
+  },
+  {
+    id: "brother_62x29",
+    nom: "Brother DK-11209 (62 x 29 mm)",
+    nomAr: "براذر 62 × 29 مم",
+    imprimanteCible: "Brother" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 62,
+    hauteurMm: 29,
+  },
+  {
+    id: "dymo_89x36",
+    nom: "Dymo 99012 (89 x 36 mm)",
+    nomAr: "دايمو 89 × 36 مم",
+    imprimanteCible: "Dymo" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 89,
+    hauteurMm: 36,
+  },
+  {
+    id: "dymo_54x25",
+    nom: "Dymo 11352 (54 x 25 mm)",
+    nomAr: "دايمو 54 × 25 مم",
+    imprimanteCible: "Dymo" as const,
+    typeSupport: "thermique_rouleau" as const,
+    largeurMm: 54,
+    hauteurMm: 25,
+  },
+  // Planches A4 Adhésives
+  {
+    id: "avery_24_a4",
+    nom: "Planche A4 - 24 étiquettes (70 x 37 mm, 3x8)",
+    nomAr: "ورقة A4 - 24 ملصق (3×8)",
+    imprimanteCible: "A4 Standard" as const,
+    typeSupport: "planche_a4" as const,
+    largeurMm: 70,
+    hauteurMm: 37,
+    colonnes: 3,
+    lignes: 8,
+    margeHautMm: 0,
+    margeGaucheMm: 0,
+    espaceColMm: 0,
+    espaceLigMm: 0,
+  },
+  {
+    id: "avery_14_a4",
+    nom: "Planche A4 - 14 étiquettes (105 x 42 mm, 2x7)",
+    nomAr: "ورقة A4 - 14 ملصق (2×7)",
+    imprimanteCible: "A4 Standard" as const,
+    typeSupport: "planche_a4" as const,
+    largeurMm: 105,
+    hauteurMm: 42,
+    colonnes: 2,
+    lignes: 7,
+    margeHautMm: 0,
+    margeGaucheMm: 0,
+    espaceColMm: 0,
+    espaceLigMm: 0,
+  },
+  {
+    id: "avery_40_a4",
+    nom: "Planche A4 - 40 étiquettes (48.5 x 25.4 mm, 4x10)",
+    nomAr: "ورقة A4 - 40 ملصق (4×10)",
+    imprimanteCible: "A4 Standard" as const,
+    typeSupport: "planche_a4" as const,
+    largeurMm: 48.5,
+    hauteurMm: 25.4,
+    colonnes: 4,
+    lignes: 10,
+    margeHautMm: 0,
+    margeGaucheMm: 0,
+    espaceColMm: 0,
+    espaceLigMm: 0,
+  },
+  {
+    id: "avery_65_a4",
+    nom: "Planche A4 - 65 étiquettes (38 x 21.2 mm, 5x13)",
+    nomAr: "ورقة A4 - 65 ملصق (5×13)",
+    imprimanteCible: "A4 Standard" as const,
+    typeSupport: "planche_a4" as const,
+    largeurMm: 38,
+    hauteurMm: 21.2,
+    colonnes: 5,
+    lignes: 13,
+    margeHautMm: 0,
+    margeGaucheMm: 0,
+    espaceColMm: 0,
+    espaceLigMm: 0,
+  },
 ];
 
 

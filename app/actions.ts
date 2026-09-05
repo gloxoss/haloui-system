@@ -115,13 +115,27 @@ import {
   genererPickingList,
 } from "@/lib/wms";
 import {
+  getNomenclature,
+  saveNomenclature,
+  supprimerNomenclature,
+  listKits,
+  getNomenclaturesKPIs,
+  lancerOrdreFabrication,
+  listOrdresFabrication,
+} from "@/lib/nomenclatures";
+import { generateBarcodeSvg } from "@/lib/barcodes";
+import {
   type InventaireType,
   type SerieStatut,
   type EmplacementType,
   type EmplacementStatut,
   type ReapproUrgence,
+  type NatureProduit,
+  type ModeDestockageKit,
+  type BarcodeSymbology,
+  type LabelConfig,
 } from "@/lib/types";
-import { createDatabaseBackup } from "@/lib/db";
+import { createDatabaseBackup, getDb } from "@/lib/db";
 import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
 import {
   type DocumentLineInput,
@@ -2139,6 +2153,196 @@ export async function genererPickingListAction(documentId: number) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================
+// NOMENCLATURES & ORDRES DE FABRICATION
+// ============================================================
+
+export async function getNomenclatureAction(produitParentId: number, branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const nomenclature = getNomenclature(produitParentId, companyId, branchId);
+    return { success: true as const, nomenclature };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function saveNomenclatureAction(input: {
+  produitParentId: number;
+  natureProduit?: NatureProduit;
+  modeDestockageKit?: ModeDestockageKit;
+  composants: Array<{
+    composantId: number;
+    quantite: number;
+    unite?: string;
+    tauxPertePourcent?: number;
+    ordre?: number;
+    notes?: string;
+  }>;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const updated = saveNomenclature({ ...input, companyId });
+    refresh(["/nomenclatures", "/produits", "/dashboard"]);
+    return { success: true as const, nomenclature: updated };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function supprimerNomenclatureAction(produitParentId: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    supprimerNomenclature(produitParentId, companyId);
+    refresh(["/nomenclatures", "/produits"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function listKitsAction(branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const kits = listKits(companyId, branchId);
+    return { success: true as const, kits };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, kits: [] };
+  }
+}
+
+export async function getNomenclaturesKPIsAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const kpis = getNomenclaturesKPIs(companyId);
+    return { success: true as const, kpis };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false as const,
+      error: msg,
+      kpis: {
+        totalKits: 0,
+        totalComposants: 0,
+        totalOrdresFabrication: 0,
+        valeurStockKitsHT: 0,
+      },
+    };
+  }
+}
+
+export async function lancerOrdreFabricationAction(input: {
+  branchId: number;
+  produitId: number;
+  typeOperation?: "assemblage" | "desassemblage";
+  quantite: number;
+  notes?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ofRecord = lancerOrdreFabrication({
+      ...input,
+      companyId,
+      responsableId: session.user.id,
+    });
+    refresh(["/nomenclatures", "/produits", "/transferts", "/dashboard"]);
+    return { success: true as const, ofRecord };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function listOrdresFabricationAction(branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ordres = listOrdresFabrication(companyId, branchId);
+    return { success: true as const, ordres };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, ordres: [] };
+  }
+}
+
+// ============================================================
+// ÉTIQUETTES & CODES-BARRES
+// ============================================================
+
+export async function generateBarcodeSvgAction(
+  symbology: BarcodeSymbology,
+  code: string,
+  options?: { width?: number; height?: number; includeText?: boolean }
+) {
+  try {
+    const svg = await generateBarcodeSvg(symbology, code, options);
+    return { success: true as const, svg };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, svg: "" };
+  }
+}
+
+export async function getEtiquettesProduitsAction(options?: {
+  branchId?: number;
+  search?: string;
+  categorie?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  const db = getDb();
+
+  try {
+    let query = `
+      SELECT
+        p.id AS produit_id,
+        p.ref,
+        p.designation,
+        p.code_barre,
+        p.prix_ht,
+        ROUND(p.prix_ht * (1 + p.tva_rate / 100), 2) AS prix_ttc,
+        p.tva_rate,
+        p.unite,
+        p.categorie,
+        p.emplacement_code,
+        COALESCE(sd.quantite, 0) AS stock_actuel
+      FROM produits p
+      LEFT JOIN stock_depots sd ON sd.produit_id = p.id AND sd.branch_id = ?
+      WHERE p.company_id = ? AND p.active = 1
+    `;
+    const params: any[] = [options?.branchId || 1, companyId];
+
+    if (options?.search?.trim()) {
+      query += " AND (p.ref LIKE ? OR p.designation LIKE ? OR p.code_barre LIKE ?)";
+      const pattern = `%${options.search.trim()}%`;
+      params.push(pattern, pattern, pattern);
+    }
+
+    if (options?.categorie && options.categorie !== "all") {
+      query += " AND p.categorie = ?";
+      params.push(options.categorie);
+    }
+
+    query += " ORDER BY p.designation ASC LIMIT 300";
+
+    const rows = db.prepare(query).all(...params) as any[];
+    return { success: true as const, produits: rows };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, produits: [] };
   }
 }
 

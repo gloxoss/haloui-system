@@ -954,6 +954,72 @@ function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_prod_emp_branch ON produit_emplacements(branch_id);
   `);
 
+  ensureColumnExists(db, "produits", "nature_produit", "TEXT DEFAULT 'simple'");
+  ensureColumnExists(db, "produits", "mode_destockage_kit", "TEXT DEFAULT 'composants'");
+  ensureColumnExists(db, "produits", "cout_revient_calcule", "REAL DEFAULT 0");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS produit_nomenclatures (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      produit_parent_id INTEGER NOT NULL,
+      composant_id INTEGER NOT NULL,
+      quantite REAL NOT NULL DEFAULT 1,
+      unite TEXT DEFAULT 'u',
+      taux_perte_pourcent REAL DEFAULT 0,
+      ordre INTEGER DEFAULT 0,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (produit_parent_id) REFERENCES produits(id) ON DELETE CASCADE,
+      FOREIGN KEY (composant_id) REFERENCES produits(id) ON DELETE RESTRICT,
+      UNIQUE (company_id, produit_parent_id, composant_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_nomenclatures_parent ON produit_nomenclatures(produit_parent_id);
+    CREATE INDEX IF NOT EXISTS idx_nomenclatures_composant ON produit_nomenclatures(composant_id);
+
+    CREATE TABLE IF NOT EXISTS ordres_fabrication (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      numero TEXT NOT NULL,
+      produit_id INTEGER NOT NULL,
+      type_operation TEXT NOT NULL DEFAULT 'assemblage' CHECK (type_operation IN ('assemblage', 'desassemblage')),
+      quantite_prevue REAL NOT NULL,
+      quantite_realisee REAL NOT NULL DEFAULT 0,
+      cout_total_ht REAL NOT NULL DEFAULT 0,
+      statut TEXT NOT NULL DEFAULT 'termine' CHECK (statut IN ('planifie', 'en_cours', 'termine', 'annule')),
+      date_ordre TEXT NOT NULL,
+      date_fin TEXT DEFAULT '',
+      responsable_id INTEGER,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE RESTRICT,
+      FOREIGN KEY (responsable_id) REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE (company_id, numero)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ordres_fab_branch ON ordres_fabrication(branch_id);
+    CREATE INDEX IF NOT EXISTS idx_ordres_fab_produit ON ordres_fabrication(produit_id);
+    CREATE INDEX IF NOT EXISTS idx_ordres_fab_date ON ordres_fabrication(date_ordre);
+    CREATE INDEX IF NOT EXISTS idx_ordres_fab_statut ON ordres_fabrication(statut);
+
+    CREATE TABLE IF NOT EXISTS ordre_fabrication_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ordre_id INTEGER NOT NULL,
+      composant_id INTEGER NOT NULL,
+      quantite_unitaire REAL NOT NULL,
+      quantite_totale REAL NOT NULL,
+      cout_unitaire_ht REAL NOT NULL DEFAULT 0,
+      cout_total_ht REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (ordre_id) REFERENCES ordres_fabrication(id) ON DELETE CASCADE,
+      FOREIGN KEY (composant_id) REFERENCES produits(id) ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS idx_fab_lignes_ordre ON ordre_fabrication_lignes(ordre_id);
+    CREATE INDEX IF NOT EXISTS idx_fab_lignes_comp ON ordre_fabrication_lignes(composant_id);
+  `);
+
   createSettingsTable(db);
   seedFeatureFlags(db);
 

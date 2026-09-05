@@ -27,7 +27,9 @@ export type FeatureKey =
   | "inventaires_stock"
   | "lots_series"
   | "reappro_intelligent"
-  | "wms_emplacements";
+  | "wms_emplacements"
+  | "nomenclatures_fabrication"
+  | "etiquettes_codes_barres";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -1203,5 +1205,136 @@ export type ReapproKPIs = {
   articlesSurstock: number;
   budgetReapproEstimeHT: number;
   fournisseursConcernes: number;
+};
+
+// --- NOMENCLATURES & KITS / ASSEMBLAGE ---
+export type NatureProduit = "simple" | "kit" | "composant";
+export type ModeDestockageKit = "composants" | "produit_fini";
+
+export type ProduitComposantRecord = {
+  id: number;
+  produit_parent_id: number;
+  composant_id: number;
+  composant_ref: string;
+  composant_designation: string;
+  composant_unite: string;
+  composant_prix_achat_ht: number;
+  composant_stock_actuel: number;
+  quantite: number;
+  unite: string;
+  taux_perte_pourcent: number;
+  ordre: number;
+  notes?: string;
+  cout_ligne_ht: number;
+};
+
+export type NomenclatureRecord = {
+  produit_id: number;
+  produit_ref: string;
+  produit_designation: string;
+  nature_produit: NatureProduit;
+  mode_destockage_kit: ModeDestockageKit;
+  prix_vente_ht: number;
+  cout_revient_ht: number;
+  marge_brute_ht: number;
+  marge_pourcent: number;
+  stock_virtuel_fabricable: number;
+  stock_physique_kit: number;
+  nb_composants: number;
+  composants: ProduitComposantRecord[];
+};
+
+export type OrdreFabricationType = "assemblage" | "desassemblage";
+export type OrdreFabricationStatut = "planifie" | "en_cours" | "termine" | "annule";
+
+export type OrdreFabricationLigne = {
+  id?: number;
+  ordre_id?: number;
+  composant_id: number;
+  composant_ref: string;
+  composant_designation: string;
+  quantite_unitaire: number;
+  quantite_totale: number;
+  cout_unitaire_ht: number;
+  cout_total_ht: number;
+  unite?: string;
+};
+
+export type OrdreFabricationRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_nom?: string;
+  numero: string;
+  produit_id: number;
+  produit_ref?: string;
+  produit_designation?: string;
+  type_operation: OrdreFabricationType;
+  quantite_prevue: number;
+  quantite_realisee: number;
+  cout_total_ht: number;
+  statut: OrdreFabricationStatut;
+  date_ordre: string;
+  date_fin?: string;
+  responsable_id?: number | null;
+  responsable_nom?: string;
+  notes?: string;
+  created_at: string;
+  lignes?: OrdreFabricationLigne[];
+};
+
+export type NomenclaturesKPIs = {
+  totalKits: number;
+  totalComposants: number;
+  totalOrdresFabrication: number;
+  valeurStockKitsHT: number;
+};
+
+// --- ÉTIQUETTES & CODES-BARRES ---
+export type BarcodeSymbology = "ean13" | "code128" | "qrcode";
+export type LabelFormatType = "thermique_rouleau" | "planche_a4";
+
+export type LabelDimensionPreset = {
+  id: string;
+  nom: string;
+  nomAr: string;
+  imprimanteCible: "Zebra" | "Dymo" | "Brother" | "A4 Standard";
+  typeSupport: LabelFormatType;
+  largeurMm: number;
+  hauteurMm: number;
+  colonnes?: number;
+  lignes?: number;
+  margeHautMm?: number;
+  margeGaucheMm?: number;
+  espaceColMm?: number;
+  espaceLigMm?: number;
+};
+
+export type LabelConfig = {
+  presetId: string;
+  symbology: BarcodeSymbology;
+  afficherNomEntreprise: boolean;
+  afficherNomProduit: boolean;
+  afficherPrixTTC: boolean;
+  afficherPrixHT: boolean;
+  afficherReference: boolean;
+  afficherCodeBarreChiffre: boolean;
+  afficherEmplacement: boolean;
+  afficherDateOuLot: boolean;
+  taillePrix: "normal" | "grand" | "tres_grand";
+};
+
+export type LabelItemToPrint = {
+  produit_id: number;
+  ref: string;
+  designation: string;
+  code_barre: string;
+  prix_ht: number;
+  prix_ttc: number;
+  tva_rate: number;
+  unite: string;
+  emplacement_code?: string;
+  numero_lot?: string;
+  exemplaires: number;
 };
 

@@ -28,6 +28,7 @@ import { getDb } from "@/lib/db";
 import { amountToFrenchWords } from "@/lib/number-to-words-fr";
 import { nextNumber } from "@/lib/numerotation";
 import { computeDocumentTotals } from "@/lib/totals";
+import { traiterDestockageKitsDocument } from "@/lib/nomenclatures";
 import {
   listDaysInMonth,
   monthKey,
@@ -1339,7 +1340,14 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
     return documentId!;
   });
 
-  return transaction();
+  const createdId = transaction();
+  try {
+    traiterDestockageKitsDocument(createdId, userId);
+  } catch (err) {
+    console.error("Erreur déstockage kit automatique:", err);
+  }
+
+  return createdId;
 }
 
 export function updateDocumentStatus(id: number, status: DocumentStatus, userId: number) {
