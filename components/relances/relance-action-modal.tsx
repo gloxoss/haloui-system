@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 
 import { enregistrerRelanceAction } from "@/app/actions";
-import { RELANCE_PALIER_LABELS } from "@/lib/constants";
 import { useTranslation } from "@/lib/i18n";
 import {
   type FactureImpayeeItem,

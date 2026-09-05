@@ -6,44 +6,26 @@ import {
   ActionIcon,
   Badge,
   Button,
-  Card,
-  Group,
   Menu,
   MenuDropdown,
   MenuItem,
   MenuTarget,
-  Paper,
-  Progress,
-  Select,
-  SimpleGrid,
   Stack,
-  Table,
-  Tabs,
   Text,
-  TextInput,
-  ThemeIcon,
 } from "@mantine/core";
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowUpDown,
   CheckCircle,
-  Clock,
-  DollarSign,
   ExternalLink,
   Eye,
   FileSpreadsheet,
-  FileText,
   History,
   MessageCircle,
   MoreHorizontal,
   Search,
   Send,
-  ShieldAlert,
   Sliders,
 } from "lucide-react";
 
-import { PageHeading } from "@/components/page-heading";
 import { RelanceActionModal } from "./relance-action-modal";
 import { RelanceHistoryDrawer } from "./relance-history-drawer";
 import { RelancePaymentModal } from "./relance-payment-modal";
@@ -85,12 +67,10 @@ export function RelancesManager({
   const [activeHistoryInvoice, setActiveHistoryInvoice] = React.useState<FactureImpayeeItem | null>(null);
   const [historyDrawerOpened, setHistoryDrawerOpened] = React.useState<boolean>(false);
 
-  // Sync with initialInvoices if server refreshes
   React.useEffect(() => {
     setInvoices(initialInvoices);
   }, [initialInvoices]);
 
-  // Filter & Sort invoices
   const filteredInvoices = React.useMemo(() => {
     let list = [...invoices];
 
@@ -193,492 +173,420 @@ export function RelancesManager({
   const pctEchu = totalCreances > 0 ? Math.round((totalEchu / totalCreances) * 100) : 0;
 
   return (
-    <Stack gap="lg">
-      <PageHeading
-        eyebrow={locale === "ar" ? "الاستخلاص والديون" : "Recouvrement & Impayés"}
-        title={locale === "ar" ? "تتبع واستخلاص الديون والإنذارات" : "Relances & Recouvrement des Impayés"}
-        description={
-          locale === "ar"
-            ? "نظام تدبير الديون الذكي، سيناريوهات التذكير الآلي (واتساب / إيميل)، وتحليل ميزان أعمار الديون"
-            : "Scénarios automatiques par paliers (J-3, J+7, J+15, J+30), balance âgée des créances et relances directes WhatsApp / Email"
-        }
-        actions={
-          <Group gap="xs">
+    <Stack gap="md" className="max-w-7xl mx-auto">
+      {/* Sleek Minimalist Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
+            {locale === "ar" ? "تتبع واستخلاص الديون" : "Relances & Impayés"}
+          </h1>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
+            {locale === "ar"
+              ? "متابعة الفواتير غير المسددة وإرسال التذكيرات بالواتساب والإيميل"
+              : "Suivi des créances en attente et scénarios de relances par WhatsApp & Email"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={<FileSpreadsheet size={13} />}
+            onClick={handleExportCsv}
+          >
+            {locale === "ar" ? "تصدير CSV" : "Exporter CSV"}
+          </Button>
+          {userRole === "admin" || userRole === "superadmin" ? (
             <Button
-              variant="default"
-              size="sm"
-              leftSection={<FileSpreadsheet size={15} />}
-              onClick={handleExportCsv}
+              component={Link}
+              href="/parametres#relances-studio"
+              variant="light"
+              size="xs"
+              leftSection={<Sliders size={13} />}
             >
-              {locale === "ar" ? "تصدير البيانات (CSV)" : "Exporter (CSV)"}
+              {locale === "ar" ? "الإعدادات" : "Paramètres"}
             </Button>
-            {userRole === "admin" || userRole === "superadmin" ? (
-              <Button
-                component={Link}
-                href="/parametres"
-                variant="light"
-                size="sm"
-                leftSection={<Sliders size={15} />}
-              >
-                {locale === "ar" ? "إعدادات السيناريوهات" : "Paramètres Relances"}
-              </Button>
-            ) : null}
-          </Group>
-        }
-      />
+          ) : null}
+        </div>
+      </div>
 
-      {/* KPI Cards Overview */}
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
-        {/* Total Créances */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                {locale === "ar" ? "مجموع الديون الإجمالية" : "Total Créances à recouvrer"}
-              </Text>
-              <Text fw={800} size="xl" mt={4}>
-                {formatCurrency(totalCreances)}
-              </Text>
-              <Text size="xs" c="dimmed" mt={2}>
-                {invoices.length} {locale === "ar" ? "فاتورة غير مسددة" : "factures en cours"}
-              </Text>
-            </div>
-            <ThemeIcon size={38} radius="md" color="indigo" variant="light">
-              <DollarSign size={20} />
-            </ThemeIcon>
-          </Group>
-        </Card>
+      {/* Clean KPI Summary Bar (4 sleek minimalist stats) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+            {locale === "ar" ? "إجمالي الديون" : "Total à recouvrer"}
+          </span>
+          <span className="text-lg font-bold text-[var(--foreground)] mt-1">
+            {formatCurrency(totalCreances)}
+          </span>
+          <span className="text-[11px] text-[var(--muted)] mt-0.5">
+            {invoices.length} {locale === "ar" ? "فاتورة غير مسددة" : "facture(s) en cours"}
+          </span>
+        </div>
 
-        {/* Total Échu (En retard) */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                {locale === "ar" ? "ديون متجاوزة للأجل (متأخرات)" : "Créances Échues (En retard)"}
-              </Text>
-              <Text fw={800} size="xl" mt={4} c="red.6">
-                {formatCurrency(totalEchu)}
-              </Text>
-              <Group gap={6} mt={2}>
-                <Badge size="xs" color="red" variant="light">
-                  {pctEchu}% des créances
-                </Badge>
-              </Group>
-            </div>
-            <ThemeIcon size={38} radius="md" color="red" variant="light">
-              <AlertTriangle size={20} />
-            </ThemeIcon>
-          </Group>
-        </Card>
+        <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+            {locale === "ar" ? "متأخرات (Échues)" : "Créances échues"}
+          </span>
+          <span className="text-lg font-bold text-rose-600 mt-1">
+            {formatCurrency(totalEchu)}
+          </span>
+          <span className="text-[11px] text-[var(--muted)] mt-0.5">
+            {pctEchu}% {locale === "ar" ? "من إجمالي الديون" : "du total des impayés"}
+          </span>
+        </div>
 
-        {/* Total Non échu (Futures) */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                {locale === "ar" ? "ديون غير حالة الأجل" : "Créances Non Échues"}
-              </Text>
-              <Text fw={800} size="xl" mt={4} c="teal.6">
-                {formatCurrency(totalNonEchu)}
-              </Text>
-              <Text size="xs" c="dimmed" mt={2}>
-                {balanceAgee.tranches.non_echu.count} {locale === "ar" ? "فواتير قيد الاستحقاق" : "échéances à venir"}
-              </Text>
-            </div>
-            <ThemeIcon size={38} radius="md" color="teal" variant="light">
-              <Clock size={20} />
-            </ThemeIcon>
-          </Group>
-        </Card>
+        <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+            {locale === "ar" ? "قيد الأجل (Non échues)" : "Échéances à venir"}
+          </span>
+          <span className="text-lg font-bold text-emerald-600 mt-1">
+            {formatCurrency(totalNonEchu)}
+          </span>
+          <span className="text-[11px] text-[var(--muted)] mt-0.5">
+            {balanceAgee.tranches.non_echu.count} {locale === "ar" ? "فاتورة" : "facture(s) non échue(s)"}
+          </span>
+        </div>
 
-        {/* Relances envoyées ce mois */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                {locale === "ar" ? "تذكيرات هذا الشهر" : "Relances ce mois-ci"}
-              </Text>
-              <Text fw={800} size="xl" mt={4} c="blue.6">
-                {balanceAgee.relances_ce_mois}
-              </Text>
-              <Text size="xs" c="dimmed" mt={2}>
-                {locale === "ar" ? "تواصل ومتابعة فعالة" : "Interventions enregistrées"}
-              </Text>
-            </div>
-            <ThemeIcon size={38} radius="md" color="blue" variant="light">
-              <Send size={20} />
-            </ThemeIcon>
-          </Group>
-        </Card>
-      </SimpleGrid>
+        <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+            {locale === "ar" ? "تذكيرات هذا الشهر" : "Relances effectuées"}
+          </span>
+          <span className="text-lg font-bold text-sky-600 mt-1">
+            {balanceAgee.relances_ce_mois}
+          </span>
+          <span className="text-[11px] text-[var(--muted)] mt-0.5">
+            {locale === "ar" ? "إجراءات مسجلة" : "interventions ce mois-ci"}
+          </span>
+        </div>
+      </div>
 
-      {/* Balance Âgée Interactive Bar Card */}
-      <Card withBorder radius="md" p="md">
-        <Group justify="space-between" mb="xs">
-          <div>
-            <Text fw={700} size="sm">
-              {locale === "ar" ? "ميزان أعمار الديون (Balance Âgée)" : "Répartition par Balance Âgée"}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {locale === "ar"
-                ? "توزيع مبالغ الديون حسب مدة التأخير عن تاريخ الاستحقاق"
-                : "Ventilation des créances par ancienneté du retard de règlement"}
-            </Text>
+      {/* Thin, Elegant Balance Âgée Line */}
+      {totalCreances > 0 && (
+        <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col gap-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-[var(--foreground)]">
+              {locale === "ar" ? "ميزان أعمار الديون" : "Balance Âgée"}
+            </span>
+            <span className="text-[var(--muted)] text-[11px]">
+              {locale === "ar" ? "توزيع المبالغ حسب مدة التأخير" : "Répartition par ancienneté"}
+            </span>
           </div>
-          <Badge variant="light" color="gray" size="sm">
-            Total : {formatCurrency(totalCreances)}
-          </Badge>
-        </Group>
 
-        {/* Visual progress segments */}
-        {totalCreances > 0 ? (
-          <Progress.Root size={20} radius="md" mt="sm">
+          {/* Thin progress track */}
+          <div className="w-full h-2 rounded-full overflow-hidden flex bg-[var(--surface-soft)]">
             {balanceAgee.tranches.non_echu.montant > 0 && (
-              <Progress.Section
-                value={(balanceAgee.tranches.non_echu.montant / totalCreances) * 100}
-                color="teal"
-              >
-                <Progress.Label>
-                  {Math.round((balanceAgee.tranches.non_echu.montant / totalCreances) * 100)}%
-                </Progress.Label>
-              </Progress.Section>
+              <div
+                style={{ width: `${(balanceAgee.tranches.non_echu.montant / totalCreances) * 100}%` }}
+                className="bg-emerald-500 h-full transition-all"
+                title={`Non échu: ${formatCurrency(balanceAgee.tranches.non_echu.montant)}`}
+              />
             )}
             {balanceAgee.tranches.j1_15.montant > 0 && (
-              <Progress.Section
-                value={(balanceAgee.tranches.j1_15.montant / totalCreances) * 100}
-                color="yellow"
-              >
-                <Progress.Label>
-                  {Math.round((balanceAgee.tranches.j1_15.montant / totalCreances) * 100)}%
-                </Progress.Label>
-              </Progress.Section>
+              <div
+                style={{ width: `${(balanceAgee.tranches.j1_15.montant / totalCreances) * 100}%` }}
+                className="bg-amber-400 h-full transition-all"
+                title={`1-15j: ${formatCurrency(balanceAgee.tranches.j1_15.montant)}`}
+              />
             )}
             {balanceAgee.tranches.j16_30.montant > 0 && (
-              <Progress.Section
-                value={(balanceAgee.tranches.j16_30.montant / totalCreances) * 100}
-                color="orange"
-              >
-                <Progress.Label>
-                  {Math.round((balanceAgee.tranches.j16_30.montant / totalCreances) * 100)}%
-                </Progress.Label>
-              </Progress.Section>
+              <div
+                style={{ width: `${(balanceAgee.tranches.j16_30.montant / totalCreances) * 100}%` }}
+                className="bg-orange-500 h-full transition-all"
+                title={`16-30j: ${formatCurrency(balanceAgee.tranches.j16_30.montant)}`}
+              />
             )}
             {balanceAgee.tranches.j31_60.montant > 0 && (
-              <Progress.Section
-                value={(balanceAgee.tranches.j31_60.montant / totalCreances) * 100}
-                color="red.6"
-              >
-                <Progress.Label>
-                  {Math.round((balanceAgee.tranches.j31_60.montant / totalCreances) * 100)}%
-                </Progress.Label>
-              </Progress.Section>
+              <div
+                style={{ width: `${(balanceAgee.tranches.j31_60.montant / totalCreances) * 100}%` }}
+                className="bg-rose-500 h-full transition-all"
+                title={`31-60j: ${formatCurrency(balanceAgee.tranches.j31_60.montant)}`}
+              />
             )}
             {balanceAgee.tranches.j61_plus.montant > 0 && (
-              <Progress.Section
-                value={(balanceAgee.tranches.j61_plus.montant / totalCreances) * 100}
-                color="red.9"
-              >
-                <Progress.Label>
-                  {Math.round((balanceAgee.tranches.j61_plus.montant / totalCreances) * 100)}%
-                </Progress.Label>
-              </Progress.Section>
+              <div
+                style={{ width: `${(balanceAgee.tranches.j61_plus.montant / totalCreances) * 100}%` }}
+                className="bg-red-700 h-full transition-all"
+                title={`+60j: ${formatCurrency(balanceAgee.tranches.j61_plus.montant)}`}
+              />
             )}
-          </Progress.Root>
-        ) : null}
+          </div>
 
-        {/* Tranches legend grid */}
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="xs" mt="md">
-          <Paper p="xs" radius="sm" withBorder style={{ borderLeft: "4px solid #14b8a6" }}>
-            <Text size="xs" c="dimmed">Non échu (&lt; 0j)</Text>
-            <Text fw={700} size="sm">{formatCurrency(balanceAgee.tranches.non_echu.montant)}</Text>
-            <Text size="11px" c="dimmed">{balanceAgee.tranches.non_echu.count} factures</Text>
-          </Paper>
+          {/* Minimalist Legend Pills */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--muted)] pt-0.5">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              Non échu : <strong>{formatCurrency(balanceAgee.tranches.non_echu.montant)}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              1 à 15j : <strong>{formatCurrency(balanceAgee.tranches.j1_15.montant)}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+              16 à 30j : <strong>{formatCurrency(balanceAgee.tranches.j16_30.montant)}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+              31 à 60j : <strong>{formatCurrency(balanceAgee.tranches.j31_60.montant)}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-700 shrink-0" />
+              +60j : <strong>{formatCurrency(balanceAgee.tranches.j61_plus.montant)}</strong>
+            </span>
+          </div>
+        </div>
+      )}
 
-          <Paper p="xs" radius="sm" withBorder style={{ borderLeft: "4px solid #eab308" }}>
-            <Text size="xs" c="dimmed">1 à 15 jours</Text>
-            <Text fw={700} size="sm">{formatCurrency(balanceAgee.tranches.j1_15.montant)}</Text>
-            <Text size="11px" c="dimmed">{balanceAgee.tranches.j1_15.count} factures</Text>
-          </Paper>
-
-          <Paper p="xs" radius="sm" withBorder style={{ borderLeft: "4px solid #f97316" }}>
-            <Text size="xs" c="dimmed">16 à 30 jours</Text>
-            <Text fw={700} size="sm">{formatCurrency(balanceAgee.tranches.j16_30.montant)}</Text>
-            <Text size="11px" c="dimmed">{balanceAgee.tranches.j16_30.count} factures</Text>
-          </Paper>
-
-          <Paper p="xs" radius="sm" withBorder style={{ borderLeft: "4px solid #ef4444" }}>
-            <Text size="xs" c="dimmed">31 à 60 jours</Text>
-            <Text fw={700} size="sm">{formatCurrency(balanceAgee.tranches.j31_60.montant)}</Text>
-            <Text size="11px" c="dimmed">{balanceAgee.tranches.j31_60.count} factures</Text>
-          </Paper>
-
-          <Paper p="xs" radius="sm" withBorder style={{ borderLeft: "4px solid #991b1b" }}>
-            <Text size="xs" c="dimmed">+60 jours</Text>
-            <Text fw={700} size="sm">{formatCurrency(balanceAgee.tranches.j61_plus.montant)}</Text>
-            <Text size="11px" c="dimmed">{balanceAgee.tranches.j61_plus.count} factures</Text>
-          </Paper>
-        </SimpleGrid>
-      </Card>
-
-      {/* Main Tabbed Invoices Management Area */}
-      <Card withBorder radius="md" p="md">
-        <Tabs value={selectedPalier} onChange={(v) => setSelectedPalier(v || "all")} variant="outline">
-          <Tabs.List mb="md">
-            <Tabs.Tab value="all" leftSection={<FileText size={14} />}>
-              {locale === "ar" ? "كافة الفواتير غير المسددة" : "Toutes les factures"} ({invoices.length})
-            </Tabs.Tab>
-            <Tabs.Tab
-              value="prevenance"
-              color="teal"
-              leftSection={<Clock size={14} />}
+      {/* Main Panel with Filter Pills, Search and Invoices List */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+        {/* Controls Row */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <button
+              onClick={() => setSelectedPalier("all")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                selectedPalier === "all"
+                  ? "bg-[var(--foreground)] text-[var(--background)] font-semibold shadow-xs"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+              }`}
             >
-              {locale === "ar" ? "1 : استباقي (J-3)" : "Palier 1 : Prévenance (J-3)"} ({balanceAgee.par_palier.prevenance.count})
-            </Tabs.Tab>
-            <Tabs.Tab
-              value="relance_1"
-              color="yellow"
-              leftSection={<AlertCircle size={14} />}
+              {locale === "ar" ? "الكل" : "Toutes"} ({invoices.length})
+            </button>
+            <button
+              onClick={() => setSelectedPalier("prevenance")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                selectedPalier === "prevenance"
+                  ? "bg-teal-600 text-white font-semibold shadow-xs"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+              }`}
             >
-              {locale === "ar" ? "2 : تذكير ودي (J+7)" : "Palier 2 : 1ère Relance (J+7)"} ({balanceAgee.par_palier.relance_1.count})
-            </Tabs.Tab>
-            <Tabs.Tab
-              value="relance_2"
-              color="orange"
-              leftSection={<AlertTriangle size={14} />}
+              {locale === "ar" ? "استباقي (J-3)" : "Prévenance (J-3)"} ({balanceAgee.par_palier.prevenance.count})
+            </button>
+            <button
+              onClick={() => setSelectedPalier("relance_1")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                selectedPalier === "relance_1"
+                  ? "bg-amber-500 text-white font-semibold shadow-xs"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+              }`}
             >
-              {locale === "ar" ? "3 : إنذار حازم (J+15)" : "Palier 3 : 2ème Relance (J+15)"} ({balanceAgee.par_palier.relance_2.count})
-            </Tabs.Tab>
-            <Tabs.Tab
-              value="mise_en_demeure"
-              color="red"
-              leftSection={<ShieldAlert size={14} />}
+              {locale === "ar" ? "تذكير (J+7)" : "Relance 1 (J+7)"} ({balanceAgee.par_palier.relance_1.count})
+            </button>
+            <button
+              onClick={() => setSelectedPalier("relance_2")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                selectedPalier === "relance_2"
+                  ? "bg-orange-600 text-white font-semibold shadow-xs"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+              }`}
             >
-              {locale === "ar" ? "4 : إنذار قانوني (J+30)" : "Palier 4 : Mise en demeure (J+30)"} ({balanceAgee.par_palier.mise_en_demeure.count})
-            </Tabs.Tab>
-          </Tabs.List>
-        </Tabs>
+              {locale === "ar" ? "إنذار (J+15)" : "Relance 2 (J+15)"} ({balanceAgee.par_palier.relance_2.count})
+            </button>
+            <button
+              onClick={() => setSelectedPalier("mise_en_demeure")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                selectedPalier === "mise_en_demeure"
+                  ? "bg-rose-600 text-white font-semibold shadow-xs"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-soft)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              {locale === "ar" ? "إنذار قانوني (J+30)" : "Mise en demeure"} ({balanceAgee.par_palier.mise_en_demeure.count})
+            </button>
+          </div>
 
-        {/* Search and Sort controls */}
-        <Group justify="space-between" mb="md" wrap="wrap">
-          <TextInput
-            placeholder={
-              locale === "ar"
-                ? "بحث برقم الفاتورة، اسم العميل، الهاتف، أو ICE..."
-                : "Rechercher client, téléphone, N° facture, ICE..."
-            }
-            leftSection={<Search size={15} />}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.currentTarget.value)}
-            style={{ flex: 1, minWidth: 260 }}
-          />
+          {/* Search and Sort */}
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-[200px]">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <input
+                type="text"
+                placeholder={locale === "ar" ? "بحث عن عميل، فاتورة..." : "Rechercher client, facture..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-hidden focus:ring-1 focus:ring-[var(--foreground)]"
+              />
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Trier par"
+              className="px-2.5 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-hidden"
+            >
+              <option value="retard_desc">Tri : Retard décroissant</option>
+              <option value="reste_desc">Tri : Montant décroissant</option>
+              <option value="date_desc">Tri : Date d'émission</option>
+              <option value="client_asc">Tri : Client (A-Z)</option>
+            </select>
+          </div>
+        </div>
 
-          <Select
-            leftSection={<ArrowUpDown size={14} />}
-            value={sortBy}
-            onChange={(v) => v && setSortBy(v)}
-            data={[
-              { value: "retard_desc", label: "Tri : Retard le plus élevé" },
-              { value: "retard_asc", label: "Tri : Retard le plus faible" },
-              { value: "reste_desc", label: "Tri : Montant reste (Décroissant)" },
-              { value: "reste_asc", label: "Tri : Montant reste (Croissant)" },
-              { value: "date_desc", label: "Tri : Date d'émission" },
-              { value: "client_asc", label: "Tri : Nom du client (A-Z)" },
-            ]}
-            style={{ minWidth: 220 }}
-          />
-        </Group>
-
-        {/* Invoices List / Table */}
+        {/* Clean, Spacious Invoices Table */}
         {filteredInvoices.length === 0 ? (
-          <Paper p="xl" radius="md" withBorder style={{ textAlign: "center", borderColor: "var(--border)" }}>
-            <CheckCircle size={40} color="var(--mantine-color-teal-6)" style={{ margin: "0 auto 12px" }} />
-            <Text fw={700} size="md">
-              {locale === "ar" ? "لا توجد أي فواتير مطابقة لهذا المعيار" : "Aucun impayé trouvé"}
+          <div className="text-center py-12">
+            <CheckCircle size={36} className="mx-auto text-teal-600 mb-2.5 opacity-80" />
+            <Text fw={600} size="sm">
+              {locale === "ar" ? "لا توجد فواتير مطابقة" : "Aucun impayé trouvé"}
             </Text>
-            <Text size="xs" c="dimmed" mt={4}>
+            <Text size="xs" c="dimmed" mt={2}>
               {locale === "ar"
-                ? "تهانينا، جميع الفواتير في هذا النطاق تمت تسويتها أو لا توجد نتائج للبحث."
-                : "Toutes les factures de cette tranche sont réglées ou aucune facture ne correspond à la recherche."}
+                ? "جميع الفواتير مسددة أو لا توجد نتائج مطابقة للبحث."
+                : "Toutes les factures de cette catégorie sont réglées."}
             </Text>
-          </Paper>
+          </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <Table highlightOnHover verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{locale === "ar" ? "العميل (الكليان)" : "Client"}</Table.Th>
-                  <Table.Th>{locale === "ar" ? "رقم وتاريخ الفاتورة" : "Facture"}</Table.Th>
-                  <Table.Th>{locale === "ar" ? "تاريخ الاستحقاق والتأخير" : "Échéance & Retard"}</Table.Th>
-                  <Table.Th>{locale === "ar" ? "المبلغ والباقي" : "Montant & Reste"}</Table.Th>
-                  <Table.Th>{locale === "ar" ? "مستوى التذكير المقترح" : "Palier recommandé"}</Table.Th>
-                  <Table.Th>{locale === "ar" ? "سجل التذكيرات" : "Historique"}</Table.Th>
-                  <Table.Th style={{ textAlign: "right" }}>{locale === "ar" ? "إجراءات" : "Actions"}</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[var(--muted)] font-medium">
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "العميل" : "Client"}</th>
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "الفاتورة" : "Facture"}</th>
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "الأجل & التأخير" : "Échéance"}</th>
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "المبلغ المستحق" : "Reste à payer"}</th>
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "المستوى" : "Niveau"}</th>
+                  <th className="py-3 px-2 font-medium">{locale === "ar" ? "السجل" : "Historique"}</th>
+                  <th className="py-3 px-2 text-right font-medium">{locale === "ar" ? "إجراء" : "Actions"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
                 {filteredInvoices.map((inv) => {
                   const palierMeta = RELANCE_PALIER_LABELS[inv.palier_recommande] || RELANCE_PALIER_LABELS.prevenance;
 
                   return (
-                    <Table.Tr key={inv.id}>
-                      {/* Client info */}
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text fw={700} size="sm">
-                            {inv.client_name}
-                          </Text>
-                          <Group gap={6}>
-                            {inv.client_phone ? (
-                              <Group gap={4}>
-                                <Text size="xs" c="dimmed">
-                                  {inv.client_phone}
-                                </Text>
-                                <ActionIcon
-                                  size="xs"
-                                  variant="subtle"
-                                  color="teal"
-                                  title="Discuter sur WhatsApp"
-                                  onClick={() => handleOpenRelance(inv)}
-                                >
-                                  <MessageCircle size={12} color="#25D366" />
-                                </ActionIcon>
-                              </Group>
-                            ) : (
-                              <Text size="xs" c="dimmed">
-                                Sans tél
-                              </Text>
-                            )}
-                            {inv.client_ice ? (
-                              <Badge size="xs" variant="outline" color="gray">
-                                ICE {inv.client_ice}
-                              </Badge>
-                            ) : null}
-                          </Group>
-                        </Stack>
-                      </Table.Td>
-
-                      {/* Facture info */}
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Group gap={6}>
-                            <Text fw={700} size="sm">
-                              FAC-{inv.numero}
-                            </Text>
-                            <ActionIcon
-                              component={Link}
-                              href={`/print/facture/${inv.id}`}
-                              target="_blank"
-                              size="xs"
-                              variant="subtle"
-                              color="blue"
-                              title="Consulter / Imprimer"
+                    <tr key={inv.id} className="hover:bg-[var(--surface-soft)] transition-colors">
+                      {/* Client */}
+                      <td className="py-3 px-2">
+                        <div className="font-semibold text-sm text-[var(--foreground)]">
+                          {inv.client_name}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)] flex items-center gap-1.5 mt-0.5">
+                          {inv.client_phone || "Sans téléphone"}
+                          {inv.client_phone ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRelance(inv)}
+                              title="Ouvrir relance WhatsApp"
+                              className="text-teal-600 hover:text-teal-700 inline-flex items-center"
                             >
-                              <ExternalLink size={12} />
-                            </ActionIcon>
-                          </Group>
-                          <Text size="xs" c="dimmed">
-                            {formatDate(inv.date)}
-                          </Text>
-                        </Stack>
-                      </Table.Td>
+                              <MessageCircle size={11} />
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
 
-                      {/* Due date & Overdue days */}
-                      <Table.Td>
-                        <Stack gap={4}>
-                          <Text size="xs" fw={600}>
-                            {formatDate(inv.date_echeance)}
-                          </Text>
+                      {/* Facture */}
+                      <td className="py-3 px-2">
+                        <div className="font-medium text-[var(--foreground)] flex items-center gap-1">
+                          FAC-{inv.numero}
+                          <Link
+                            href={`/print/facture/${inv.id}`}
+                            target="_blank"
+                            className="text-[var(--muted)] hover:text-[var(--foreground)]"
+                          >
+                            <ExternalLink size={11} />
+                          </Link>
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)]">
+                          {formatDate(inv.date)}
+                        </div>
+                      </td>
+
+                      {/* Échéance & Retard */}
+                      <td className="py-3 px-2">
+                        <div className="font-medium text-[var(--foreground)]">
+                          {formatDate(inv.date_echeance)}
+                        </div>
+                        <div className="mt-0.5">
                           {inv.jours_retard <= 0 ? (
-                            <Badge size="sm" variant="light" color="teal">
-                              {inv.jours_retard === 0 ? "Échéance aujourd'hui" : `Dans ${Math.abs(inv.jours_retard)}j`}
-                            </Badge>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                              {inv.jours_retard === 0 ? "Aujourd'hui" : `Dans ${Math.abs(inv.jours_retard)}j`}
+                            </span>
                           ) : (
-                            <Badge
-                              size="sm"
-                              variant="light"
-                              color={inv.jours_retard > 30 ? "red" : inv.jours_retard > 14 ? "orange" : "yellow"}
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                inv.jours_retard > 30
+                                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300"
+                                  : inv.jours_retard > 14
+                                    ? "bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300"
+                                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                              }`}
                             >
-                              +{inv.jours_retard} jours de retard
-                            </Badge>
+                              +{inv.jours_retard}j retard
+                            </span>
                           )}
-                        </Stack>
-                      </Table.Td>
+                        </div>
+                      </td>
 
-                      {/* Financials */}
-                      <Table.Td>
-                        <Stack gap={2}>
-                          <Text fw={800} size="sm" c="red.6">
-                            {formatCurrency(inv.reste)}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            Sur {formatCurrency(inv.total_ttc)} {inv.avance > 0 ? `(Avance: ${formatCurrency(inv.avance)})` : ""}
-                          </Text>
-                        </Stack>
-                      </Table.Td>
+                      {/* Montant Reste */}
+                      <td className="py-3 px-2">
+                        <div className="font-bold text-sm text-rose-600">
+                          {formatCurrency(inv.reste)}
+                        </div>
+                        <div className="text-[10px] text-[var(--muted)]">
+                          sur {formatCurrency(inv.total_ttc)}
+                        </div>
+                      </td>
 
-                      {/* Recommended Palier */}
-                      <Table.Td>
+                      {/* Palier Badge */}
+                      <td className="py-3 px-2">
                         <Badge
-                          size="md"
+                          size="sm"
                           color={palierMeta.color}
-                          variant="filled"
-                          style={{ textTransform: "none" }}
+                          variant="light"
+                          style={{ textTransform: "none", fontWeight: 600 }}
                         >
                           {palierMeta.badge}
                         </Badge>
-                      </Table.Td>
+                      </td>
 
-                      {/* Relances History Count */}
-                      <Table.Td>
+                      {/* Historique Relances */}
+                      <td className="py-3 px-2">
                         {inv.nombre_relances > 0 ? (
-                          <Button
-                            size="compact-xs"
-                            variant="light"
-                            color="indigo"
-                            leftSection={<History size={12} />}
+                          <button
+                            type="button"
                             onClick={() => handleOpenHistory(inv)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 underline underline-offset-2"
                           >
-                            {inv.nombre_relances} {inv.nombre_relances > 1 ? "relances" : "relance"}
-                          </Button>
+                            <History size={11} />
+                            {inv.nombre_relances} relance{inv.nombre_relances > 1 ? "s" : ""}
+                          </button>
                         ) : (
-                          <Text size="xs" c="dimmed">
-                            Aucune relance
-                          </Text>
+                          <span className="text-[11px] text-[var(--muted)]">—</span>
                         )}
-                      </Table.Td>
+                      </td>
 
-                      {/* Quick Actions */}
-                      <Table.Td style={{ textAlign: "right" }}>
-                        <Group gap="xs" justify="flex-end">
+                      {/* Actions */}
+                      <td className="py-3 px-2 text-right">
+                        <div className="inline-flex items-center gap-1.5 justify-end">
                           <Button
                             size="xs"
                             color="teal"
                             variant="filled"
-                            leftSection={<Send size={13} />}
+                            leftSection={<Send size={12} />}
                             onClick={() => handleOpenRelance(inv)}
+                            style={{ height: 28, fontSize: "11px", fontWeight: 600 }}
                           >
                             {locale === "ar" ? "تذكير" : "Relancer"}
                           </Button>
 
                           <Button
                             size="xs"
-                            color="blue"
-                            variant="light"
-                            leftSection={<DollarSign size={13} />}
+                            variant="default"
                             onClick={() => handleOpenPayment(inv)}
+                            style={{ height: 28, fontSize: "11px", fontWeight: 500 }}
                           >
-                            {locale === "ar" ? "استخلاص" : "Encaisser"}
+                            {locale === "ar" ? "أداء" : "Encaisser"}
                           </Button>
 
                           <Menu position="bottom-end" shadow="md">
                             <MenuTarget>
                               <ActionIcon variant="subtle" size="sm" color="gray">
-                                <MoreHorizontal size={16} />
+                                <MoreHorizontal size={14} />
                               </ActionIcon>
                             </MenuTarget>
                             <MenuDropdown>
                               <MenuItem
-                                leftSection={<History size={14} />}
+                                leftSection={<History size={13} />}
                                 onClick={() => handleOpenHistory(inv)}
                               >
                                 {locale === "ar" ? "سجل التذكيرات" : "Historique des relances"}
@@ -687,45 +595,39 @@ export function RelancesManager({
                                 component={Link}
                                 href={`/print/facture/${inv.id}`}
                                 target="_blank"
-                                leftSection={<Eye size={14} />}
+                                leftSection={<Eye size={13} />}
                               >
                                 {locale === "ar" ? "معاينة الفاتورة" : "Aperçu de la facture"}
                               </MenuItem>
                             </MenuDropdown>
                           </Menu>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </Table.Tbody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Relance Action Modal (WhatsApp / Email / Appel) */}
+      {/* Relance Action Modal */}
       <RelanceActionModal
         invoice={activeRelanceInvoice}
         settings={settings}
         opened={relanceModalOpened}
         onClose={() => setRelanceModalOpened(false)}
-        onSuccess={() => {
-          // If needed, can trigger router.refresh or update state
-        }}
       />
 
-      {/* Quick Settlement Payment Modal */}
+      {/* Payment Settlement Modal */}
       <RelancePaymentModal
         invoice={activePaymentInvoice}
         opened={paymentModalOpened}
         onClose={() => setPaymentModalOpened(false)}
-        onSuccess={() => {
-          // Updates handled through server actions revalidation
-        }}
       />
 
-      {/* History Drawer */}
+      {/* History Timeline Drawer */}
       <RelanceHistoryDrawer
         invoice={activeHistoryInvoice}
         opened={historyDrawerOpened}
