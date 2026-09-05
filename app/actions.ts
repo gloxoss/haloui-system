@@ -961,6 +961,9 @@ export async function getSubscriptionInvoicesAction(subscriptionId: number) {
 // PORTAIL CLIENT DÉDIÉ (SERVER ACTIONS)
 // ==========================================
 
+// Rate limiting map for portal logins: max 5 failed attempts per 15 minutes per identifier
+const portalLoginAttempts = new Map<string, { attempts: number; lockUntil: number }>();
+
 export async function loginClientPortalAction(formData: FormData) {
   const identifier = String(formData.get("identifier") || "").trim();
   const code = String(formData.get("code") || "").trim();
@@ -969,13 +972,38 @@ export async function loginClientPortalAction(formData: FormData) {
     return { success: false, error: "Veuillez saisir votre numéro (Téléphone ou ICE) et votre Code PIN." };
   }
 
-  const session = getClientByPortalCode(identifier, code);
-  if (!session) {
+  const rateKey = identifier.toLowerCase().replace(/\s+/g, "");
+  const now = Date.now();
+  const attemptRecord = portalLoginAttempts.get(rateKey);
+
+  if (attemptRecord && attemptRecord.lockUntil > now) {
+    const remainingMins = Math.ceil((attemptRecord.lockUntil - now) / 60000);
     return {
       success: false,
-      error: "Identifiant ou code PIN incorrect. Veuillez vérifier ou contacter votre responsable commercial.",
+      error: `Trop de tentatives infructueuses. Accès temporairement verrouillé pour ${remainingMins} minute(s).`,
     };
   }
+
+  const session = getClientByPortalCode(identifier, code);
+  if (!session) {
+    const currentAttempts = (attemptRecord?.attempts || 0) + 1;
+    if (currentAttempts >= 5) {
+      portalLoginAttempts.set(rateKey, { attempts: currentAttempts, lockUntil: now + 15 * 60 * 1000 });
+      return {
+        success: false,
+        error: "Trop de tentatives erronées. Compte temporairement bloqué pendant 15 minutes par mesure de sécurité.",
+      };
+    } else {
+      portalLoginAttempts.set(rateKey, { attempts: currentAttempts, lockUntil: 0 });
+      return {
+        success: false,
+        error: `Identifiant ou code PIN incorrect (${5 - currentAttempts} essai(s) restant(s)).`,
+      };
+    }
+  }
+
+  // Clear failed attempts on success
+  portalLoginAttempts.delete(rateKey);
 
   await setPortalClientSession(session);
   redirect("/espace-client");
@@ -1028,9 +1056,18 @@ export async function signClientDocumentAction(input: {
 }
 
 export async function regenerateClientPortalAccessAction(clientId: number) {
-  const admin = await requireAuth();
-  const res = regenerateClientPortalAccess(clientId, admin.user.id);
+  const session = await requireAuth();
+
+  // STRICT RBAC: Only superadmin is allowed to view, modify, or regenerate portal credentials
+  if (session.user.role !== "superadmin") {
+    return {
+      success: false as const,
+      error: "Accès refusé : Seul le super-administrateur (superadmin) est autorisé à gérer les accès du portail client.",
+    };
+  }
+
+  const res = regenerateClientPortalAccess(clientId, session.user.id);
   refresh(["/clients"]);
-  return { success: true, ...res };
+  return { success: true as const, ...res };
 }
 

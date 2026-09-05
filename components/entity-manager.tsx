@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TD, TH, THead } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { getAuthSession } from "@/lib/auth";
 import { listEntities } from "@/lib/data";
 import { requirePartyFeature } from "@/lib/features";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
@@ -28,10 +29,24 @@ export async function EntityManager({
   await requirePartyFeature(type);
   const locale = await getServerLocale();
   const dict = getServerDictionary(locale);
+  const session = await getAuthSession();
+  const isSuperadmin = session?.user?.role === "superadmin";
 
   const saveAction = saveEntityAction.bind(null, type);
   const deleteAction = deleteEntityAction.bind(null, type);
-  const items = listEntities(type, search);
+  const rawItems = listEntities(type, search);
+
+  // Strict RBAC: If not superadmin, strip portal credentials so they are never exposed in DOM or memory
+  const items = rawItems.map((item) => {
+    if (type === "clients" && !isSuperadmin) {
+      return {
+        ...item,
+        portal_access_code: undefined,
+        portal_token: undefined,
+      };
+    }
+    return item;
+  });
 
   const pageTitle = type === "clients" ? dict.entities.clientsTitle : dict.entities.fournisseursTitle;
   const newTitle = type === "clients" ? dict.entities.newClient : dict.entities.newFournisseur;
@@ -104,8 +119,8 @@ export async function EntityManager({
               <tr>
                 <TH>{dict.entities.name}</TH>
                 <TH>{dict.entities.phone}</TH>
-                {type === "clients" && (
-                  <TH>{locale === "ar" ? "فضاء الزبون" : "Espace Client"}</TH>
+                {type === "clients" && isSuperadmin && (
+                  <TH>{locale === "ar" ? "فضاء الزبون (Superadmin)" : "Espace Client (Superadmin)"}</TH>
                 )}
                 <TH>{dict.entities.address}</TH>
               </tr>
@@ -113,7 +128,7 @@ export async function EntityManager({
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <TD colSpan={type === "clients" ? 4 : 3} className="py-8 text-center text-[var(--muted)]">
+                  <TD colSpan={type === "clients" && isSuperadmin ? 4 : 3} className="py-8 text-center text-[var(--muted)]">
                     {locale === "ar" ? "ما كاين حتى تسجيل حالياً." : `Aucun ${type === "clients" ? "client" : "fournisseur"} pour l'instant.`}
                   </TD>
                 </tr>
@@ -163,13 +178,13 @@ export async function EntityManager({
                             </ConfirmSubmitButton>
                           </div>
                         </form>
-                        {type === "clients" && (
+                        {type === "clients" && isSuperadmin && (
                           <ClientPortalAdminActions client={item} locale={locale} />
                         )}
                       </details>
                     </TD>
                     <TD>{item.phone || item.ice || "—"}</TD>
-                    {type === "clients" && (
+                    {type === "clients" && isSuperadmin && (
                       <TD>
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">

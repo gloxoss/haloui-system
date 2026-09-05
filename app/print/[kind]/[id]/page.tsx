@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import AttestationTemplate from "@/app/print/[kind]/[id]/templates/attestation";
 import BonLivraisonTemplate from "@/app/print/[kind]/[id]/templates/bl";
@@ -18,6 +18,8 @@ import {
   listBranches,
 } from "@/lib/data";
 
+import { getAuthSession } from "@/lib/auth";
+import { getPortalClientSession } from "@/lib/portal-auth";
 import { getActiveCompanyId } from "@/lib/company";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +48,15 @@ export default async function PrintPage({
 }) {
   const { kind, id } = await params;
   const { paper } = await searchParams;
+
+  const authSession = await getAuthSession();
+  const portalSession = await getPortalClientSession();
+
+  // If not logged in as staff nor as a valid portal client, deny access
+  if (!authSession?.user && !portalSession) {
+    redirect("/login");
+  }
+
   const activeCompanyId = await getActiveCompanyId();
   const documentKind = documentKinds.get(kind.toLowerCase());
 
@@ -53,6 +64,13 @@ export default async function PrintPage({
     const document = getDocumentById(Number(id)) as (PrintableDocument & { company_id?: number }) | null;
     if (!document) {
       notFound();
+    }
+
+    // Tenant Isolation: A client portal session can ONLY access documents belonging strictly to their client ID
+    if (portalSession && !authSession?.user) {
+      if (!document.client_id || document.client_id !== portalSession.clientId) {
+        notFound();
+      }
     }
 
     const company = getCompany(document.company_id || activeCompanyId);
@@ -92,6 +110,11 @@ export default async function PrintPage({
         ) : null}
       </>
     );
+  }
+
+  // Client portal users are strictly barred from HR / staff documents (fiche-personnel, attestations)
+  if (portalSession && !authSession?.user) {
+    notFound();
   }
 
   if (kind === "fiche-personnel" || kind === "personnel") {

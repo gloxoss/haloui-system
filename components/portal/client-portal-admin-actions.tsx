@@ -45,9 +45,11 @@ export function ClientPortalAdminActions({
     setIsRegenerating(true);
     try {
       const res = await regenerateClientPortalAccessAction(client.id);
-      if (res.success && res.portal_access_code && res.portal_token) {
+      if (res.success) {
         setCurrentPin(res.portal_access_code);
         setCurrentToken(res.portal_token);
+      } else {
+        alert(res.error || "Une erreur est survenue lors de la réinitialisation.");
       }
     } finally {
       setIsRegenerating(false);
