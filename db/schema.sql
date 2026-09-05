@@ -272,3 +272,72 @@ CREATE INDEX IF NOT EXISTS idx_documents_type_date ON documents(type, date);
 CREATE INDEX IF NOT EXISTS idx_documents_branch ON documents(branch_id);
 CREATE INDEX IF NOT EXISTS idx_ca_date ON chiffre_affaires(date);
 
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  client_id INTEGER NOT NULL,
+  titre TEXT NOT NULL,
+  reference TEXT NOT NULL,
+  periodicite TEXT NOT NULL CHECK (periodicite IN ('mensuel', 'trimestriel', 'semestriel', 'annuel')),
+  date_debut TEXT NOT NULL,
+  date_fin TEXT DEFAULT '',
+  prochaine_echeance TEXT NOT NULL,
+  derniere_facturation_date TEXT DEFAULT '',
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'suspendu', 'termine', 'brouillon')),
+  mode_reglement TEXT NOT NULL DEFAULT 'virement' CHECK (mode_reglement IN ('prelevement', 'virement', 'cheque', 'especes', 'traite')),
+  auto_generer INTEGER NOT NULL DEFAULT 1,
+  generer_statut TEXT NOT NULL DEFAULT 'valide' CHECK (generer_statut IN ('brouillon', 'valide')),
+  terme_paiement_jours INTEGER NOT NULL DEFAULT 30,
+  notes TEXT DEFAULT '',
+  total_ht REAL NOT NULL DEFAULT 0,
+  total_tva REAL NOT NULL DEFAULT 0,
+  total_ttc REAL NOT NULL DEFAULT 0,
+  mrr REAL NOT NULL DEFAULT 0,
+  arr REAL NOT NULL DEFAULT 0,
+  created_by INTEGER,
+  updated_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_company ON subscriptions(company_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_client ON subscriptions(client_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_echeance ON subscriptions(prochaine_echeance);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_statut ON subscriptions(statut);
+
+CREATE TABLE IF NOT EXISTS subscription_lignes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subscription_id INTEGER NOT NULL,
+  produit_id INTEGER,
+  designation TEXT NOT NULL,
+  quantite REAL NOT NULL DEFAULT 1,
+  unite TEXT NOT NULL DEFAULT 'mois',
+  prix_unitaire_ht REAL NOT NULL DEFAULT 0,
+  tva_rate REAL NOT NULL DEFAULT 20,
+  remise REAL NOT NULL DEFAULT 0,
+  total_ht REAL NOT NULL DEFAULT 0,
+  FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+  FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_lignes_sub ON subscription_lignes(subscription_id);
+
+CREATE TABLE IF NOT EXISTS subscription_invoices_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subscription_id INTEGER NOT NULL,
+  document_id INTEGER NOT NULL,
+  periode_label TEXT NOT NULL,
+  date_generation TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  montant_ttc REAL NOT NULL,
+  created_by INTEGER,
+  FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_invoices_sub ON subscription_invoices_log(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_sub_invoices_doc ON subscription_invoices_log(document_id);
+

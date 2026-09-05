@@ -16,7 +16,12 @@ export function nextNumber(type: DocumentType, companyId = 1) {
         .get(type) as { last_number?: number } | undefined;
     }
 
-    const next = (row?.last_number ?? 0) + 1;
+    const docRow = db
+      .prepare("SELECT COALESCE(MAX(numero), 0) AS max_num FROM documents WHERE company_id = ? AND type = ?")
+      .get(companyId, type) as { max_num?: number } | undefined;
+
+    const baseNumber = Math.max(row?.last_number ?? 0, docRow?.max_num ?? 0);
+    const next = baseNumber + 1;
 
     db.prepare(
       `

@@ -20,10 +20,14 @@ import {
   deleteProduct,
   deleteBranch,
   deleteSortieCaisse,
+  deleteSubscription,
   enregistrerReglementRapide,
+  generateBatchDueInvoices,
+  generateSubscriptionInvoice,
   getRelanceSettings,
   getRelancesLogByDocument,
   getUserById,
+  listSubscriptionInvoices,
   logRelance,
   resetBusinessData,
   saveBranch,
@@ -37,10 +41,12 @@ import {
   saveProductUnits,
   saveRelanceSettings,
   saveSortieCaisse,
+  saveSubscription,
   saveThemeSettings,
   saveUser,
   syncRevenueFromSystemSales,
   syncSelectedSalesDocuments,
+  toggleSubscriptionStatus,
   updateDocumentStatus,
   updateProfile,
   upsertRevenueEntry,
@@ -57,6 +63,9 @@ import {
   type RelancePalier,
   type RelanceSettings,
   type RelanceStatut,
+  type Periodicite,
+  type SubscriptionModeReglement,
+  type SubscriptionStatut,
   type ThemeDensity,
   type ThemePreset,
 } from "@/lib/types";
@@ -859,4 +868,82 @@ export async function saveRelanceSettingsAction(formData: FormData) {
 export async function getRelancesHistoryAction(documentId: number) {
   await requireAuth();
   return getRelancesLogByDocument(documentId);
+}
+
+// ==========================================
+// ACTIONS ABONNEMENTS (SUBSCRIPTIONS)
+// ==========================================
+
+export async function saveSubscriptionAction(input: {
+  id?: number;
+  client_id: number;
+  titre: string;
+  reference?: string;
+  periodicite: Periodicite;
+  date_debut: string;
+  date_fin?: string;
+  prochaine_echeance?: string;
+  statut?: SubscriptionStatut;
+  mode_reglement?: SubscriptionModeReglement;
+  auto_generer?: number;
+  generer_statut?: "brouillon" | "valide";
+  terme_paiement_jours?: number;
+  notes?: string;
+  lignes: Array<{
+    produit_id?: number | null;
+    designation: string;
+    quantite: number;
+    unite?: string;
+    prix_unitaire_ht: number;
+    tva_rate: number;
+    remise?: number;
+  }>;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+
+  const subId = saveSubscription(
+    {
+      ...input,
+      company_id: companyId,
+    },
+    session.user.id
+  );
+
+  refresh(["/abonnements", "/dashboard"]);
+  return { success: true, id: subId };
+}
+
+export async function generateSubscriptionInvoiceAction(subscriptionId: number) {
+  const session = await requireAuth();
+  const result = generateSubscriptionInvoice(subscriptionId, session.user.id);
+  refresh(["/abonnements", "/factures", "/dashboard", "/relances"]);
+  return { success: true, ...result };
+}
+
+export async function generateBatchDueInvoicesAction() {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  const result = generateBatchDueInvoices(companyId, session.user.id);
+  refresh(["/abonnements", "/factures", "/dashboard", "/relances"]);
+  return { success: true, ...result };
+}
+
+export async function toggleSubscriptionStatusAction(subscriptionId: number, newStatus: SubscriptionStatut) {
+  const session = await requireAuth();
+  toggleSubscriptionStatus(subscriptionId, newStatus, session.user.id);
+  refresh(["/abonnements", "/dashboard"]);
+  return { success: true };
+}
+
+export async function deleteSubscriptionAction(subscriptionId: number) {
+  const session = await requireAuth();
+  deleteSubscription(subscriptionId, session.user.id);
+  refresh(["/abonnements", "/dashboard"]);
+  return { success: true };
+}
+
+export async function getSubscriptionInvoicesAction(subscriptionId: number) {
+  await requireAuth();
+  return listSubscriptionInvoices(subscriptionId);
 }

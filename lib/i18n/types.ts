@@ -52,6 +52,7 @@ export type TranslationDictionary = {
     dashboard: string;
     devis: string;
     factures: string;
+    abonnements: string;
     relances: string;
     bl: string;
     bs: string;

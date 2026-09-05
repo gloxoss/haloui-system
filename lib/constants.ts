@@ -123,6 +123,7 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "utilisateurs", label: "Gestion des Utilisateurs", description: "Réservé Superadmin : création et permissions des comptes d'accès.", category: "systeme" },
   { key: "gestion_tva", label: "Gestion de la TVA & Taxes", description: "Activer le calcul et l'affichage de la TVA sur les articles et les documents (Devis, Factures).", category: "commercial" },
   { key: "relances", label: "Relances Automatiques & Impayés", description: "Module intelligent de relances par paliers (J-3, J+7, J+15, J+30) par WhatsApp et Email.", category: "commercial" },
+  { key: "abonnements", label: "Abonnements & Facturation Récurrente", description: "Gestion des contrats périodiques, prélèvements automatiques et tableau de bord MRR/ARR.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -143,6 +144,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   utilisateurs: true,
   gestion_tva: true,
   relances: true,
+  abonnements: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -522,10 +524,33 @@ export const RELANCE_PALIER_LABELS: Record<string, { label: string; labelAr: str
   },
 };
 
+export const PERIODICITE_LABELS: Record<string, { label: string; labelAr: string; factor: number; code: string }> = {
+  mensuel: { label: "Mensuel", labelAr: "شهري", factor: 1, code: "M" },
+  trimestriel: { label: "Trimestriel", labelAr: "فصلي (كل 3 أشهر)", factor: 3, code: "T" },
+  semestriel: { label: "Semestriel", labelAr: "نصف سنوي (كل 6 أشهر)", factor: 6, code: "S" },
+  annuel: { label: "Annuel", labelAr: "سنوي", factor: 12, code: "A" },
+};
+
+export const SUBSCRIPTION_STATUT_LABELS: Record<string, { label: string; labelAr: string; color: string }> = {
+  actif: { label: "Actif", labelAr: "نشط", color: "teal" },
+  suspendu: { label: "Suspendu", labelAr: "معلق", color: "orange" },
+  termine: { label: "Terminé", labelAr: "منتهي", color: "gray" },
+  brouillon: { label: "Brouillon", labelAr: "مسودة", color: "blue" },
+};
+
+export const MODE_REGLEMENT_LABELS: Record<string, { label: string; labelAr: string }> = {
+  prelevement: { label: "Prélèvement bancaire", labelAr: "اقتطاع بنكي" },
+  virement: { label: "Virement bancaire", labelAr: "تحويل بنكي" },
+  cheque: { label: "Chèque", labelAr: "شيك" },
+  especes: { label: "Espèces", labelAr: "نقداً" },
+  traite: { label: "Traite (LCN)", labelAr: "كمبيالة" },
+};
+
 export const PRIMARY_NAV_ITEMS = [
   { href: "/dashboard", label: "Tableau de bord" },
   { href: "/devis", label: "Devis", feature: "devis" as const },
   { href: "/factures", label: "Factures", feature: "factures" as const },
+  { href: "/abonnements", label: "Abonnements", feature: "abonnements" as const },
   { href: "/relances", label: "Relances & Impayés", feature: "relances" as const },
   { href: "/personnel", label: "Personnel", feature: "personnel" as const },
   { href: "/chiffre-affaires", label: "Chiffre d'affaires", feature: "chiffre_affaires" as const },

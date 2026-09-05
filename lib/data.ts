@@ -65,6 +65,13 @@ import {
   type SalesDocumentSyncCandidate,
   type SearchResult,
   type SortieCaisseRecord,
+  type SubscriptionInvoiceRecord,
+  type SubscriptionItem,
+  type SubscriptionLine,
+  type SubscriptionModeReglement,
+  type SubscriptionStats,
+  type SubscriptionStatut,
+  type Periodicite,
   type ThemeSettings,
   type UserRecord,
 } from "@/lib/types";
@@ -2664,4 +2671,561 @@ export function enregistrerReglementRapide(
   });
 
   return { success: true, nouveauReste };
+}
+
+// ==========================================
+// ABONNEMENTS & FACTURATION RÉCURRENTE (SUBSCRIPTIONS)
+// ==========================================
+
+export function computeNextEcheance(currentDate: string, periodicite: Periodicite): string {
+  const [yearStr, monthStr, dayStr] = currentDate.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  let monthsToAdd = 1;
+  if (periodicite === "trimestriel") monthsToAdd = 3;
+  else if (periodicite === "semestriel") monthsToAdd = 6;
+  else if (periodicite === "annuel") monthsToAdd = 12;
+
+  let targetMonth = month + monthsToAdd;
+  let targetYear = year;
+  while (targetMonth > 12) {
+    targetMonth -= 12;
+    targetYear += 1;
+  }
+
+  const maxDays = new Date(targetYear, targetMonth, 0).getDate();
+  const targetDay = Math.min(day, maxDays);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${targetYear}-${pad(targetMonth)}-${pad(targetDay)}`;
+}
+
+export function computeMrrArr(totalTtc: number, periodicite: Periodicite): { mrr: number; arr: number } {
+  let mrr = 0;
+  if (periodicite === "mensuel") {
+    mrr = totalTtc;
+  } else if (periodicite === "trimestriel") {
+    mrr = totalTtc / 3;
+  } else if (periodicite === "semestriel") {
+    mrr = totalTtc / 6;
+  } else if (periodicite === "annuel") {
+    mrr = totalTtc / 12;
+  }
+  const arr = mrr * 12;
+  return {
+    mrr: Math.round(mrr * 100) / 100,
+    arr: Math.round(arr * 100) / 100,
+  };
+}
+
+export function listSubscriptions(
+  companyId?: number,
+  options?: { statut?: string; periodicite?: string; search?: string }
+): SubscriptionItem[] {
+  const db = getDb();
+  const today = todayIso();
+
+  let query = `
+    SELECT 
+      s.*,
+      c.name as client_name,
+      c.phone as client_phone,
+      c.email as client_email,
+      c.ice as client_ice,
+      (SELECT COUNT(*) FROM subscription_invoices_log sil WHERE sil.subscription_id = s.id) as factures_count
+    FROM subscriptions s
+    LEFT JOIN clients c ON s.client_id = c.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+
+  if (companyId) {
+    query += ` AND s.company_id = ?`;
+    params.push(companyId);
+  }
+
+  if (options?.statut && options.statut !== "all") {
+    query += ` AND s.statut = ?`;
+    params.push(options.statut);
+  }
+
+  if (options?.periodicite && options.periodicite !== "all") {
+    query += ` AND s.periodicite = ?`;
+    params.push(options.periodicite);
+  }
+
+  if (options?.search && options.search.trim()) {
+    const q = `%${options.search.trim().toLowerCase()}%`;
+    query += ` AND (LOWER(s.titre) LIKE ? OR LOWER(s.reference) LIKE ? OR LOWER(c.name) LIKE ? OR c.phone LIKE ?)`;
+    params.push(q, q, q, q);
+  }
+
+  query += ` ORDER BY s.prochaine_echeance ASC, s.id DESC`;
+
+  const rows = db.prepare(query).all(...params) as any[];
+
+  return rows.map((row) => {
+    const est_echu = row.statut === "actif" && row.prochaine_echeance <= today;
+    return {
+      ...row,
+      est_echu,
+    };
+  });
+}
+
+export function getSubscription(id: number): (SubscriptionItem & { lignes: SubscriptionLine[] }) | null {
+  const db = getDb();
+  const today = todayIso();
+
+  const sub = db.prepare(`
+    SELECT 
+      s.*,
+      c.name as client_name,
+      c.phone as client_phone,
+      c.email as client_email,
+      c.ice as client_ice,
+      (SELECT COUNT(*) FROM subscription_invoices_log sil WHERE sil.subscription_id = s.id) as factures_count
+    FROM subscriptions s
+    LEFT JOIN clients c ON s.client_id = c.id
+    WHERE s.id = ?
+  `).get(id) as any;
+
+  if (!sub) return null;
+
+  const lignes = db.prepare(`
+    SELECT * FROM subscription_lignes WHERE subscription_id = ? ORDER BY id ASC
+  `).all(id) as SubscriptionLine[];
+
+  return {
+    ...sub,
+    est_echu: sub.statut === "actif" && sub.prochaine_echeance <= today,
+    lignes,
+  };
+}
+
+export function getSubscriptionsStats(companyId?: number): SubscriptionStats {
+  const db = getDb();
+  const today = todayIso();
+
+  const subs = (
+    companyId
+      ? db.prepare(`SELECT * FROM subscriptions WHERE company_id = ?`).all(companyId)
+      : db.prepare(`SELECT * FROM subscriptions`).all()
+  ) as any[];
+
+  let total_mrr = 0;
+  let total_arr = 0;
+  let actifs_count = 0;
+  let echus_count = 0;
+  let suspendus_count = 0;
+  let total_echu_ttc = 0;
+
+  const par_periodicite: Record<Periodicite, { count: number; mrr: number; ttc: number }> = {
+    mensuel: { count: 0, mrr: 0, ttc: 0 },
+    trimestriel: { count: 0, mrr: 0, ttc: 0 },
+    semestriel: { count: 0, mrr: 0, ttc: 0 },
+    annuel: { count: 0, mrr: 0, ttc: 0 },
+  };
+
+  const par_mode_reglement: Record<SubscriptionModeReglement, { count: number; ttc: number }> = {
+    prelevement: { count: 0, ttc: 0 },
+    virement: { count: 0, ttc: 0 },
+    cheque: { count: 0, ttc: 0 },
+    especes: { count: 0, ttc: 0 },
+    traite: { count: 0, ttc: 0 },
+  };
+
+  for (const s of subs) {
+    if (s.statut === "actif") {
+      actifs_count++;
+      total_mrr += Number(s.mrr || 0);
+      total_arr += Number(s.arr || 0);
+
+      if (s.prochaine_echeance <= today) {
+        echus_count++;
+        total_echu_ttc += Number(s.total_ttc || 0);
+      }
+    } else if (s.statut === "suspendu") {
+      suspendus_count++;
+    }
+
+    const p = s.periodicite as Periodicite;
+    if (par_periodicite[p]) {
+      par_periodicite[p].count++;
+      par_periodicite[p].mrr += Number(s.mrr || 0);
+      par_periodicite[p].ttc += Number(s.total_ttc || 0);
+    }
+
+    const m = s.mode_reglement as SubscriptionModeReglement;
+    if (par_mode_reglement[m]) {
+      par_mode_reglement[m].count++;
+      par_mode_reglement[m].ttc += Number(s.total_ttc || 0);
+    }
+  }
+
+  return {
+    total_mrr: Math.round(total_mrr * 100) / 100,
+    total_arr: Math.round(total_arr * 100) / 100,
+    actifs_count,
+    echus_count,
+    suspendus_count,
+    total_count: subs.length,
+    total_echu_ttc: Math.round(total_echu_ttc * 100) / 100,
+    par_periodicite,
+    par_mode_reglement,
+  };
+}
+
+export function saveSubscription(
+  input: {
+    id?: number;
+    company_id: number;
+    client_id: number;
+    titre: string;
+    reference?: string;
+    periodicite: Periodicite;
+    date_debut: string;
+    date_fin?: string;
+    prochaine_echeance?: string;
+    statut?: SubscriptionStatut;
+    mode_reglement?: SubscriptionModeReglement;
+    auto_generer?: number;
+    generer_statut?: "brouillon" | "valide";
+    terme_paiement_jours?: number;
+    notes?: string;
+    lignes: Array<{
+      produit_id?: number | null;
+      designation: string;
+      quantite: number;
+      unite?: string;
+      prix_unitaire_ht: number;
+      tva_rate: number;
+      remise?: number;
+    }>;
+  },
+  userId?: number
+): number {
+  const db = getDb();
+
+  let total_ht = 0;
+  let total_tva = 0;
+
+  const linesToInsert = input.lignes.map((l) => {
+    const qte = Number(l.quantite) || 1;
+    const pu = Number(l.prix_unitaire_ht) || 0;
+    const remise = Number(l.remise) || 0;
+    const tvaRate = Number(l.tva_rate) || 0;
+
+    const lineHtBeforeRemise = qte * pu;
+    const remiseMontant = (lineHtBeforeRemise * remise) / 100;
+    const lineHt = Math.max(lineHtBeforeRemise - remiseMontant, 0);
+    const lineTva = (lineHt * tvaRate) / 100;
+
+    total_ht += lineHt;
+    total_tva += lineTva;
+
+    return {
+      produit_id: l.produit_id ?? null,
+      designation: l.designation,
+      quantite: qte,
+      unite: l.unite || "mois",
+      prix_unitaire_ht: pu,
+      tva_rate: tvaRate,
+      remise,
+      total_ht: Math.round(lineHt * 100) / 100,
+    };
+  });
+
+  const total_ttc = Math.round((total_ht + total_tva) * 100) / 100;
+  const { mrr, arr } = computeMrrArr(total_ttc, input.periodicite);
+
+  const reference = input.reference?.trim() || `ABO-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+  const prochaine_echeance = input.prochaine_echeance?.trim() || input.date_debut;
+
+  let subId = input.id ?? null;
+
+  const tx = db.transaction(() => {
+    if (subId) {
+      db.prepare(`
+        UPDATE subscriptions
+        SET client_id = @client_id,
+            titre = @titre,
+            reference = @reference,
+            periodicite = @periodicite,
+            date_debut = @date_debut,
+            date_fin = @date_fin,
+            prochaine_echeance = @prochaine_echeance,
+            statut = @statut,
+            mode_reglement = @mode_reglement,
+            auto_generer = @auto_generer,
+            generer_statut = @generer_statut,
+            terme_paiement_jours = @terme_paiement_jours,
+            notes = @notes,
+            total_ht = @total_ht,
+            total_tva = @total_tva,
+            total_ttc = @total_ttc,
+            mrr = @mrr,
+            arr = @arr,
+            updated_by = @updated_by,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = @id AND company_id = @company_id
+      `).run({
+        id: subId,
+        company_id: input.company_id,
+        client_id: input.client_id,
+        titre: input.titre,
+        reference,
+        periodicite: input.periodicite,
+        date_debut: input.date_debut,
+        date_fin: input.date_fin || "",
+        prochaine_echeance,
+        statut: input.statut || "actif",
+        mode_reglement: input.mode_reglement || "virement",
+        auto_generer: input.auto_generer !== undefined ? input.auto_generer : 1,
+        generer_statut: input.generer_statut || "valide",
+        terme_paiement_jours: input.terme_paiement_jours !== undefined ? input.terme_paiement_jours : 30,
+        notes: input.notes || "",
+        total_ht: Math.round(total_ht * 100) / 100,
+        total_tva: Math.round(total_tva * 100) / 100,
+        total_ttc,
+        mrr,
+        arr,
+        updated_by: userId,
+      });
+
+      db.prepare("DELETE FROM subscription_lignes WHERE subscription_id = ?").run(subId);
+    } else {
+      const res = db.prepare(`
+        INSERT INTO subscriptions (
+          company_id, client_id, titre, reference, periodicite, date_debut, date_fin,
+          prochaine_echeance, statut, mode_reglement, auto_generer, generer_statut,
+          terme_paiement_jours, notes, total_ht, total_tva, total_ttc, mrr, arr,
+          created_by, updated_by
+        ) VALUES (
+          @company_id, @client_id, @titre, @reference, @periodicite, @date_debut, @date_fin,
+          @prochaine_echeance, @statut, @mode_reglement, @auto_generer, @generer_statut,
+          @terme_paiement_jours, @notes, @total_ht, @total_tva, @total_ttc, @mrr, @arr,
+          @created_by, @updated_by
+        )
+      `).run({
+        company_id: input.company_id,
+        client_id: input.client_id,
+        titre: input.titre,
+        reference,
+        periodicite: input.periodicite,
+        date_debut: input.date_debut,
+        date_fin: input.date_fin || "",
+        prochaine_echeance,
+        statut: input.statut || "actif",
+        mode_reglement: input.mode_reglement || "virement",
+        auto_generer: input.auto_generer !== undefined ? input.auto_generer : 1,
+        generer_statut: input.generer_statut || "valide",
+        terme_paiement_jours: input.terme_paiement_jours !== undefined ? input.terme_paiement_jours : 30,
+        notes: input.notes || "",
+        total_ht: Math.round(total_ht * 100) / 100,
+        total_tva: Math.round(total_tva * 100) / 100,
+        total_ttc,
+        mrr,
+        arr,
+        created_by: userId,
+        updated_by: userId,
+      });
+      subId = Number(res.lastInsertRowid);
+    }
+
+    const insertLine = db.prepare(`
+      INSERT INTO subscription_lignes (
+        subscription_id, produit_id, designation, quantite, unite, prix_unitaire_ht, tva_rate, remise, total_ht
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const l of linesToInsert) {
+      insertLine.run(
+        subId,
+        l.produit_id,
+        l.designation,
+        l.quantite,
+        l.unite,
+        l.prix_unitaire_ht,
+        l.tva_rate,
+        l.remise,
+        l.total_ht
+      );
+    }
+
+    logAudit(userId ?? null, subId ? "update" : "create", "subscription", subId, {
+      titre: input.titre,
+      client_id: input.client_id,
+      total_ttc,
+      mrr,
+    });
+  });
+
+  tx();
+  return subId!;
+}
+
+export function generateSubscriptionInvoice(
+  subscriptionId: number,
+  userId?: number
+): { documentId: number; invoiceNumero: number; nextEcheance: string } {
+  const db = getDb();
+  const sub = getSubscription(subscriptionId);
+  if (!sub) {
+    throw new Error("Abonnement introuvable");
+  }
+
+  const invoiceDate = sub.prochaine_echeance || todayIso();
+  const dateEcheance = new Date(new Date(invoiceDate).getTime() + sub.terme_paiement_jours * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  const periodeLabel = `Échéance ${invoiceDate} (${sub.periodicite})`;
+
+  const docLines = (sub.lignes || []).map((l) => ({
+    produit_id: l.produit_id ?? null,
+    designation: `${l.designation} (${sub.titre} - ${periodeLabel})`,
+    quantite: l.quantite,
+    unite: l.unite || "mois",
+    prix_unitaire_ht: l.prix_unitaire_ht,
+    tva_rate: l.tva_rate,
+    remise: l.remise || 0,
+  }));
+
+  const documentId = saveDocument(
+    {
+      company_id: sub.company_id,
+      type: "facture",
+      date: invoiceDate,
+      date_echeance: dateEcheance,
+      client_id: sub.client_id,
+      notes: `Facturation récurrente automatique - Contrat réf: ${sub.reference} (${sub.titre})\nMode de règlement : ${sub.mode_reglement}`,
+      status: sub.generer_statut || "valide",
+      lines: docLines,
+    },
+    userId ?? 1
+  );
+
+  const savedDoc = getDocumentById(documentId);
+  const invoiceNumero = savedDoc?.numero ?? documentId;
+
+  const nextEcheance = computeNextEcheance(invoiceDate, sub.periodicite);
+
+  let newStatut = sub.statut;
+  if (sub.date_fin && nextEcheance > sub.date_fin) {
+    newStatut = "termine";
+  }
+
+  db.prepare(`
+    UPDATE subscriptions
+    SET prochaine_echeance = ?,
+        derniere_facturation_date = ?,
+        statut = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(nextEcheance, invoiceDate, newStatut, sub.id);
+
+  db.prepare(`
+    INSERT INTO subscription_invoices_log (
+      subscription_id, document_id, periode_label, montant_ttc, created_by
+    ) VALUES (?, ?, ?, ?, ?)
+  `).run(sub.id, documentId, periodeLabel, sub.total_ttc, userId ?? null);
+
+  logAudit(userId ?? null, "create", "document", documentId, {
+    source: "subscription",
+    subscription_id: sub.id,
+    invoiceNumero,
+    montant: sub.total_ttc,
+  });
+
+  return { documentId, invoiceNumero, nextEcheance };
+}
+
+export function generateBatchDueInvoices(
+  companyId: number,
+  userId?: number
+): {
+  generatedCount: number;
+  invoices: Array<{ id: number; numero: number; subscriptionId: number; clientName: string; totalTtc: number }>;
+} {
+  const db = getDb();
+  const today = todayIso();
+
+  const dueSubs = db.prepare(`
+    SELECT id, client_id FROM subscriptions
+    WHERE company_id = ? AND statut = 'actif' AND auto_generer = 1 AND prochaine_echeance <= ?
+    ORDER BY prochaine_echeance ASC
+  `).all(companyId, today) as Array<{ id: number; client_id: number }>;
+
+  const invoices: Array<{ id: number; numero: number; subscriptionId: number; clientName: string; totalTtc: number }> = [];
+
+  for (const s of dueSubs) {
+    try {
+      const res = generateSubscriptionInvoice(s.id, userId);
+      const sub = getSubscription(s.id);
+      invoices.push({
+        id: res.documentId,
+        numero: res.invoiceNumero,
+        subscriptionId: s.id,
+        clientName: sub?.client_name || "Client",
+        totalTtc: sub?.total_ttc || 0,
+      });
+    } catch (err) {
+      console.error(`Erreur génération facture abonnement #${s.id}:`, err);
+    }
+  }
+
+  return {
+    generatedCount: invoices.length,
+    invoices,
+  };
+}
+
+export function listSubscriptionInvoices(subscriptionId: number): SubscriptionInvoiceRecord[] {
+  const db = getDb();
+
+  const rows = db.prepare(`
+    SELECT 
+      sil.id,
+      sil.subscription_id,
+      sil.document_id,
+      sil.periode_label,
+      sil.date_generation,
+      sil.montant_ttc,
+      d.numero as document_numero,
+      d.date as document_date,
+      d.date_echeance as document_date_echeance,
+      d.status as document_status,
+      d.reste as document_reste
+    FROM subscription_invoices_log sil
+    JOIN documents d ON sil.document_id = d.id
+    WHERE sil.subscription_id = ?
+    ORDER BY sil.date_generation DESC, sil.id DESC
+  `).all(subscriptionId) as SubscriptionInvoiceRecord[];
+
+  return rows;
+}
+
+export function deleteSubscription(id: number, userId?: number): void {
+  const db = getDb();
+  db.prepare("DELETE FROM subscriptions WHERE id = ?").run(id);
+  logAudit(userId ?? null, "delete", "subscription", id, {});
+}
+
+export function toggleSubscriptionStatus(
+  id: number,
+  newStatus: SubscriptionStatut,
+  userId?: number
+): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE subscriptions
+    SET statut = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(newStatus, id);
+
+  logAudit(userId ?? null, "update", "subscription", id, { newStatus });
 }

@@ -450,6 +450,75 @@ function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_relances_doc ON relances_log(document_id);
     CREATE INDEX IF NOT EXISTS idx_relances_client ON relances_log(client_id);
     CREATE INDEX IF NOT EXISTS idx_relances_date ON relances_log(date_envoi);
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      client_id INTEGER NOT NULL,
+      titre TEXT NOT NULL,
+      reference TEXT NOT NULL,
+      periodicite TEXT NOT NULL CHECK (periodicite IN ('mensuel', 'trimestriel', 'semestriel', 'annuel')),
+      date_debut TEXT NOT NULL,
+      date_fin TEXT DEFAULT '',
+      prochaine_echeance TEXT NOT NULL,
+      derniere_facturation_date TEXT DEFAULT '',
+      statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'suspendu', 'termine', 'brouillon')),
+      mode_reglement TEXT NOT NULL DEFAULT 'virement' CHECK (mode_reglement IN ('prelevement', 'virement', 'cheque', 'especes', 'traite')),
+      auto_generer INTEGER NOT NULL DEFAULT 1,
+      generer_statut TEXT NOT NULL DEFAULT 'valide' CHECK (generer_statut IN ('brouillon', 'valide')),
+      terme_paiement_jours INTEGER NOT NULL DEFAULT 30,
+      notes TEXT DEFAULT '',
+      total_ht REAL NOT NULL DEFAULT 0,
+      total_tva REAL NOT NULL DEFAULT 0,
+      total_ttc REAL NOT NULL DEFAULT 0,
+      mrr REAL NOT NULL DEFAULT 0,
+      arr REAL NOT NULL DEFAULT 0,
+      created_by INTEGER,
+      updated_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_company ON subscriptions(company_id);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_client ON subscriptions(client_id);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_echeance ON subscriptions(prochaine_echeance);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_statut ON subscriptions(statut);
+
+    CREATE TABLE IF NOT EXISTS subscription_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      produit_id INTEGER,
+      designation TEXT NOT NULL,
+      quantite REAL NOT NULL DEFAULT 1,
+      unite TEXT NOT NULL DEFAULT 'mois',
+      prix_unitaire_ht REAL NOT NULL DEFAULT 0,
+      tva_rate REAL NOT NULL DEFAULT 20,
+      remise REAL NOT NULL DEFAULT 0,
+      total_ht REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sub_lignes_sub ON subscription_lignes(subscription_id);
+
+    CREATE TABLE IF NOT EXISTS subscription_invoices_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      document_id INTEGER NOT NULL,
+      periode_label TEXT NOT NULL,
+      date_generation TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      montant_ttc REAL NOT NULL,
+      created_by INTEGER,
+      FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sub_invoices_sub ON subscription_invoices_log(subscription_id);
+    CREATE INDEX IF NOT EXISTS idx_sub_invoices_doc ON subscription_invoices_log(document_id);
   `);
 
   ensureColumnExists(db, "documents", "company_id", "INTEGER DEFAULT 1");
@@ -483,6 +552,76 @@ function migrateDatabase(db: Database.Database) {
   }
 }
 
+function seedSubscriptionsIfEmpty(db: Database.Database, actorId: number) {
+  const count = (db.prepare("SELECT COUNT(*) as count FROM subscriptions").get() as any)?.count ?? 0;
+  if (count > 0) return;
+
+  const client = db.prepare("SELECT id FROM clients ORDER BY id ASC LIMIT 1").get() as any;
+  if (!client) return;
+
+  const clientId = client.id;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Contract 1: Mensuel (Due today!)
+  const sub1 = db.prepare(`
+    INSERT INTO subscriptions (
+      company_id, client_id, titre, reference, periodicite, date_debut, date_fin,
+      prochaine_echeance, statut, mode_reglement, auto_generer, generer_statut,
+      terme_paiement_jours, notes, total_ht, total_tva, total_ttc, mrr, arr, created_by, updated_by
+    ) VALUES (
+      1, ?, 'Contrat Maintenance IT & Infogérance', 'ABO-2026-001', 'mensuel', ?, '',
+      ?, 'actif', 'prelevement', 1, 'valide', 30, 'Prélèvement mensuel automatique le 01 du mois',
+      2500, 500, 3000, 3000, 36000, ?, ?
+    )
+  `).run(clientId, today, today, actorId, actorId);
+
+  const sub1Id = Number(sub1.lastInsertRowid);
+  db.prepare(`
+    INSERT INTO subscription_lignes (subscription_id, designation, quantite, unite, prix_unitaire_ht, tva_rate, remise, total_ht)
+    VALUES (?, 'Forfait Maintenance Informatique Préventive & Curative', 1, 'mois', 2500, 20, 0, 2500)
+  `).run(sub1Id);
+
+  // Contract 2: Trimestriel
+  const nextMonth = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+  const sub2 = db.prepare(`
+    INSERT INTO subscriptions (
+      company_id, client_id, titre, reference, periodicite, date_debut, date_fin,
+      prochaine_echeance, statut, mode_reglement, auto_generer, generer_statut,
+      terme_paiement_jours, notes, total_ht, total_tva, total_ttc, mrr, arr, created_by, updated_by
+    ) VALUES (
+      1, ?, 'Loyer Local Commercial & Entrepôt Stockage #2', 'ABO-2026-002', 'trimestriel', ?, '',
+      ?, 'actif', 'virement', 1, 'valide', 15, 'Facturation trimestrielle par virement',
+      15000, 0, 15000, 5000, 60000, ?, ?
+    )
+  `).run(clientId, today, nextMonth, actorId, actorId);
+
+  const sub2Id = Number(sub2.lastInsertRowid);
+  db.prepare(`
+    INSERT INTO subscription_lignes (subscription_id, designation, quantite, unite, prix_unitaire_ht, tva_rate, remise, total_ht)
+    VALUES (?, 'Loyer Trimestriel Entrepôt et Espace de Stockage', 1, 'trimestre', 15000, 0, 0, 15000)
+  `).run(sub2Id);
+
+  // Contract 3: Annuel
+  const futureDate = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const sub3 = db.prepare(`
+    INSERT INTO subscriptions (
+      company_id, client_id, titre, reference, periodicite, date_debut, date_fin,
+      prochaine_echeance, statut, mode_reglement, auto_generer, generer_statut,
+      terme_paiement_jours, notes, total_ht, total_tva, total_ttc, mrr, arr, created_by, updated_by
+    ) VALUES (
+      1, ?, 'Abonnement Cloud ERP & Sauvegardes Quotidiennes', 'ABO-2026-003', 'annuel', ?, '',
+      ?, 'actif', 'prelevement', 1, 'valide', 30, 'Renouvellement annuel avec prélèvement bancaire',
+      12000, 2400, 14400, 1200, 14400, ?, ?
+    )
+  `).run(clientId, today, futureDate, actorId, actorId);
+
+  const sub3Id = Number(sub3.lastInsertRowid);
+  db.prepare(`
+    INSERT INTO subscription_lignes (subscription_id, designation, quantite, unite, prix_unitaire_ht, tva_rate, remise, total_ht)
+    VALUES (?, 'Licence Cloud Annuelle & Support Dédié 24/7', 1, 'an', 12000, 20, 0, 12000)
+  `).run(sub3Id);
+}
+
 function initializeDatabase() {
   ensureDataDirectories();
   const isNewDatabase = !fs.existsSync(DB_PATH);
@@ -495,6 +634,7 @@ function initializeDatabase() {
   seedIfNeeded(db, superadminId);
   applyProductBatchV2(db, superadminId);
   applyFullProductSeedIfMissing(db, superadminId);
+  seedSubscriptionsIfEmpty(db, superadminId);
 
   if (!isNewDatabase) {
     backupDatabase(db);

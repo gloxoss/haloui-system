@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BellRing,
   Building2,
+  CalendarClock,
   ChevronDown,
   ClipboardList,
   FileSpreadsheet,
@@ -44,6 +45,7 @@ const navIcons = {
   "/dashboard": LayoutDashboard,
   "/devis": FileText,
   "/factures": Receipt,
+  "/abonnements": CalendarClock,
   "/relances": BellRing,
   "/personnel": Users,
   "/chiffre-affaires": TrendingUp,
@@ -129,6 +131,7 @@ export function SidebarNav({
       case "/dashboard": return t.nav.dashboard;
       case "/devis": return t.nav.devis;
       case "/factures": return t.nav.factures;
+      case "/abonnements": return locale === "ar" ? "الاشتراكات & MRR" : "Abonnements";
       case "/relances": return t.nav.relances;
       case "/personnel": return t.nav.personnel;
       case "/chiffre-affaires": return t.nav.caisse;

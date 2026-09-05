@@ -52,6 +52,7 @@ export const ar: TranslationDictionary = {
     dashboard: "طابلو دو بور (لوحة القيادة)",
     devis: "الدوڤيات (Devis)",
     factures: "الفواتير (Factures)",
+    abonnements: "الاشتراكات والدورية",
     relances: "استخلاص الديون والإنذارات",
     bl: "بونات التوصيل (BL)",
     bs: "بونات الخروج (BS)",

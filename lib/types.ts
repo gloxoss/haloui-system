@@ -18,7 +18,8 @@ export type FeatureKey =
   | "multi_branches"
   | "multi_langue"
   | "gestion_tva"
-  | "relances";
+  | "relances"
+  | "abonnements";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -420,5 +421,81 @@ export type BalanceAgeeStats = {
     mise_en_demeure: { montant: number; count: number };
   };
   relances_ce_mois: number;
+};
+
+export type Periodicite = "mensuel" | "trimestriel" | "semestriel" | "annuel";
+export type SubscriptionStatut = "actif" | "suspendu" | "termine" | "brouillon";
+export type SubscriptionModeReglement = "prelevement" | "virement" | "cheque" | "especes" | "traite";
+
+export type SubscriptionLine = {
+  id?: number;
+  subscription_id?: number;
+  produit_id?: number | null;
+  designation: string;
+  quantite: number;
+  unite?: string;
+  prix_unitaire_ht: number;
+  tva_rate: number;
+  remise?: number;
+  total_ht: number;
+};
+
+export type SubscriptionItem = {
+  id: number;
+  company_id: number;
+  client_id: number;
+  client_name: string;
+  client_phone: string;
+  client_email?: string;
+  client_ice?: string;
+  titre: string;
+  reference: string;
+  periodicite: Periodicite;
+  date_debut: string;
+  date_fin?: string;
+  prochaine_echeance: string;
+  derniere_facturation_date?: string;
+  statut: SubscriptionStatut;
+  mode_reglement: SubscriptionModeReglement;
+  auto_generer: number;
+  generer_statut: "brouillon" | "valide";
+  terme_paiement_jours: number;
+  notes?: string;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+  mrr: number;
+  arr: number;
+  created_at: string;
+  updated_at: string;
+  lignes?: SubscriptionLine[];
+  factures_count: number;
+  est_echu: boolean;
+};
+
+export type SubscriptionStats = {
+  total_mrr: number;
+  total_arr: number;
+  actifs_count: number;
+  echus_count: number;
+  suspendus_count: number;
+  total_count: number;
+  total_echu_ttc: number;
+  par_periodicite: Record<Periodicite, { count: number; mrr: number; ttc: number }>;
+  par_mode_reglement: Record<SubscriptionModeReglement, { count: number; ttc: number }>;
+};
+
+export type SubscriptionInvoiceRecord = {
+  id: number;
+  subscription_id: number;
+  document_id: number;
+  document_numero: number;
+  periode_label: string;
+  date_generation: string;
+  montant_ttc: number;
+  document_status: string;
+  document_date: string;
+  document_date_echeance: string;
+  document_reste: number;
 };
 
