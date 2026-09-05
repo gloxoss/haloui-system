@@ -1018,6 +1018,113 @@ function migrateDatabase(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_fab_lignes_ordre ON ordre_fabrication_lignes(ordre_id);
     CREATE INDEX IF NOT EXISTS idx_fab_lignes_comp ON ordre_fabrication_lignes(composant_id);
+
+    -- MODULE CAISSE TACTILE (POS) & SESSIONS DE CAISSE (X / Z)
+    CREATE TABLE IF NOT EXISTS caisse_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      numero_session TEXT NOT NULL,
+      statut TEXT NOT NULL DEFAULT 'ouverte' CHECK (statut IN ('ouverte', 'fermee')),
+      date_ouverture TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      fond_caisse_ouverture REAL NOT NULL DEFAULT 0,
+      details_fond_ouverture_json TEXT DEFAULT '',
+      date_fermeture TEXT DEFAULT '',
+      montant_especes_theorique REAL DEFAULT 0,
+      montant_especes_reel REAL DEFAULT 0,
+      details_fond_fermeture_json TEXT DEFAULT '',
+      ecart_caisse REAL DEFAULT 0,
+      total_ventes_ht REAL DEFAULT 0,
+      total_ventes_ttc REAL DEFAULT 0,
+      total_especes REAL DEFAULT 0,
+      total_carte REAL DEFAULT 0,
+      total_cheque REAL DEFAULT 0,
+      total_virement REAL DEFAULT 0,
+      total_sorties REAL DEFAULT 0,
+      total_entrees REAL DEFAULT 0,
+      nb_tickets INTEGER DEFAULT 0,
+      notes_fermeture TEXT DEFAULT '',
+      rapport_z_numero TEXT DEFAULT '',
+      rapport_z_json TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE (company_id, numero_session)
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_sessions_branch ON caisse_sessions(branch_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_sessions_user ON caisse_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_sessions_statut ON caisse_sessions(statut);
+    CREATE INDEX IF NOT EXISTS idx_caisse_sessions_date ON caisse_sessions(date_ouverture);
+
+    CREATE TABLE IF NOT EXISTS caisse_tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      numero_ticket TEXT NOT NULL,
+      client_id INTEGER,
+      client_nom TEXT DEFAULT 'Client Comptoir',
+      total_ht REAL NOT NULL DEFAULT 0,
+      total_tva REAL NOT NULL DEFAULT 0,
+      total_ttc REAL NOT NULL DEFAULT 0,
+      remise_globale REAL NOT NULL DEFAULT 0,
+      montant_paye REAL NOT NULL DEFAULT 0,
+      montant_rendu REAL NOT NULL DEFAULT 0,
+      mode_reglement TEXT NOT NULL DEFAULT 'especes' CHECK (mode_reglement IN ('especes', 'carte', 'cheque', 'virement', 'mixte')),
+      details_reglement_json TEXT DEFAULT '',
+      statut TEXT NOT NULL DEFAULT 'valide' CHECK (statut IN ('en_attente', 'valide', 'annule')),
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES caisse_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE (company_id, numero_ticket)
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_tickets_session ON caisse_tickets(session_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_tickets_branch ON caisse_tickets(branch_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_tickets_statut ON caisse_tickets(statut);
+    CREATE INDEX IF NOT EXISTS idx_caisse_tickets_date ON caisse_tickets(created_at);
+
+    CREATE TABLE IF NOT EXISTS caisse_ticket_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER NOT NULL,
+      produit_id INTEGER,
+      ref TEXT NOT NULL,
+      designation TEXT NOT NULL,
+      prix_unitaire_ht REAL NOT NULL DEFAULT 0,
+      prix_unitaire_ttc REAL NOT NULL DEFAULT 0,
+      quantite REAL NOT NULL DEFAULT 1,
+      tva_rate REAL NOT NULL DEFAULT 20,
+      remise_pourcent REAL NOT NULL DEFAULT 0,
+      total_ht REAL NOT NULL DEFAULT 0,
+      total_ttc REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (ticket_id) REFERENCES caisse_tickets(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_ticket_lignes_ticket ON caisse_ticket_lignes(ticket_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_ticket_lignes_produit ON caisse_ticket_lignes(produit_id);
+
+    CREATE TABLE IF NOT EXISTS caisse_mouvements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('entree', 'sortie')),
+      montant REAL NOT NULL,
+      motif TEXT NOT NULL,
+      beneficiaire TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES caisse_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_session ON caisse_mouvements(session_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_type ON caisse_mouvements(type);
   `);
 
   createSettingsTable(db);

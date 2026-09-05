@@ -125,6 +125,17 @@ import {
 } from "@/lib/nomenclatures";
 import { generateBarcodeSvg } from "@/lib/barcodes";
 import {
+  getSessionActive,
+  getSessionById,
+  ouvrirSessionCaisse,
+  enregistrerTicketCaisse,
+  getTicketById,
+  enregistrerMouvementCaisse,
+  genererRapportX,
+  cloturerSessionCaisse,
+  listSessionsCaisse,
+} from "@/lib/pos";
+import {
   type InventaireType,
   type SerieStatut,
   type EmplacementType,
@@ -134,6 +145,9 @@ import {
   type ModeDestockageKit,
   type BarcodeSymbology,
   type LabelConfig,
+  type CaisseModeReglement,
+  type CaisseMouvementType,
+  type DenominationsComptage,
 } from "@/lib/types";
 import { createDatabaseBackup, getDb } from "@/lib/db";
 import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
@@ -2345,5 +2359,158 @@ export async function getEtiquettesProduitsAction(options?: {
     return { success: false as const, error: msg, produits: [] };
   }
 }
+
+// ============================================================
+// CAISSE TACTILE (POS) & SESSIONS DE CAISSE (X / Z)
+// ============================================================
+
+export async function getSessionActiveAction(branchId: number) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const caisseSession = getSessionActive(companyId, branchId);
+    return { success: true as const, session: caisseSession };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, session: null };
+  }
+}
+
+export async function ouvrirSessionCaisseAction(input: {
+  branchId: number;
+  fondInitial: number;
+  detailsFondJson?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const caisseSession = ouvrirSessionCaisse({
+      ...input,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/pos", "/chiffre-affaires"]);
+    return { success: true as const, session: caisseSession };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function enregistrerTicketCaisseAction(input: {
+  sessionId: number;
+  branchId: number;
+  clientId?: number | null;
+  clientNom?: string;
+  lignes: Array<{
+    produitId?: number | null;
+    ref: string;
+    designation: string;
+    prixUnitaireHt: number;
+    prixUnitaireTtc: number;
+    quantite: number;
+    tvaRate: number;
+    remisePourcent?: number;
+  }>;
+  remiseGlobale?: number;
+  modeReglement: CaisseModeReglement;
+  montantPaye: number;
+  detailsReglementJson?: string;
+  notes?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ticket = enregistrerTicketCaisse({
+      ...input,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/pos", "/chiffre-affaires", "/produits", "/dashboard"]);
+    return { success: true as const, ticket };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function enregistrerMouvementCaisseAction(input: {
+  sessionId: number;
+  branchId: number;
+  type: CaisseMouvementType;
+  montant: number;
+  motif: string;
+  beneficiaire?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const mvt = enregistrerMouvementCaisse({
+      ...input,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/pos", "/chiffre-affaires"]);
+    return { success: true as const, mouvement: mvt };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function genererRapportXAction(sessionId: number) {
+  await requireAuth();
+  try {
+    const rapportX = genererRapportX(sessionId);
+    return { success: true as const, rapport: rapportX };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function cloturerSessionCaisseAction(input: {
+  sessionId: number;
+  comptageReelEspeces: number;
+  detailsComptageJson?: string;
+  notes?: string;
+}) {
+  const session = await requireAuth();
+  try {
+    const rapportZ = cloturerSessionCaisse({
+      ...input,
+      userId: session.user.id,
+    });
+    refresh(["/pos", "/chiffre-affaires", "/dashboard"]);
+    return { success: true as const, rapport: rapportZ };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function listSessionsCaisseAction(branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const sessions = listSessionsCaisse(companyId, branchId);
+    return { success: true as const, sessions };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, sessions: [] };
+  }
+}
+
+export async function getTicketByIdAction(ticketId: number) {
+  await requireAuth();
+  try {
+    const ticket = getTicketById(ticketId);
+    return { success: true as const, ticket };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, ticket: null };
+  }
+}
+
 
 

@@ -134,6 +134,7 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "wms_emplacements", label: "Gestion des Emplacements WMS", description: "Cartographie détaillée (Allée/Travée/Niveau/Bac) et génération optimisée des listes de picking en serpentin.", category: "commercial" },
   { key: "nomenclatures_fabrication", label: "Nomenclatures & Kits (BOM)", description: "Produits composés (Kits/Packs), calcul du coût de revient, déstockage des composants et ordres de fabrication.", category: "commercial" },
   { key: "etiquettes_codes_barres", label: "Étiquettes & Codes-Barres", description: "Édition et impression en masse d'étiquettes de prix (EAN-13, Code 128, QR Code) pour imprimantes thermiques et A4.", category: "commercial" },
+  { key: "caisse_tactile_pos", label: "Caisse Tactile Plein Écran (POS)", description: "Point de vente rapide au comptoir optimisé écran tactile, douchette code-barres, multi-tickets et clôture X/Z.", category: "caisse" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -165,6 +166,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   wms_emplacements: true,
   nomenclatures_fabrication: true,
   etiquettes_codes_barres: true,
+  caisse_tactile_pos: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -574,6 +576,7 @@ export const PRIMARY_NAV_ITEMS = [
   { href: "/relances", label: "Relances & Impayés", feature: "relances" as const },
   { href: "/personnel", label: "Personnel", feature: "personnel" as const },
   { href: "/chiffre-affaires", label: "Chiffre d'affaires", feature: "chiffre_affaires" as const },
+  { href: "/pos", label: "Caisse Tactile (POS)", feature: "caisse_tactile_pos" as const },
   { href: "/rapprochement-bancaire", label: "Rapprochement bancaire", feature: "rapprochement_bancaire" as const },
   { href: "/devises", label: "Devises & Change", feature: "multi_devises" as const },
 ] as const;

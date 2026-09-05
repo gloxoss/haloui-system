@@ -29,7 +29,8 @@ export type FeatureKey =
   | "reappro_intelligent"
   | "wms_emplacements"
   | "nomenclatures_fabrication"
-  | "etiquettes_codes_barres";
+  | "etiquettes_codes_barres"
+  | "caisse_tactile_pos";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -1337,4 +1338,142 @@ export type LabelItemToPrint = {
   numero_lot?: string;
   exemplaires: number;
 };
+
+// --- CAISSE TACTILE (POS) & SESSIONS (X / Z) ---
+export type CaisseSessionStatut = "ouverte" | "fermee";
+export type CaisseTicketStatut = "en_attente" | "valide" | "annule";
+export type CaisseModeReglement = "especes" | "carte" | "cheque" | "virement" | "mixte";
+export type CaisseMouvementType = "entree" | "sortie";
+
+export type DenominationsComptage = {
+  billets200?: number;
+  billets100?: number;
+  billets50?: number;
+  billets20?: number;
+  pieces10?: number;
+  pieces5?: number;
+  pieces2?: number;
+  pieces1?: number;
+  pieces050?: number;
+  autre?: number;
+};
+
+export type CaisseSessionRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  user_id: number;
+  user_name?: string;
+  numero_session: string;
+  statut: CaisseSessionStatut;
+  date_ouverture: string;
+  fond_caisse_ouverture: number;
+  details_fond_ouverture_json?: string;
+  date_fermeture?: string;
+  montant_especes_theorique: number;
+  montant_especes_reel: number;
+  details_fond_fermeture_json?: string;
+  ecart_caisse: number;
+  total_ventes_ht: number;
+  total_ventes_ttc: number;
+  total_especes: number;
+  total_carte: number;
+  total_cheque: number;
+  total_virement: number;
+  total_sorties: number;
+  total_entrees: number;
+  nb_tickets: number;
+  notes_fermeture?: string;
+  rapport_z_numero?: string;
+  rapport_z_json?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CaisseTicketLigneRecord = {
+  id?: number;
+  ticket_id?: number;
+  produit_id?: number | null;
+  ref: string;
+  designation: string;
+  prix_unitaire_ht: number;
+  prix_unitaire_ttc: number;
+  quantite: number;
+  tva_rate: number;
+  remise_pourcent?: number;
+  total_ht: number;
+  total_ttc: number;
+};
+
+export type CaisseTicketRecord = {
+  id: number;
+  session_id: number;
+  company_id: number;
+  branch_id: number;
+  branch_name?: string;
+  numero_ticket: string;
+  client_id?: number | null;
+  client_nom: string;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+  remise_globale: number;
+  montant_paye: number;
+  montant_rendu: number;
+  mode_reglement: CaisseModeReglement;
+  details_reglement_json?: string;
+  statut: CaisseTicketStatut;
+  notes?: string;
+  created_by?: number;
+  created_by_name?: string;
+  created_at: string;
+  lignes: CaisseTicketLigneRecord[];
+};
+
+export type CaisseMouvementRecord = {
+  id: number;
+  session_id: number;
+  company_id: number;
+  branch_id: number;
+  type: CaisseMouvementType;
+  montant: number;
+  motif: string;
+  beneficiaire?: string;
+  created_by?: number;
+  created_by_name?: string;
+  created_at: string;
+};
+
+export type RapportXData = {
+  session: CaisseSessionRecord;
+  fond_initial: number;
+  total_ventes_ht: number;
+  total_ventes_ttc: number;
+  nb_tickets: number;
+  par_mode_reglement: {
+    especes: number;
+    carte: number;
+    cheque: number;
+    virement: number;
+    mixte: number;
+  };
+  total_entrees: number;
+  total_sorties: number;
+  theorique_especes_en_caisse: number;
+  derniers_tickets: CaisseTicketRecord[];
+  mouvements: CaisseMouvementRecord[];
+  date_generation: string;
+};
+
+export type RapportZData = RapportXData & {
+  numero_z: string;
+  date_cloture: string;
+  comptage_reel_especes: number;
+  ecart_caisse: number;
+  details_comptage: DenominationsComptage;
+  notes: string;
+  signataire: string;
+};
+
 
