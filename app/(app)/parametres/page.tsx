@@ -9,6 +9,7 @@ import {
 import { AttestationTemplateEditor } from "@/components/attestation-template-editor";
 import { PageHeading } from "@/components/page-heading";
 import { ProductUnitsEditor } from "@/components/product-units-editor";
+import { RelancesSettingsPanel } from "@/components/relances/relances-settings-panel";
 import { ThemeSelectorForm } from "@/components/theme-selector-form";
 import { UploadField } from "@/components/upload-field";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import {
   FEATURE_TOGGLE_DEFINITIONS,
 } from "@/lib/constants";
 import { getActiveCompany } from "@/lib/company";
-import { getFeatureFlags, getProductUnits, getThemeSettings, listBranches } from "@/lib/data";
+import { getFeatureFlags, getProductUnits, getRelanceSettings, getThemeSettings, listBranches } from "@/lib/data";
 import { getServerDictionary, getServerLocale } from "@/lib/i18n/server";
 import { BACKUP_DIR, DB_PATH } from "@/lib/runtime-paths";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ function downloadLinkClass() {
 const FEATURE_LOCALES_AR: Record<string, { label: string; description: string }> = {
   devis: { label: "الدوڤيات (Devis)", description: "تفعيل إنشاء وعرض عروض الأسعار والدوڤيات." },
   factures: { label: "الفواتير (Factures)", description: "تفعيل إنشاء وعرض الفواتير التجارية الرسمية." },
+  relances: { label: "استخلاص الديون والإنذارات", description: "تفعيل سيناريوهات التذكير الآلية بالواتساب والإيميل والبالنص إيجي." },
   bons_livraison: { label: "بونات التوصيل (BL)", description: "تفعيل بونات التسليم وخروج السلعة للكليان." },
   bons_sortie: { label: "بونات الخروج (BS)", description: "تفعيل بونات خروج السلعة وتحويلها بين المحلات." },
   bons_commande: { label: "بونات الكوموند (BC)", description: "تفعيل بونات الطلب وشراء السلعة من الفورنيسور." },
@@ -101,6 +103,7 @@ export default async function ParametresPage() {
   const featureFlags = getFeatureFlags();
   const themeSettings = getThemeSettings();
   const productUnits = getProductUnits();
+  const relanceSettings = getRelanceSettings(company.id);
 
   const eyebrow = isSuperadmin
     ? dict.settings.superadminSection
@@ -687,6 +690,13 @@ export default async function ParametresPage() {
       {isSuperadmin || (isAdmin && featureFlags.attestations) ? (
         <div id="attestations-studio" className="scroll-mt-6">
           <AttestationTemplateEditor initialValues={company} />
+        </div>
+      ) : null}
+
+      {/* Relances & Recouvrement Studio */}
+      {isSuperadmin || (isAdmin && featureFlags.relances) ? (
+        <div id="relances-studio" className="scroll-mt-6">
+          <RelancesSettingsPanel initialSettings={relanceSettings} />
         </div>
       ) : null}
     </div>

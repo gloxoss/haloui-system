@@ -407,6 +407,8 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "chiffre_affaires", "preuve_path", "TEXT DEFAULT ''");
   ensureColumnExists(db, "chiffre_affaires", "statut_cloture", "TEXT DEFAULT 'brouillon'");
 
+  ensureColumnExists(db, "documents", "date_echeance", "TEXT DEFAULT ''");
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS sorties_caisse (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -427,6 +429,27 @@ function migrateDatabase(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_sorties_caisse_date ON sorties_caisse(date);
     CREATE INDEX IF NOT EXISTS idx_sorties_caisse_branch ON sorties_caisse(branch_id);
+
+    CREATE TABLE IF NOT EXISTS relances_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      document_id INTEGER NOT NULL,
+      client_id INTEGER NOT NULL,
+      palier TEXT NOT NULL CHECK (palier IN ('prevenance', 'relance_1', 'relance_2', 'mise_en_demeure')),
+      canal TEXT NOT NULL CHECK (canal IN ('whatsapp', 'email', 'appel', 'courrier')),
+      destinataire TEXT NOT NULL,
+      message_envoye TEXT NOT NULL,
+      statut TEXT NOT NULL DEFAULT 'envoye' CHECK (statut IN ('envoye', 'ouvert', 'promesse_paiement', 'annule')),
+      date_envoi TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_relances_doc ON relances_log(document_id);
+    CREATE INDEX IF NOT EXISTS idx_relances_client ON relances_log(client_id);
+    CREATE INDEX IF NOT EXISTS idx_relances_date ON relances_log(date_envoi);
   `);
 
   ensureColumnExists(db, "documents", "company_id", "INTEGER DEFAULT 1");

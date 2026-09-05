@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BellRing,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -43,6 +44,7 @@ const navIcons = {
   "/dashboard": LayoutDashboard,
   "/devis": FileText,
   "/factures": Receipt,
+  "/relances": BellRing,
   "/personnel": Users,
   "/chiffre-affaires": TrendingUp,
   "/bons-livraison": Truck,
@@ -127,6 +129,7 @@ export function SidebarNav({
       case "/dashboard": return t.nav.dashboard;
       case "/devis": return t.nav.devis;
       case "/factures": return t.nav.factures;
+      case "/relances": return t.nav.relances;
       case "/personnel": return t.nav.personnel;
       case "/chiffre-affaires": return t.nav.caisse;
       case "/bons-livraison": return t.nav.bl;

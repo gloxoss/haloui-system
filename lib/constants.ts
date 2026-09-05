@@ -122,6 +122,7 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "multi_langue", label: "Sélecteur de Langue", description: "Activer le commutateur de langue bilingue (Français / العربية).", category: "systeme" },
   { key: "utilisateurs", label: "Gestion des Utilisateurs", description: "Réservé Superadmin : création et permissions des comptes d'accès.", category: "systeme" },
   { key: "gestion_tva", label: "Gestion de la TVA & Taxes", description: "Activer le calcul et l'affichage de la TVA sur les articles et les documents (Devis, Factures).", category: "commercial" },
+  { key: "relances", label: "Relances Automatiques & Impayés", description: "Module intelligent de relances par paliers (J-3, J+7, J+15, J+30) par WhatsApp et Email.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -141,6 +142,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   multi_langue: true,
   utilisateurs: true,
   gestion_tva: true,
+  relances: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -374,10 +376,157 @@ export const SEED_BRANCHES = [
   },
 ];
 
+export const DEFAULT_RELANCE_TEMPLATES_FR = {
+  prevenance: `Bonjour {{client_name}},
+
+Nous vous rappelons avec courtoisie que la facture n° {{facture_numero}} d'un montant de {{montant_du}} arrive à échéance le {{date_echeance}}.
+
+Vous pouvez consulter votre document ici : {{lien_facture}}
+
+Coordonnées pour virement bancaire :
+RIB : {{rib}}
+Banque : {{banque}}
+
+Nous restons à votre entière disposition pour tout renseignement.
+Cordialement,
+{{societe}}`,
+
+  relance_1: `Bonjour {{client_name}},
+
+Sauf erreur ou omission de notre part, nous constatons que la facture n° {{facture_numero}} du {{date_facture}} (Échéance le {{date_echeance}}) d'un montant restant de {{montant_du}} présente un retard de {{jours_retard}} jours.
+
+Si le règlement a déjà été effectué, merci de nous transmettre le justificatif. Dans le cas contraire, nous vous remercions de bien vouloir régulariser cette situation dans les meilleurs délais.
+
+Lien de la facture : {{lien_facture}}
+RIB de virement : {{rib}} ({{banque}})
+
+Bien cordialement,
+{{societe}}`,
+
+  relance_2: `Bonjour {{client_name}},
+
+Malgré notre précédent rappel, la facture n° {{facture_numero}} reste impayée à ce jour, avec un retard de {{jours_retard}} jours pour un solde exigible de {{montant_du}}.
+
+Nous vous prions de procéder au règlement immédiat afin d'éviter tout blocage de vos futures commandes ou livraisons.
+
+Lien de la facture : {{lien_facture}}
+RIB : {{rib}} ({{banque}})
+
+Dans l'attente de votre confirmation rapide,
+{{societe}}`,
+
+  mise_en_demeure: `MISE EN DEMEURE - DERNIER AVIS AVANT CONTENTIEUX
+
+À l'attention de {{client_name}},
+
+Nous constatons que la facture n° {{facture_numero}} présente un retard critique de {{jours_retard}} jours pour un montant exigible de {{montant_du}}.
+
+Faute de règlement sous 48 heures ouvrées, nous nous verrons contraints de transmettre votre dossier à notre service juridique pour engagement des poursuites légales de recouvrement, avec application des intérêts de retard.
+
+Lien officiel : {{lien_facture}}
+RIB de règlement : {{rib}} ({{banque}})
+
+Comptant sur votre régularisation immédiate,
+La Direction - {{societe}}`,
+};
+
+export const DEFAULT_RELANCE_TEMPLATES_AR = {
+  prevenance: `السلام عليكم {{client_name}}،
+
+نود تذكيركم بلطف بأن الفاتورة رقم {{facture_numero}} بمبلغ {{montant_du}} يحل أجل أدائها بتاريخ {{date_echeance}}.
+
+يمكنكم الاطلاع على الفاتورة عبر الرابط التالي:
+{{lien_facture}}
+
+معلومات التحويل البنكي:
+RIB: {{rib}}
+البنك: {{banque}}
+
+شكراً لثقتكم وتعاونكم الدائم.
+{{societe}}`,
+
+  relance_1: `السلام عليكم {{client_name}}،
+
+نحيطكم علماً بأن الفاتورة رقم {{facture_numero}} بتاريخ {{date_facture}} (أجل الأداء: {{date_echeance}}) بمبلغ متبقي قدره {{montant_du}} قد تجاوزت أجل الاستحقاق بـ {{jours_retard}} يوماً.
+
+إذا تم أداء المبلغ المرجو موافاتنا بوصل الأداء، وإلا نرجو منكم التفضل بتسوية الوضعية في أقرب الآجال.
+
+رابط الفاتورة: {{lien_facture}}
+رقم الحساب البنكي RIB: {{rib}} ({{banque}})
+
+مع خالص التحيات،
+{{societe}}`,
+
+  relance_2: `السلام عليكم {{client_name}}،
+
+على الرغم من تذكيرنا السابق، يؤسفنا إخباركم بأن الفاتورة رقم {{facture_numero}} لا تزال غير مسددة بتأخير قدره {{jours_retard}} يوماً، بمبلغ باقٍ قدره {{montant_du}}.\n\nنرجو منكم تسوية هذا المبلغ بصفة عاجلة تفادياً لأي تعليق للطلبيات أو التوصيلات القادمة.
+
+رابط الفاتورة: {{lien_facture}}
+رقم الحساب البنكي RIB: {{rib}} ({{banque}})
+
+في انتظار تأكيدكم العاجل،
+{{societe}}`,
+
+  mise_en_demeure: `إنذار أخير قبل الإحالة على النزاعات القانونية
+
+إلى السيد(ة) {{client_name}}،
+
+نعلمكم بأن الفاتورة رقم {{facture_numero}} بلغت تأخيراً حرجاً قدره {{jours_retard}} يوماً بمبلغ مستحق قدره {{montant_du}}.
+
+في حالة عدم التوصل بالأداء خلال 48 ساعة، سنكون مضطرين آسفين لإحالة الملف على مصلحة النزاعات لمباشرة إجراءات الاستخلاص القانونية مع احتساب فوائد التأخير.
+
+رابط الفاتورة: {{lien_facture}}
+رقم الحساب البنكي RIB: {{rib}} ({{banque}})
+
+إدارة شركة {{societe}}`,
+};
+
+export const DEFAULT_RELANCE_SETTINGS = {
+  delais: {
+    prevenance: -3,
+    relance_1: 7,
+    relance_2: 15,
+    mise_en_demeure: 30,
+  },
+  rib: "011 780 0000 123456789012 34",
+  banque: "BMCE Bank of Africa",
+  titulaire_compte: "STE OURIDA STATION SARL",
+  templates_fr: DEFAULT_RELANCE_TEMPLATES_FR,
+  templates_ar: DEFAULT_RELANCE_TEMPLATES_AR,
+};
+
+export const RELANCE_PALIER_LABELS: Record<string, { label: string; labelAr: string; color: string; badge: string }> = {
+  prevenance: {
+    label: "Palier 1 : Prévenance (J-3)",
+    labelAr: "المرحلة 1 : تذكير استباقي (قبل 3 أيام)",
+    color: "teal",
+    badge: "J-3 Préventif",
+  },
+  relance_1: {
+    label: "Palier 2 : 1ère Relance (J+7)",
+    labelAr: "المرحلة 2 : تذكير ودي (بعد 7 أيام)",
+    color: "yellow",
+    badge: "J+7 Courtois",
+  },
+  relance_2: {
+    label: "Palier 3 : 2ème Relance (J+15)",
+    labelAr: "المرحلة 3 : إنذار حازم (بعد 15 يوماً)",
+    color: "orange",
+    badge: "J+15 Ferme",
+  },
+  mise_en_demeure: {
+    label: "Palier 4 : Mise en Demeure (J+30)",
+    labelAr: "المرحلة 4 : إنذار قانوني (بعد 30 يوماً)",
+    color: "red",
+    badge: "J+30 Contentieux",
+  },
+};
+
 export const PRIMARY_NAV_ITEMS = [
   { href: "/dashboard", label: "Tableau de bord" },
   { href: "/devis", label: "Devis", feature: "devis" as const },
   { href: "/factures", label: "Factures", feature: "factures" as const },
+  { href: "/relances", label: "Relances & Impayés", feature: "relances" as const },
   { href: "/personnel", label: "Personnel", feature: "personnel" as const },
   { href: "/chiffre-affaires", label: "Chiffre d'affaires", feature: "chiffre_affaires" as const },
 ] as const;
@@ -403,3 +552,4 @@ export function getDocumentModule(slug: string) {
 export function getModuleSlugByType(type: DocumentType) {
   return DOCUMENT_MODULES.find((module) => module.type === type)?.slug ?? "devis";
 }
+

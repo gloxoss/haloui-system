@@ -4,6 +4,9 @@ import {
   ATTESTATION_TYPE_LABELS,
   DEFAULT_FEATURE_FLAGS,
   DEFAULT_PRODUCT_UNITS,
+  DEFAULT_RELANCE_SETTINGS,
+  DEFAULT_RELANCE_TEMPLATES_AR,
+  DEFAULT_RELANCE_TEMPLATES_FR,
   DEFAULT_THEME_SETTINGS,
   DEFAULT_TVA_RATE,
   DOCUMENT_STATUS_LABELS,
@@ -34,6 +37,7 @@ import {
 } from "@/lib/utils";
 import {
   type AttestationRecord,
+  type BalanceAgeeStats,
   type BranchRecord,
   type CompanyRecord,
   type DocumentLineInput,
@@ -43,12 +47,18 @@ import {
   type EmployeeAttestationType,
   type EmployeeRecord,
   type EntityRecord,
+  type FactureImpayeeItem,
   type FeatureFlags,
   type FeatureKey,
   type ManagedRole,
   type CashDaySummary,
   type PartyType,
   type ProductRecord,
+  type RelanceCanal,
+  type RelanceLogRecord,
+  type RelancePalier,
+  type RelanceSettings,
+  type RelanceStatut,
   type RevenueDailyPoint,
   type RevenueMonthlyBranchPoint,
   type RevenueStats,
@@ -80,6 +90,7 @@ type SaveDocumentInput = {
   company_id?: number | null;
   type: DocumentType;
   date: string;
+  date_echeance?: string;
   branch_id?: number | null;
   source_branch_id?: number | null;
   destination_branch_id?: number | null;
@@ -1154,6 +1165,7 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
     company_id: input.company_id ?? 1,
     type: input.type,
     date: input.date || todayIso(),
+    date_echeance: input.date_echeance ?? "",
     branch_id: input.branch_id ?? null,
     source_branch_id: input.source_branch_id ?? null,
     destination_branch_id: input.destination_branch_id ?? null,
@@ -1180,6 +1192,7 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
           UPDATE documents
           SET company_id = COALESCE(@company_id, company_id),
               date = @date,
+              date_echeance = @date_echeance,
               branch_id = @branch_id,
               source_branch_id = @source_branch_id,
               destination_branch_id = @destination_branch_id,
@@ -1209,10 +1222,10 @@ export function saveDocument(input: SaveDocumentInput, userId: number) {
       const result = db.prepare(
         `
           INSERT INTO documents (
-            company_id, type, numero, date, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
+            company_id, type, numero, date, date_echeance, branch_id, source_branch_id, destination_branch_id, client_id, fournisseur_id,
             parent_document_id, total_ht, total_tva, total_ttc, remise, avance, reste, notes, status, created_by, updated_by
           ) VALUES (
-            @company_id, @type, @numero, @date, @branch_id, @source_branch_id, @destination_branch_id, @client_id, @fournisseur_id,
+            @company_id, @type, @numero, @date, @date_echeance, @branch_id, @source_branch_id, @destination_branch_id, @client_id, @fournisseur_id,
             @parent_document_id, @total_ht, @total_tva, @total_ttc, @remise, @avance, @reste, @notes, @status, @created_by, @updated_by
           )
         `,
@@ -2273,4 +2286,382 @@ export function getDocumentMeta() {
     statusLabels: DOCUMENT_STATUS_LABELS,
     attestationLabels: ATTESTATION_TYPE_LABELS,
   };
+}
+
+export function getRelanceSettings(companyId?: number): RelanceSettings {
+  const db = getDb();
+  const cId = companyId || 1;
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(`relances.settings.${cId}`) as
+    | { value?: string }
+    | undefined;
+
+  let settings: RelanceSettings = { ...DEFAULT_RELANCE_SETTINGS };
+  if (row?.value) {
+    try {
+      const parsed = JSON.parse(row.value);
+      settings = {
+        delais: { ...DEFAULT_RELANCE_SETTINGS.delais, ...(parsed.delais || {}) },
+        rib: parsed.rib ?? DEFAULT_RELANCE_SETTINGS.rib,
+        banque: parsed.banque ?? DEFAULT_RELANCE_SETTINGS.banque,
+        titulaire_compte: parsed.titulaire_compte ?? DEFAULT_RELANCE_SETTINGS.titulaire_compte,
+        templates_fr: { ...DEFAULT_RELANCE_TEMPLATES_FR, ...(parsed.templates_fr || {}) },
+        templates_ar: { ...DEFAULT_RELANCE_TEMPLATES_AR, ...(parsed.templates_ar || {}) },
+      };
+    } catch {
+      settings = { ...DEFAULT_RELANCE_SETTINGS };
+    }
+  }
+
+  const company = getCompany(cId);
+  if (company && (!settings.titulaire_compte || settings.titulaire_compte === DEFAULT_RELANCE_SETTINGS.titulaire_compte)) {
+    settings.titulaire_compte = company.name;
+  }
+
+  return settings;
+}
+
+export function saveRelanceSettings(companyId: number, settings: RelanceSettings, userId: number) {
+  const db = getDb();
+  const key = `relances.settings.${companyId}`;
+  db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)").run(key, JSON.stringify(settings));
+  logAudit(userId, "update", "relances_settings", companyId, settings);
+}
+
+export function interpolateRelanceTemplate(template: string, vars: Record<string, string | number>): string {
+  let result = template;
+  for (const [key, val] of Object.entries(vars)) {
+    const pattern = new RegExp(`{{${key}}}`, "g");
+    result = result.replace(pattern, String(val ?? ""));
+  }
+  return result;
+}
+
+export function getFacturesImpayees(
+  companyId: number,
+  filters?: { palier?: string; search?: string }
+): FactureImpayeeItem[] {
+  const db = getDb();
+  const settings = getRelanceSettings(companyId);
+  const today = todayIso();
+
+  const query = `
+    SELECT 
+      d.id,
+      d.company_id,
+      d.numero,
+      d.date,
+      d.date_echeance,
+      d.client_id,
+      d.total_ttc,
+      d.avance,
+      d.reste,
+      d.status,
+      c.name AS client_name,
+      COALESCE(c.phone, '') AS client_phone,
+      COALESCE(c.email, '') AS client_email,
+      COALESCE(c.ice, '') AS client_ice,
+      (SELECT COUNT(*) FROM relances_log rl WHERE rl.document_id = d.id) AS nombre_relances,
+      (SELECT rl.palier FROM relances_log rl WHERE rl.document_id = d.id ORDER BY rl.date_envoi DESC, rl.id DESC LIMIT 1) AS dernier_palier,
+      (SELECT rl.date_envoi FROM relances_log rl WHERE rl.document_id = d.id ORDER BY rl.date_envoi DESC, rl.id DESC LIMIT 1) AS derniere_relance_date,
+      (SELECT rl.canal FROM relances_log rl WHERE rl.document_id = d.id ORDER BY rl.date_envoi DESC, rl.id DESC LIMIT 1) AS derniere_relance_canal
+    FROM documents d
+    JOIN clients c ON c.id = d.client_id
+    WHERE d.company_id = ?
+      AND d.type = 'facture'
+      AND d.reste > 0.009
+    ORDER BY d.date ASC, d.numero ASC
+  `;
+
+  type RawRow = {
+    id: number;
+    company_id: number;
+    numero: number;
+    date: string;
+    date_echeance: string | null;
+    client_id: number;
+    total_ttc: number;
+    avance: number;
+    reste: number;
+    status: string;
+    client_name: string;
+    client_phone: string;
+    client_email: string;
+    client_ice: string;
+    nombre_relances: number;
+    dernier_palier: RelancePalier | null;
+    derniere_relance_date: string | null;
+    derniere_relance_canal: RelanceCanal | null;
+  };
+
+  const rows = db.prepare(query).all(companyId) as RawRow[];
+
+  const items: FactureImpayeeItem[] = rows.map((row) => {
+    let effectiveEcheance = row.date_echeance && row.date_echeance.trim().length === 10
+      ? row.date_echeance.trim()
+      : "";
+
+    if (!effectiveEcheance) {
+      const docDate = new Date(row.date);
+      if (!isNaN(docDate.getTime())) {
+        docDate.setDate(docDate.getDate() + 30);
+        effectiveEcheance = docDate.toISOString().slice(0, 10);
+      } else {
+        effectiveEcheance = row.date;
+      }
+    }
+
+    const todayDate = new Date(today);
+    const dueDate = new Date(effectiveEcheance);
+    const diffMs = todayDate.getTime() - dueDate.getTime();
+    const jours_retard = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    let palier_recommande: RelancePalier = "prevenance";
+    if (jours_retard >= settings.delais.mise_en_demeure) {
+      palier_recommande = "mise_en_demeure";
+    } else if (jours_retard >= settings.delais.relance_2) {
+      palier_recommande = "relance_2";
+    } else if (jours_retard >= settings.delais.relance_1) {
+      palier_recommande = "relance_1";
+    } else {
+      palier_recommande = "prevenance";
+    }
+
+    return {
+      id: row.id,
+      company_id: row.company_id,
+      numero: row.numero,
+      date: row.date,
+      date_echeance: effectiveEcheance,
+      client_id: row.client_id,
+      client_name: row.client_name,
+      client_phone: row.client_phone,
+      client_email: row.client_email,
+      client_ice: row.client_ice,
+      total_ttc: Number(row.total_ttc),
+      avance: Number(row.avance),
+      reste: Number(row.reste),
+      status: row.status,
+      jours_retard,
+      palier_recommande,
+      dernier_palier: row.dernier_palier,
+      derniere_relance_date: row.derniere_relance_date,
+      derniere_relance_canal: row.derniere_relance_canal,
+      nombre_relances: Number(row.nombre_relances || 0),
+    };
+  });
+
+  let filtered = items;
+  if (filters?.palier && filters.palier !== "all") {
+    filtered = filtered.filter((i) => i.palier_recommande === filters.palier);
+  }
+
+  if (filters?.search && filters.search.trim()) {
+    const q = filters.search.trim().toLowerCase();
+    filtered = filtered.filter(
+      (i) =>
+        String(i.numero).includes(q) ||
+        i.client_name.toLowerCase().includes(q) ||
+        i.client_phone.includes(q) ||
+        (i.client_ice && i.client_ice.toLowerCase().includes(q))
+    );
+  }
+
+  filtered.sort((a, b) => {
+    if (b.jours_retard !== a.jours_retard) {
+      return b.jours_retard - a.jours_retard;
+    }
+    return a.date.localeCompare(b.date);
+  });
+
+  return filtered;
+}
+
+export function getBalanceAgee(companyId: number): BalanceAgeeStats {
+  const db = getDb();
+  const allInvoices = getFacturesImpayees(companyId);
+  const currentMonth = monthKey();
+
+  let total_creances = 0;
+  let total_echu = 0;
+  let total_non_echu = 0;
+
+  const tranches = {
+    non_echu: { montant: 0, count: 0 },
+    j1_15: { montant: 0, count: 0 },
+    j16_30: { montant: 0, count: 0 },
+    j31_60: { montant: 0, count: 0 },
+    j61_plus: { montant: 0, count: 0 },
+  };
+
+  const par_palier = {
+    prevenance: { montant: 0, count: 0 },
+    relance_1: { montant: 0, count: 0 },
+    relance_2: { montant: 0, count: 0 },
+    mise_en_demeure: { montant: 0, count: 0 },
+  };
+
+  for (const inv of allInvoices) {
+    const reste = inv.reste;
+    total_creances += reste;
+
+    if (inv.jours_retard <= 0) {
+      total_non_echu += reste;
+      tranches.non_echu.montant += reste;
+      tranches.non_echu.count += 1;
+    } else {
+      total_echu += reste;
+      if (inv.jours_retard <= 15) {
+        tranches.j1_15.montant += reste;
+        tranches.j1_15.count += 1;
+      } else if (inv.jours_retard <= 30) {
+        tranches.j16_30.montant += reste;
+        tranches.j16_30.count += 1;
+      } else if (inv.jours_retard <= 60) {
+        tranches.j31_60.montant += reste;
+        tranches.j31_60.count += 1;
+      } else {
+        tranches.j61_plus.montant += reste;
+        tranches.j61_plus.count += 1;
+      }
+    }
+
+    if (inv.palier_recommande in par_palier) {
+      par_palier[inv.palier_recommande].montant += reste;
+      par_palier[inv.palier_recommande].count += 1;
+    }
+  }
+
+  const relancesMonthRow = db.prepare(`
+    SELECT COUNT(*) AS count 
+    FROM relances_log 
+    WHERE company_id = ? AND substr(date_envoi, 1, 7) = ?
+  `).get(companyId, currentMonth) as { count: number } | undefined;
+
+  return {
+    total_creances,
+    total_echu,
+    total_non_echu,
+    tranches,
+    par_palier,
+    relances_ce_mois: Number(relancesMonthRow?.count || 0),
+  };
+}
+
+export function logRelance(input: {
+  company_id: number;
+  document_id: number;
+  client_id: number;
+  palier: RelancePalier;
+  canal: RelanceCanal;
+  destinataire: string;
+  message_envoye: string;
+  statut?: RelanceStatut;
+  notes?: string;
+  created_by?: number | null;
+}): number {
+  const db = getDb();
+  const res = db.prepare(`
+    INSERT INTO relances_log (
+      company_id, document_id, client_id, palier, canal, destinataire, message_envoye, statut, notes, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.company_id,
+    input.document_id,
+    input.client_id,
+    input.palier,
+    input.canal,
+    input.destinataire,
+    input.message_envoye,
+    input.statut || "envoye",
+    input.notes || "",
+    input.created_by ?? null
+  );
+
+  const newId = Number(res.lastInsertRowid);
+  if (input.created_by) {
+    logAudit(input.created_by, "create", "relances_log", newId, input);
+  }
+  return newId;
+}
+
+export function getRelancesLogByDocument(documentId: number): RelanceLogRecord[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT rl.*, u.full_name AS created_by_name, c.name AS client_name, d.numero AS document_numero
+    FROM relances_log rl
+    LEFT JOIN users u ON u.id = rl.created_by
+    LEFT JOIN clients c ON c.id = rl.client_id
+    LEFT JOIN documents d ON d.id = rl.document_id
+    WHERE rl.document_id = ?
+    ORDER BY rl.date_envoi DESC, rl.id DESC
+  `).all(documentId) as RelanceLogRecord[];
+  return rows;
+}
+
+export function listRelancesLogs(companyId: number, limit = 50): RelanceLogRecord[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT rl.*, u.full_name AS created_by_name, c.name AS client_name, d.numero AS document_numero
+    FROM relances_log rl
+    LEFT JOIN users u ON u.id = rl.created_by
+    LEFT JOIN clients c ON c.id = rl.client_id
+    LEFT JOIN documents d ON d.id = rl.document_id
+    WHERE rl.company_id = ?
+    ORDER BY rl.date_envoi DESC, rl.id DESC
+    LIMIT ?
+  `).all(companyId, limit) as RelanceLogRecord[];
+  return rows;
+}
+
+export function enregistrerReglementRapide(
+  documentId: number,
+  montant: number,
+  modePaiement: string,
+  notes: string,
+  userId: number
+) {
+  const db = getDb();
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(documentId) as DocumentRecord | undefined;
+  if (!doc) {
+    throw new Error("Facture introuvable.");
+  }
+
+  const versement = Math.max(0, Number(montant) || 0);
+  if (versement <= 0) {
+    throw new Error("Le montant du règlement doit être supérieur à 0.");
+  }
+
+  const nouvelleAvance = Number(doc.avance || 0) + versement;
+  const nouveauReste = Math.max(0, Number(doc.total_ttc) - nouvelleAvance);
+
+  const updatedNotes = notes?.trim()
+    ? `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} MAD (${modePaiement}). Note: ${notes.trim()}`
+    : `${doc.notes ? doc.notes + "\n" : ""}[${todayIso()}] Règlement reçu: ${versement.toFixed(2)} MAD (${modePaiement})`;
+
+  db.prepare(`
+    UPDATE documents
+    SET avance = ?,
+        reste = ?,
+        notes = ?,
+        updated_by = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(nouvelleAvance, nouveauReste, updatedNotes, userId, documentId);
+
+  if (nouveauReste === 0) {
+    db.prepare(`
+      UPDATE relances_log
+      SET statut = 'promesse_paiement'
+      WHERE document_id = ? AND statut = 'envoye'
+    `).run(documentId);
+  }
+
+  logAudit(userId, "payment", "document", documentId, {
+    montant: versement,
+    modePaiement,
+    nouvelleAvance,
+    nouveauReste,
+  });
+
+  return { success: true, nouveauReste };
 }

@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS documents (
   type TEXT NOT NULL CHECK (type IN ('devis', 'facture', 'bl', 'bs', 'bc')),
   numero INTEGER NOT NULL,
   date TEXT NOT NULL,
+  date_echeance TEXT DEFAULT '',
   branch_id INTEGER,
   source_branch_id INTEGER,
   destination_branch_id INTEGER,
@@ -246,6 +247,28 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS relances_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  document_id INTEGER NOT NULL,
+  client_id INTEGER NOT NULL,
+  palier TEXT NOT NULL CHECK (palier IN ('prevenance', 'relance_1', 'relance_2', 'mise_en_demeure')),
+  canal TEXT NOT NULL CHECK (canal IN ('whatsapp', 'email', 'appel', 'courrier')),
+  destinataire TEXT NOT NULL,
+  message_envoye TEXT NOT NULL,
+  statut TEXT NOT NULL DEFAULT 'envoye' CHECK (statut IN ('envoye', 'ouvert', 'promesse_paiement', 'annule')),
+  date_envoi TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_relances_doc ON relances_log(document_id);
+CREATE INDEX IF NOT EXISTS idx_relances_client ON relances_log(client_id);
+CREATE INDEX IF NOT EXISTS idx_relances_date ON relances_log(date_envoi);
 CREATE INDEX IF NOT EXISTS idx_documents_type_date ON documents(type, date);
 CREATE INDEX IF NOT EXISTS idx_documents_branch ON documents(branch_id);
 CREATE INDEX IF NOT EXISTS idx_ca_date ON chiffre_affaires(date);
+

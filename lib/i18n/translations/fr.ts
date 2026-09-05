@@ -52,6 +52,7 @@ export const fr: TranslationDictionary = {
     dashboard: "Tableau de bord",
     devis: "Devis",
     factures: "Factures",
+    relances: "Relances & Impayés",
     bl: "Bons de livraison",
     bs: "Bons de sortie",
     bc: "Bons de commande",

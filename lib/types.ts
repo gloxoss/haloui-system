@@ -17,7 +17,8 @@ export type FeatureKey =
   | "multi_societes"
   | "multi_branches"
   | "multi_langue"
-  | "gestion_tva";
+  | "gestion_tva"
+  | "relances";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -187,6 +188,7 @@ export type DocumentRecord = {
   type: DocumentType;
   numero: number;
   date: string;
+  date_echeance?: string;
   branch_id: number | null;
   source_branch_id: number | null;
   destination_branch_id: number | null;
@@ -333,3 +335,90 @@ export type SearchResult = {
   meta: string;
   href: string;
 };
+
+export type RelancePalier = "prevenance" | "relance_1" | "relance_2" | "mise_en_demeure";
+export type RelanceCanal = "whatsapp" | "email" | "appel" | "courrier";
+export type RelanceStatut = "envoye" | "ouvert" | "promesse_paiement" | "annule";
+
+export type RelanceLogRecord = {
+  id: number;
+  company_id: number;
+  document_id: number;
+  client_id: number;
+  palier: RelancePalier;
+  canal: RelanceCanal;
+  destinataire: string;
+  message_envoye: string;
+  statut: RelanceStatut;
+  date_envoi: string;
+  notes: string;
+  created_by: number | null;
+  created_by_name?: string;
+  client_name?: string;
+  document_numero?: number;
+};
+
+export type RelanceTemplates = {
+  prevenance: string;
+  relance_1: string;
+  relance_2: string;
+  mise_en_demeure: string;
+};
+
+export type RelanceSettings = {
+  delais: {
+    prevenance: number; // e.g. -3
+    relance_1: number;  // e.g. 7
+    relance_2: number;  // e.g. 15
+    mise_en_demeure: number; // e.g. 30
+  };
+  rib: string;
+  banque: string;
+  titulaire_compte: string;
+  templates_fr: RelanceTemplates;
+  templates_ar: RelanceTemplates;
+};
+
+export type FactureImpayeeItem = {
+  id: number;
+  company_id: number;
+  numero: number;
+  date: string;
+  date_echeance: string;
+  client_id: number;
+  client_name: string;
+  client_phone: string;
+  client_email: string;
+  client_ice?: string;
+  total_ttc: number;
+  avance: number;
+  reste: number;
+  status: string;
+  jours_retard: number;
+  palier_recommande: RelancePalier;
+  dernier_palier?: RelancePalier | null;
+  derniere_relance_date?: string | null;
+  derniere_relance_canal?: RelanceCanal | null;
+  nombre_relances: number;
+};
+
+export type BalanceAgeeStats = {
+  total_creances: number;
+  total_echu: number;
+  total_non_echu: number;
+  tranches: {
+    non_echu: { montant: number; count: number };
+    j1_15: { montant: number; count: number };
+    j16_30: { montant: number; count: number };
+    j31_60: { montant: number; count: number };
+    j61_plus: { montant: number; count: number };
+  };
+  par_palier: {
+    prevenance: { montant: number; count: number };
+    relance_1: { montant: number; count: number };
+    relance_2: { montant: number; count: number };
+    mise_en_demeure: { montant: number; count: number };
+  };
+  relances_ce_mois: number;
+};
+

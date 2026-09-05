@@ -20,7 +20,11 @@ import {
   deleteProduct,
   deleteBranch,
   deleteSortieCaisse,
+  enregistrerReglementRapide,
+  getRelanceSettings,
+  getRelancesLogByDocument,
   getUserById,
+  logRelance,
   resetBusinessData,
   saveBranch,
   saveCashDayClosing,
@@ -29,10 +33,11 @@ import {
   saveEmployee,
   saveEntity,
   saveFeatureFlags,
-  saveThemeSettings,
   saveProduct,
   saveProductUnits,
+  saveRelanceSettings,
   saveSortieCaisse,
+  saveThemeSettings,
   saveUser,
   syncRevenueFromSystemSales,
   syncSelectedSalesDocuments,
@@ -48,6 +53,10 @@ import {
   type DocumentType,
   type EmployeeAttestationType,
   type PartyType,
+  type RelanceCanal,
+  type RelancePalier,
+  type RelanceSettings,
+  type RelanceStatut,
   type ThemeDensity,
   type ThemePreset,
 } from "@/lib/types";
@@ -747,4 +756,107 @@ export async function setLocaleAction(locale: "fr" | "ar") {
     sameSite: "lax",
   });
   revalidatePath("/", "layout");
+}
+
+export async function enregistrerRelanceAction(formData: FormData) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+
+  const document_id = Number(formData.get("document_id"));
+  const client_id = Number(formData.get("client_id"));
+  const palier = (formData.get("palier") as RelancePalier) || "prevenance";
+  const canal = (formData.get("canal") as RelanceCanal) || "whatsapp";
+  const destinataire = String(formData.get("destinataire") || "");
+  const message_envoye = String(formData.get("message_envoye") || "");
+  const statut = (formData.get("statut") as RelanceStatut) || "envoye";
+  const notes = String(formData.get("notes") || "");
+
+  if (!document_id || !client_id) {
+    throw new Error("Document ou client invalide.");
+  }
+
+  logRelance({
+    company_id: companyId,
+    document_id,
+    client_id,
+    palier,
+    canal,
+    destinataire,
+    message_envoye,
+    statut,
+    notes,
+    created_by: session.user.id,
+  });
+
+  refresh(["/relances", "/dashboard", "/factures"]);
+  return { success: true };
+}
+
+export async function enregistrerReglementRapideAction(formData: FormData) {
+  const session = await requireAuth();
+  const document_id = Number(formData.get("document_id"));
+  const montant = Number(formData.get("montant"));
+  const mode_paiement = String(formData.get("mode_paiement") || "Virement");
+  const notes = String(formData.get("notes") || "");
+
+  if (!document_id || isNaN(montant) || montant <= 0) {
+    throw new Error("Montant ou document invalide.");
+  }
+
+  const result = enregistrerReglementRapide(
+    document_id,
+    montant,
+    mode_paiement,
+    notes,
+    session.user.id
+  );
+
+  refresh(["/relances", "/dashboard", "/factures"]);
+  return result;
+}
+
+export async function saveRelanceSettingsAction(formData: FormData) {
+  const session = await requireAdmin();
+  const companyId = await getActiveCompanyId();
+
+  const rawJson = formData.get("settings_json");
+  let newSettings: RelanceSettings;
+
+  if (typeof rawJson === "string" && rawJson.trim()) {
+    newSettings = safeJsonParse<RelanceSettings>(rawJson, getRelanceSettings(companyId));
+  } else {
+    const current = getRelanceSettings(companyId);
+    newSettings = {
+      delais: {
+        prevenance: Number(formData.get("delai_prevenance") ?? current.delais.prevenance),
+        relance_1: Number(formData.get("delai_relance_1") ?? current.delais.relance_1),
+        relance_2: Number(formData.get("delai_relance_2") ?? current.delais.relance_2),
+        mise_en_demeure: Number(formData.get("delai_mise_en_demeure") ?? current.delais.mise_en_demeure),
+      },
+      rib: String(formData.get("rib") || current.rib),
+      banque: String(formData.get("banque") || current.banque),
+      titulaire_compte: String(formData.get("titulaire_compte") || current.titulaire_compte),
+      templates_fr: {
+        prevenance: String(formData.get("template_fr_prevenance") || current.templates_fr.prevenance),
+        relance_1: String(formData.get("template_fr_relance_1") || current.templates_fr.relance_1),
+        relance_2: String(formData.get("template_fr_relance_2") || current.templates_fr.relance_2),
+        mise_en_demeure: String(formData.get("template_fr_mise_en_demeure") || current.templates_fr.mise_en_demeure),
+      },
+      templates_ar: {
+        prevenance: String(formData.get("template_ar_prevenance") || current.templates_ar.prevenance),
+        relance_1: String(formData.get("template_ar_relance_1") || current.templates_ar.relance_1),
+        relance_2: String(formData.get("template_ar_relance_2") || current.templates_ar.relance_2),
+        mise_en_demeure: String(formData.get("template_ar_mise_en_demeure") || current.templates_ar.mise_en_demeure),
+      },
+    };
+  }
+
+  saveRelanceSettings(companyId, newSettings, session.user.id);
+  refresh(["/parametres", "/relances"]);
+  return { success: true };
+}
+
+export async function getRelancesHistoryAction(documentId: number) {
+  await requireAuth();
+  return getRelancesLogByDocument(documentId);
 }
