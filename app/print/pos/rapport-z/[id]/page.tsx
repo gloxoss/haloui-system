@@ -147,6 +147,10 @@ export default async function PrintRapportZPage({
               <span>{formatNumber(session.total_carte)} DH</span>
             </div>
             <div className="flex justify-between text-[10px]">
+              <span>Bons d&apos;Achat :</span>
+              <span>{formatNumber(session.total_bon_achat || 0)} DH</span>
+            </div>
+            <div className="flex justify-between text-[10px]">
               <span>Chèques :</span>
               <span>{formatNumber(session.total_cheque)} DH</span>
             </div>

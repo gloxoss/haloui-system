@@ -1040,6 +1040,7 @@ function migrateDatabase(db: Database.Database) {
       total_especes REAL DEFAULT 0,
       total_carte REAL DEFAULT 0,
       total_cheque REAL DEFAULT 0,
+      total_bon_achat REAL DEFAULT 0,
       total_virement REAL DEFAULT 0,
       total_sorties REAL DEFAULT 0,
       total_entrees REAL DEFAULT 0,
@@ -1072,7 +1073,7 @@ function migrateDatabase(db: Database.Database) {
       remise_globale REAL NOT NULL DEFAULT 0,
       montant_paye REAL NOT NULL DEFAULT 0,
       montant_rendu REAL NOT NULL DEFAULT 0,
-      mode_reglement TEXT NOT NULL DEFAULT 'especes' CHECK (mode_reglement IN ('especes', 'carte', 'cheque', 'virement', 'mixte')),
+      mode_reglement TEXT NOT NULL DEFAULT 'especes' CHECK (mode_reglement IN ('especes', 'carte', 'cheque', 'virement', 'bon_achat', 'mixte')),
       details_reglement_json TEXT DEFAULT '',
       statut TEXT NOT NULL DEFAULT 'valide' CHECK (statut IN ('en_attente', 'valide', 'annule')),
       notes TEXT DEFAULT '',
@@ -1126,6 +1127,10 @@ function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_session ON caisse_mouvements(session_id);
     CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_type ON caisse_mouvements(type);
   `);
+
+  ensureColumnExists(db, "caisse_sessions", "total_bon_achat", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "produits", "vendu_au_poids", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "produits", "code_plu", "TEXT DEFAULT ''");
 
   createSettingsTable(db);
   seedFeatureFlags(db);

@@ -148,6 +148,7 @@ import {
   type CaisseModeReglement,
   type CaisseMouvementType,
   type DenominationsComptage,
+  type PaiementPartiel,
 } from "@/lib/types";
 import { createDatabaseBackup, getDb } from "@/lib/db";
 import { formatDate, formatNumber, monthKey, safeJsonParse, todayIso, toNumber } from "@/lib/utils";
@@ -2416,6 +2417,7 @@ export async function enregistrerTicketCaisseAction(input: {
   modeReglement: CaisseModeReglement;
   montantPaye: number;
   detailsReglementJson?: string;
+  paiementsPartiels?: PaiementPartiel[];
   notes?: string;
 }) {
   const session = await requireAuth();

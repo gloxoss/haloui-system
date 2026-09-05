@@ -37,6 +37,8 @@ import {
   DollarSign,
   FileSpreadsheet,
   FileText,
+  Gift,
+  Layers,
   Lock,
   Maximize2,
   Minimize2,
@@ -48,8 +50,10 @@ import {
   QrCode,
   Receipt,
   RotateCcw,
+  Scale,
   Search,
   ShoppingCart,
+  Split,
   Store,
   Tag,
   Trash2,
@@ -63,9 +67,12 @@ import {
   type CaisseModeReglement,
   type CaisseSessionRecord,
   type CaisseTicketRecord,
+  type PaiementPartiel,
   type RapportZData,
 } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
+import { parseScaleBarcode } from "@/lib/scale-barcode";
+import { BalanceModal } from "./balance-modal";
 import { MouvementCaisseModal } from "./mouvement-caisse-modal";
 import { SessionClotureModal } from "./session-cloture-modal";
 import { SessionOuvertureModal } from "./session-ouverture-modal";
@@ -82,6 +89,8 @@ export interface PosProductItem {
   categorie: string;
   stock_actuel: number;
   nature_produit?: string;
+  vendu_au_poids?: number;
+  code_plu?: string;
 }
 
 interface CartItem {
@@ -187,6 +196,18 @@ export function PosTerminal({
   const [lastCompletedTicket, setLastCompletedTicket] = useState<CaisseTicketRecord | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // --- MULTI-PAIEMENTS (RÈGLEMENTS MIXTES) ---
+  const [splitPayments, setSplitPayments] = useState<PaiementPartiel[]>([]);
+  const [splitModeDraft, setSplitModeDraft] = useState<"especes" | "carte" | "bon_achat" | "cheque" | "virement">("carte");
+  const [splitMontantDraft, setSplitMontantDraft] = useState<number | string>("");
+  const [splitRefDraft, setSplitRefDraft] = useState<string>("");
+  const [bonAchatReference, setBonAchatReference] = useState<string>("");
+
+  // --- BALANCE CONNECTÉE & PRODUITS AU POIDS ---
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState<boolean>(false);
+  const [balanceTargetProduct, setBalanceTargetProduct] = useState<PosProductItem | null>(null);
+  const [scaleBarcodeScanNotice, setScaleBarcodeScanNotice] = useState<string>("");
+
   // Extraire les catégories uniques
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -205,7 +226,8 @@ export function PosTerminal({
         !searchQuery.trim() ||
         p.designation.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.ref.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.code_barre && p.code_barre.toLowerCase().includes(searchQuery.toLowerCase()));
+        (p.code_barre && p.code_barre.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        ((p as any).code_plu && String((p as any).code_plu).includes(searchQuery.trim()));
       return matchCat && matchSearch;
     });
   }, [products, selectedCategory, searchQuery]);
@@ -236,11 +258,20 @@ export function PosTerminal({
     };
   }, [currentTicket]);
 
-  // Calcul du rendu de monnaie
+  // Calcul du rendu de monnaie en mode Espèces
   const changeDue = useMemo(() => {
     const tender = Number(tenderAmount) || 0;
     return Math.max(0, Math.round((tender - ticketTotals.totalTtc) * 100) / 100);
   }, [tenderAmount, ticketTotals.totalTtc]);
+
+  // Calculs du Multi-Paiements
+  const totalSplitRegle = useMemo(() => {
+    return Math.round(splitPayments.reduce((sum, p) => sum + (Number(p.montant) || 0), 0) * 100) / 100;
+  }, [splitPayments]);
+
+  const remainingSplitDue = useMemo(() => {
+    return Math.max(0, Math.round((ticketTotals.totalTtc - totalSplitRegle) * 100) / 100);
+  }, [ticketTotals.totalTtc, totalSplitRegle]);
 
   // --- GESTION DU PLEIN ÉCRAN ---
   const toggleFullscreen = () => {
@@ -252,7 +283,7 @@ export function PosTerminal({
   };
 
   // --- AJOUT D'ARTICLE AU TICKET EN COURS ---
-  const handleAddProduct = (prod: PosProductItem) => {
+  const handleAddProduct = (prod: PosProductItem, customQty?: number) => {
     setTickets((prev) =>
       prev.map((t) => {
         if (t.id !== activeTicketId) return t;
@@ -261,20 +292,26 @@ export function PosTerminal({
         if (existingIdx >= 0) {
           // Incrémenter la quantité
           const updatedItems = [...t.items];
+          const newQty =
+            customQty !== undefined
+              ? Math.round((updatedItems[existingIdx].quantite + customQty) * 1000) / 1000
+              : updatedItems[existingIdx].quantite + 1;
+
           updatedItems[existingIdx] = {
             ...updatedItems[existingIdx],
-            quantite: updatedItems[existingIdx].quantite + 1,
+            quantite: newQty,
           };
           return { ...t, items: updatedItems };
         } else {
           // Nouvelle ligne
+          const qty = customQty !== undefined ? customQty : 1;
           const newItem: CartItem = {
             produitId: prod.id,
             ref: prod.ref,
             designation: prod.designation,
             prixUnitaireHt: prod.prix_ht,
             prixUnitaireTtc: prod.prix_ttc,
-            quantite: 1,
+            quantite: qty,
             tvaRate: prod.tva_rate || 20,
             remisePourcent: 0,
           };
@@ -284,15 +321,72 @@ export function PosTerminal({
     );
   };
 
-  // --- ÉCOUTEUR GLOBAL DE SCANNER CODE-BARRES ---
+  // --- TRAITEMENT CENTRALISÉ DU SCAN CODE-BARRES / BALANCE ---
+  const processScannedCode = (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code) return;
+
+    // 1. Détection prioritaire code-barres balance EAN-13 GS1 (poids/prix variable 20-29)
+    const scaleRes = parseScaleBarcode(code, products);
+    if (scaleRes.isValidScaleBarcode && scaleRes.matchedProductId) {
+      const prod = products.find((p) => p.id === scaleRes.matchedProductId);
+      if (prod) {
+        const qty = scaleRes.calculatedQuantity || 1;
+        handleAddProduct(prod, qty);
+        setBarcodeScanSuccess(true);
+        setScaleBarcodeScanNotice(
+          scaleRes.type === "weight"
+            ? `⚖️ Balance : ${prod.designation} (${qty.toFixed(3)} kg)`
+            : `⚖️ Balance : ${prod.designation} (${formatNumber(scaleRes.priceDh || 0)} DH)`
+        );
+        setTimeout(() => {
+          setBarcodeScanSuccess(false);
+          setScaleBarcodeScanNotice("");
+        }, 2500);
+        if (searchInputRef.current) searchInputRef.current.value = "";
+        setSearchQuery("");
+        return;
+      }
+    }
+
+    // 2. Recherche standard par code-barres exact ou référence
+    const matchedProd = products.find(
+      (p) =>
+        (p.code_barre && p.code_barre.toLowerCase() === code.toLowerCase()) ||
+        p.ref.toLowerCase() === code.toLowerCase()
+    );
+
+    if (matchedProd) {
+      handleAddProduct(matchedProd);
+      setBarcodeScanSuccess(true);
+      setTimeout(() => setBarcodeScanSuccess(false), 800);
+      if (searchInputRef.current) searchInputRef.current.value = "";
+      setSearchQuery("");
+    }
+  };
+
+  // --- ÉCOUTEUR GLOBAL DE SCANNER CODE-BARRES & RACCOURCI BALANCE F4 ---
   useEffect(() => {
     let barcodeBuffer = "";
     let lastKeyTime = Date.now();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      // Ne pas intercepter si l'utilisateur est dans un textarea ou modal
-      if (isPaymentModalOpen || isOuvertureModalOpen || isClotureModalOpen || isMouvementModalOpen) {
+      // Raccourci F4 pour ouvrir la balance
+      if (e.key === "F4") {
+        e.preventDefault();
+        setBalanceTargetProduct(null);
+        setIsBalanceModalOpen(true);
+        return;
+      }
+
+      // Ne pas intercepter si l'utilisateur est dans un modal
+      if (
+        isPaymentModalOpen ||
+        isOuvertureModalOpen ||
+        isClotureModalOpen ||
+        isMouvementModalOpen ||
+        isBalanceModalOpen
+      ) {
         return;
       }
 
@@ -307,21 +401,7 @@ export function PosTerminal({
           e.preventDefault();
           const scannedCode = barcodeBuffer.trim();
           barcodeBuffer = "";
-
-          // Chercher le produit par code-barres exact ou référence
-          const matchedProd = products.find(
-            (p) =>
-              (p.code_barre && p.code_barre.toLowerCase() === scannedCode.toLowerCase()) ||
-              p.ref.toLowerCase() === scannedCode.toLowerCase()
-          );
-
-          if (matchedProd) {
-            handleAddProduct(matchedProd);
-            setBarcodeScanSuccess(true);
-            setTimeout(() => setBarcodeScanSuccess(false), 800);
-            if (searchInputRef.current) searchInputRef.current.value = "";
-            setSearchQuery("");
-          }
+          processScannedCode(scannedCode);
         }
       } else if (e.key.length === 1) {
         barcodeBuffer += e.key;
@@ -330,7 +410,14 @@ export function PosTerminal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [products, isPaymentModalOpen, isOuvertureModalOpen, isClotureModalOpen, isMouvementModalOpen]);
+  }, [
+    products,
+    isPaymentModalOpen,
+    isOuvertureModalOpen,
+    isClotureModalOpen,
+    isMouvementModalOpen,
+    isBalanceModalOpen,
+  ]);
 
   // --- MODIFICATION D'UNE LIGNE DU PANIER ---
   const handleUpdateItemQty = (idx: number, delta: number) => {
@@ -447,11 +534,52 @@ export function PosTerminal({
     }
   };
 
+  // --- BALANCE CONNECTÉE & PESÉE AU COMPTOIR ---
+  const handleOpenBalanceModal = (prod?: PosProductItem) => {
+    setBalanceTargetProduct(prod || null);
+    setIsBalanceModalOpen(true);
+  };
+
+  const handleAddWeighedItem = (prod: PosProductItem, weightKg: number) => {
+    handleAddProduct(prod, weightKg);
+    setBarcodeScanSuccess(true);
+    setScaleBarcodeScanNotice(`⚖️ Pesée ajoutée : ${prod.designation} (${weightKg.toFixed(3)} kg)`);
+    setTimeout(() => {
+      setBarcodeScanSuccess(false);
+      setScaleBarcodeScanNotice("");
+    }, 2500);
+  };
+
+  // --- GESTION DU MULTI-PAIEMENTS ---
+  const handleAddSplitPayment = () => {
+    const amt = Number(splitMontantDraft) || 0;
+    if (amt <= 0) return;
+
+    const newP: PaiementPartiel = {
+      mode: splitModeDraft,
+      montant: amt,
+      reference: splitRefDraft.trim() || undefined,
+    };
+
+    setSplitPayments((prev) => [...prev, newP]);
+    setSplitRefDraft("");
+    const newRemaining = Math.max(0, Math.round((remainingSplitDue - amt) * 100) / 100);
+    setSplitMontantDraft(newRemaining > 0 ? newRemaining : "");
+  };
+
+  const handleRemoveSplitPayment = (idx: number) => {
+    setSplitPayments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   // --- OUVRIR LA MODALE D'ENCAISSEMENT ---
   const handleOpenPayment = (mode: CaisseModeReglement) => {
     if (currentTicket.items.length === 0) return;
     setPaymentMode(mode);
     setTenderAmount(ticketTotals.totalTtc);
+    setBonAchatReference("");
+    setSplitPayments([]);
+    setSplitMontantDraft(ticketTotals.totalTtc);
+    setSplitRefDraft("");
     setIsPaymentModalOpen(true);
   };
 
@@ -464,6 +592,33 @@ export function PosTerminal({
 
     setIsSubmittingTicket(true);
     try {
+      let finalMontantPaye = Number(tenderAmount) || ticketTotals.totalTtc;
+      let finalPaiementsPartiels: PaiementPartiel[] | undefined = undefined;
+
+      if (paymentMode === "mixte") {
+        if (splitPayments.length === 0) {
+          alert("Veuillez ajouter au moins un règlement dans la ventilation mixte.");
+          setIsSubmittingTicket(false);
+          return;
+        }
+        if (remainingSplitDue > 0.05) {
+          alert(`Le montant réglé (${formatNumber(totalSplitRegle)} DH) ne couvre pas le total dû (${formatNumber(ticketTotals.totalTtc)} DH).`);
+          setIsSubmittingTicket(false);
+          return;
+        }
+        finalPaiementsPartiels = splitPayments;
+        finalMontantPaye = totalSplitRegle;
+      } else if (paymentMode === "bon_achat") {
+        finalPaiementsPartiels = [
+          {
+            mode: "bon_achat",
+            montant: ticketTotals.totalTtc,
+            reference: bonAchatReference.trim() || undefined,
+          },
+        ];
+        finalMontantPaye = ticketTotals.totalTtc;
+      }
+
       const res = await enregistrerTicketCaisseAction({
         sessionId: activeSession.id,
         branchId: selectedBranchId,
@@ -481,7 +636,9 @@ export function PosTerminal({
         })),
         remiseGlobale: currentTicket.remiseGlobale,
         modeReglement: paymentMode,
-        montantPaye: Number(tenderAmount) || ticketTotals.totalTtc,
+        montantPaye: finalMontantPaye,
+        paiementsPartiels: finalPaiementsPartiels,
+        detailsReglementJson: finalPaiementsPartiels ? JSON.stringify(finalPaiementsPartiels) : undefined,
       });
 
       if (res.success && res.ticket) {
@@ -668,38 +825,62 @@ export function PosTerminal({
         {/* === SECTION GAUCHE : CATALOGUE PRODUITS & SCANNER (7 COLS) === */}
         <div className="col-span-7 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
           {/* Barre de Recherche & Douchette Code-barres */}
-          <div className="p-3 bg-slate-900/90 border-b border-slate-800 shrink-0">
-            <div className="relative">
-              <TextInput
-                ref={searchInputRef}
-                placeholder="Scanner un code-barres (douchette) ou taper réf/nom..."
-                leftSection={<Search size={18} className="text-slate-400" />}
-                rightSection={
-                  barcodeScanSuccess ? (
-                    <Badge color="teal" size="xs" variant="filled">
-                      Scanné !
-                    </Badge>
-                  ) : (
-                    <Barcode size={20} className="text-indigo-400" />
-                  )
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          <div className="p-3 bg-slate-900/90 border-b border-slate-800 shrink-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <TextInput
+                  ref={searchInputRef}
+                  placeholder="Scanner un code-barres (douchette) ou taper réf/nom..."
+                  leftSection={<Search size={18} className="text-slate-400" />}
+                  rightSection={
+                    barcodeScanSuccess ? (
+                      <Badge color="teal" size="xs" variant="filled">
+                        Scanné !
+                      </Badge>
+                    ) : (
+                      <Barcode size={20} className="text-indigo-400" />
+                    )
+                  }
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                  size="md"
+                  radius="lg"
+                  styles={{
+                    input: {
+                      backgroundColor: "#0f172a",
+                      borderColor: barcodeScanSuccess ? "#10b981" : "#334155",
+                      color: "#ffffff",
+                      fontSize: "0.95rem",
+                    },
+                  }}
+                />
+              </div>
+
+              {/* Raccourci Pesée / Balance Connectée (F4) */}
+              <Button
+                variant="light"
+                color="teal"
                 size="md"
                 radius="lg"
-                styles={{
-                  input: {
-                    backgroundColor: "#0f172a",
-                    borderColor: barcodeScanSuccess ? "#10b981" : "#334155",
-                    color: "#ffffff",
-                    fontSize: "0.95rem",
-                  },
-                }}
-              />
+                leftSection={<Scale size={18} />}
+                onClick={() => handleOpenBalanceModal()}
+                title="Peser un article / Connecter la Balance de pesage (F4)"
+                className="border border-teal-600/40 text-teal-300 font-bold hover:bg-teal-900/40 shrink-0"
+              >
+                Peser <span className="hidden xl:inline text-[10px] ml-1 opacity-80">(F4)</span>
+              </Button>
             </div>
 
+            {/* Notification de Scan Balance Code-Barres Variable */}
+            {scaleBarcodeScanNotice && (
+              <div className="p-2 bg-emerald-950/80 border border-emerald-500/60 rounded-lg flex items-center gap-2 text-xs text-emerald-300 shadow-sm animate-pulse">
+                <Scale size={16} className="text-emerald-400 shrink-0" />
+                <span className="font-semibold">{scaleBarcodeScanNotice}</span>
+              </div>
+            )}
+
             {/* Filtres Catégories Rapides */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pt-2.5 pb-1 no-scrollbar">
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 no-scrollbar">
               <Button
                 size="compact-xs"
                 radius="xl"
@@ -729,10 +910,17 @@ export function PosTerminal({
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
               {filteredProducts.map((prod) => {
                 const inCart = currentTicket.items.find((i) => i.produitId === prod.id);
+                const isWeighed = prod.vendu_au_poids === 1 || prod.unite === "kg" || prod.unite === "g";
                 return (
                   <div
                     key={prod.id}
-                    onClick={() => handleAddProduct(prod)}
+                    onClick={() => {
+                      if (isWeighed) {
+                        handleOpenBalanceModal(prod);
+                      } else {
+                        handleAddProduct(prod);
+                      }
+                    }}
                     className={`relative p-3 rounded-xl border cursor-pointer transition-all duration-150 flex flex-col justify-between min-h-[105px] select-none active:scale-95 ${
                       inCart
                         ? "bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-900/20"
@@ -741,8 +929,8 @@ export function PosTerminal({
                   >
                     {/* Badge de quantité déjà dans le panier */}
                     {inCart && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900">
-                        {inCart.quantite}
+                      <span className="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white text-[10px] font-black px-1.5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900">
+                        {inCart.quantite % 1 === 0 ? inCart.quantite : inCart.quantite.toFixed(2)}
                       </span>
                     )}
 
@@ -751,7 +939,11 @@ export function PosTerminal({
                         <span className="text-[10px] font-mono font-semibold text-slate-400 truncate max-w-[65%]">
                           {prod.ref}
                         </span>
-                        {prod.stock_actuel !== undefined && (
+                        {isWeighed ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800/60 flex items-center gap-0.5">
+                            <Scale size={10} /> Au Poids
+                          </span>
+                        ) : prod.stock_actuel !== undefined ? (
                           <span
                             className={`text-[9px] font-bold px-1 rounded ${
                               prod.stock_actuel > 0
@@ -761,7 +953,7 @@ export function PosTerminal({
                           >
                             Stk: {prod.stock_actuel}
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <h3 className="font-bold text-xs text-white line-clamp-2 mt-1 leading-snug">
@@ -770,10 +962,14 @@ export function PosTerminal({
                     </div>
 
                     <div className="flex items-baseline justify-between mt-2 pt-1 border-t border-slate-700/50">
-                      <span className="text-[10px] text-slate-400 uppercase">TTC</span>
+                      <span className="text-[10px] text-slate-400 uppercase">
+                        {isWeighed ? "DH/KG" : "TTC"}
+                      </span>
                       <span className="font-black text-sm text-emerald-400">
                         {formatNumber(prod.prix_ttc)}{" "}
-                        <span className="text-[10px] font-bold text-slate-300">DH</span>
+                        <span className="text-[10px] font-bold text-slate-300">
+                          DH{isWeighed ? "/kg" : ""}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -866,7 +1062,10 @@ export function PosTerminal({
                         )}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatNumber(item.prixUnitaireTtc)} DH × {item.quantite}
+                        {formatNumber(item.prixUnitaireTtc)} DH ×{" "}
+                        <span className="font-semibold text-slate-200">
+                          {item.quantite % 1 === 0 ? item.quantite : item.quantite.toFixed(3)}
+                        </span>
                       </div>
                     </div>
 
@@ -880,7 +1079,9 @@ export function PosTerminal({
                       >
                         <Minus size={12} />
                       </ActionIcon>
-                      <span className="text-xs font-bold w-6 text-center">{item.quantite}</span>
+                      <span className="text-xs font-bold px-1 min-w-6 text-center">
+                        {item.quantite % 1 === 0 ? item.quantite : item.quantite.toFixed(2)}
+                      </span>
                       <ActionIcon
                         size="sm"
                         variant="light"
@@ -1040,19 +1241,27 @@ export function PosTerminal({
             <Text size="xs" fw={700} mb={6}>
               Mode de paiement :
             </Text>
-            <SimpleGrid cols={4} spacing="xs">
+            <SimpleGrid cols={3} spacing="xs">
               {[
                 { id: "especes", label: "Espèces", icon: Banknote, color: "teal" },
                 { id: "carte", label: "Carte TPE", icon: CreditCard, color: "blue" },
+                { id: "bon_achat", label: "Bon d'Achat", icon: Tag, color: "grape" },
                 { id: "cheque", label: "Chèque", icon: Receipt, color: "orange" },
                 { id: "virement", label: "Virement", icon: FileSpreadsheet, color: "indigo" },
+                { id: "mixte", label: "Multi-Paiement", icon: Layers, color: "violet" },
               ].map((m) => (
                 <Button
                   key={m.id}
                   size="sm"
                   variant={paymentMode === m.id ? "filled" : "light"}
                   color={m.color}
-                  onClick={() => setPaymentMode(m.id as CaisseModeReglement)}
+                  onClick={() => {
+                    const newMode = m.id as CaisseModeReglement;
+                    setPaymentMode(newMode);
+                    if (newMode === "mixte") {
+                      setSplitMontantDraft(remainingSplitDue > 0 ? remainingSplitDue : ticketTotals.totalTtc);
+                    }
+                  }}
                   leftSection={<m.icon size={16} />}
                 >
                   {m.label}
@@ -1061,69 +1270,249 @@ export function PosTerminal({
             </SimpleGrid>
           </div>
 
-          {/* Raccourcis de Billets si Espèces */}
-          {paymentMode === "especes" && (
-            <div>
-              <Text size="xs" fw={700} mb={6} c="dimmed">
-                Raccourcis Coupures Reçues :
-              </Text>
-              <Group gap="xs">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  color="teal"
-                  onClick={() => handleQuickTenderPreset("exact")}
-                >
-                  Montant Exact ({formatNumber(ticketTotals.totalTtc)} DH)
-                </Button>
-                {[20, 50, 100, 200, 500].map((b) => (
-                  <Button
-                    key={b}
+          {/* CAS 1 : MULTI-PAIEMENT (RÈGLEMENT MIXTE) */}
+          {paymentMode === "mixte" ? (
+            <div className="space-y-3">
+              {/* Synthèse Reste Dû / Total Réglé */}
+              <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Total Dû</span>
+                  <span className="text-sm font-black text-white">{formatNumber(ticketTotals.totalTtc)} DH</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Réglé</span>
+                  <span className="text-sm font-black text-emerald-400">{formatNumber(totalSplitRegle)} DH</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Reste à Payer</span>
+                  <span className={`text-sm font-black ${remainingSplitDue > 0.05 ? "text-amber-400" : "text-emerald-400"}`}>
+                    {formatNumber(remainingSplitDue)} DH
+                  </span>
+                </div>
+              </div>
+
+              {/* Liste des Paiements Déjà Enregistrés */}
+              {splitPayments.length > 0 && (
+                <div className="border border-slate-800 rounded-lg overflow-hidden">
+                  <Table striped highlightOnHover verticalSpacing="xs">
+                    <Table.Thead>
+                      <Table.Tr className="bg-slate-900 text-[11px] text-slate-400">
+                        <Table.Th>Mode</Table.Th>
+                        <Table.Th>Montant</Table.Th>
+                        <Table.Th>Réf / Détail</Table.Th>
+                        <Table.Th style={{ width: 40 }}></Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {splitPayments.map((p, pIdx) => (
+                        <Table.Tr key={pIdx} className="text-xs">
+                          <Table.Td>
+                            <Badge
+                              size="sm"
+                              variant="light"
+                              color={
+                                p.mode === "especes"
+                                  ? "teal"
+                                  : p.mode === "carte"
+                                  ? "blue"
+                                  : p.mode === "bon_achat"
+                                  ? "grape"
+                                  : p.mode === "cheque"
+                                  ? "orange"
+                                  : "indigo"
+                              }
+                            >
+                              {p.mode === "especes"
+                                ? "Espèces"
+                                : p.mode === "carte"
+                                ? "Carte TPE"
+                                : p.mode === "bon_achat"
+                                ? "Bon d'Achat"
+                                : p.mode === "cheque"
+                                ? "Chèque"
+                                : "Virement"}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td className="font-bold text-white">
+                            {formatNumber(p.montant)} DH
+                          </Table.Td>
+                          <Table.Td className="text-slate-400 text-[11px]">
+                            {p.reference || "-"}
+                          </Table.Td>
+                          <Table.Td>
+                            <ActionIcon
+                              size="sm"
+                              color="red"
+                              variant="subtle"
+                              onClick={() => handleRemoveSplitPayment(pIdx)}
+                            >
+                              <Trash2 size={13} />
+                            </ActionIcon>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Formulaire d'ajout d'une tranche de règlement */}
+              {remainingSplitDue > 0.01 && (
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+                  <Text size="xs" fw={700} c="indigo.3">
+                    + Ajouter un mode de paiement partiel :
+                  </Text>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      label="Mode"
+                      size="xs"
+                      value={splitModeDraft}
+                      onChange={(v) => v && setSplitModeDraft(v as Exclude<CaisseModeReglement, "mixte">)}
+                      data={[
+                        { value: "especes", label: "💵 Espèces" },
+                        { value: "carte", label: "💳 Carte TPE" },
+                        { value: "bon_achat", label: "🏷️ Bon d'Achat" },
+                        { value: "cheque", label: "📝 Chèque" },
+                        { value: "virement", label: "🏦 Virement" },
+                      ]}
+                    />
+                    <NumberInput
+                      label="Montant (DH)"
+                      size="xs"
+                      value={splitMontantDraft}
+                      onChange={setSplitMontantDraft}
+                      min={0.1}
+                      max={ticketTotals.totalTtc}
+                    />
+                  </div>
+
+                  <TextInput
+                    label="Réf / N° de bon / N° chèque (optionnel)"
+                    placeholder="Ex: TPE-98234, CHQ-5542, BON-CADEAU-100..."
                     size="xs"
-                    variant={Number(tenderAmount) === b ? "filled" : "light"}
-                    color="teal"
-                    onClick={() => handleQuickTenderPreset(b)}
+                    value={splitRefDraft}
+                    onChange={(e) => setSplitRefDraft(e.currentTarget.value)}
+                  />
+
+                  <Button
+                    size="xs"
+                    fullWidth
+                    color="indigo"
+                    variant="light"
+                    leftSection={<Plus size={14} />}
+                    onClick={handleAddSplitPayment}
+                    disabled={!splitMontantDraft || Number(splitMontantDraft) <= 0}
                   >
-                    {b} DH
+                    Ajouter ce règlement ({formatNumber(Number(splitMontantDraft) || 0)} DH)
                   </Button>
-                ))}
-              </Group>
+                </div>
+              )}
+            </div>
+          ) : paymentMode === "especes" ? (
+            /* CAS 2 : PAIEMENT EN ESPÈCES AVEC RACCOURCIS COUPURES */
+            <div className="space-y-3">
+              <div>
+                <Text size="xs" fw={700} mb={6} c="dimmed">
+                  Raccourcis Coupures Reçues :
+                </Text>
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    color="teal"
+                    onClick={() => handleQuickTenderPreset("exact")}
+                  >
+                    Montant Exact ({formatNumber(ticketTotals.totalTtc)} DH)
+                  </Button>
+                  {[20, 50, 100, 200, 500].map((b) => (
+                    <Button
+                      key={b}
+                      size="xs"
+                      variant={Number(tenderAmount) === b ? "filled" : "light"}
+                      color="teal"
+                      onClick={() => handleQuickTenderPreset(b)}
+                    >
+                      {b} DH
+                    </Button>
+                  ))}
+                </Group>
+              </div>
+
+              {/* Montant Reçu & Rendu de monnaie */}
+              <SimpleGrid cols={2} spacing="xs">
+                <NumberInput
+                  label="Montant Reçu / Donné"
+                  value={tenderAmount}
+                  onChange={setTenderAmount}
+                  min={0}
+                  size="md"
+                  radius="md"
+                  prefix="DH "
+                  styles={{ input: { fontSize: "1.2rem", fontWeight: 800 } }}
+                />
+
+                <Paper
+                  p="xs"
+                  radius="md"
+                  withBorder
+                  bg={changeDue > 0 ? "amber.0" : "gray.0"}
+                  className="flex flex-col justify-center"
+                >
+                  <Text size="xs" c="dimmed" fw={600}>
+                    Monnaie à Rendre :
+                  </Text>
+                  <Text
+                    size="xl"
+                    fw={900}
+                    c={changeDue > 0 ? "amber.9" : "dark.7"}
+                    className="leading-tight"
+                  >
+                    {formatNumber(changeDue)} <span className="text-xs">DH</span>
+                  </Text>
+                </Paper>
+              </SimpleGrid>
+            </div>
+          ) : paymentMode === "bon_achat" ? (
+            /* CAS 3 : PAIEMENT INTÉGRAL PAR BON D'ACHAT / CHÈQUE CADEAU */
+            <div className="space-y-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-2 text-grape-400">
+                <Tag size={18} />
+                <Text size="xs" fw={700}>
+                  Règlement par Bon d&apos;Achat ou Titre Cadeau
+                </Text>
+              </div>
+              <TextInput
+                label="Référence / Code du Bon d'Achat"
+                placeholder="Ex: BON-2026-X88, CARTE-CADEAU-..."
+                value={bonAchatReference}
+                onChange={(e) => setBonAchatReference(e.currentTarget.value)}
+                size="sm"
+                radius="md"
+                required
+              />
+              <Text size="xs" c="dimmed">
+                Le montant total de <strong>{formatNumber(ticketTotals.totalTtc)} DH</strong> sera débité sur ce bon d&apos;achat.
+              </Text>
+            </div>
+          ) : (
+            /* CAS 4 : CARTE TPE / CHÈQUE / VIREMENT */
+            <div className="space-y-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+              <Text size="xs" c="dimmed">
+                Montant à percevoir via {paymentMode === "carte" ? "TPE Carte Bancaire" : paymentMode === "cheque" ? "Chèque Bancaire" : "Virement"} :
+              </Text>
+              <div className="text-xl font-black text-white">
+                {formatNumber(ticketTotals.totalTtc)} DH
+              </div>
+              <TextInput
+                label="Référence Transaction / Numéro (Optionnel)"
+                placeholder="Ex: Autorisation TPE, N° Chèque..."
+                value={bonAchatReference}
+                onChange={(e) => setBonAchatReference(e.currentTarget.value)}
+                size="sm"
+                radius="md"
+              />
             </div>
           )}
-
-          {/* Montant Reçu & Rendu de monnaie */}
-          <SimpleGrid cols={2} spacing="xs">
-            <NumberInput
-              label="Montant Reçu / Donné"
-              value={tenderAmount}
-              onChange={setTenderAmount}
-              min={0}
-              size="md"
-              radius="md"
-              prefix="DH "
-              styles={{ input: { fontSize: "1.2rem", fontWeight: 800 } }}
-            />
-
-            <Paper
-              p="xs"
-              radius="md"
-              withBorder
-              bg={changeDue > 0 ? "amber.0" : "gray.0"}
-              className="flex flex-col justify-center"
-            >
-              <Text size="xs" c="dimmed" fw={600}>
-                Monnaie à Rendre :
-              </Text>
-              <Text
-                size="xl"
-                fw={900}
-                c={changeDue > 0 ? "amber.9" : "dark.7"}
-                className="leading-tight"
-              >
-                {formatNumber(changeDue)} <span className="text-xs">DH</span>
-              </Text>
-            </Paper>
-          </SimpleGrid>
 
           <Button
             fullWidth
@@ -1133,9 +1522,12 @@ export function PosTerminal({
             leftSection={<CheckCircle2 size={20} />}
             loading={isSubmittingTicket}
             onClick={handleFinalizeTicket}
+            disabled={paymentMode === "mixte" && (remainingSplitDue > 0.05 || splitPayments.length === 0)}
             mt="xs"
           >
-            Valider l&apos;encaissement ({formatNumber(ticketTotals.totalTtc)} DH)
+            {paymentMode === "mixte"
+              ? `Valider l'encaissement mixte (${formatNumber(totalSplitRegle)} DH)`
+              : `Valider l'encaissement (${formatNumber(ticketTotals.totalTtc)} DH)`}
           </Button>
         </Stack>
       </Modal>
@@ -1246,6 +1638,18 @@ export function PosTerminal({
           />
         </>
       )}
+
+      {/* 6. MODALE BALANCE CONNECTÉE / PESÉE TACTILE */}
+      <BalanceModal
+        opened={isBalanceModalOpen}
+        onClose={() => {
+          setIsBalanceModalOpen(false);
+          setBalanceTargetProduct(null);
+        }}
+        products={products}
+        preselectedProduct={balanceTargetProduct}
+        onAddWeighedItem={handleAddWeighedItem}
+      />
     </div>
   );
 }

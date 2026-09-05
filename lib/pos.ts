@@ -10,6 +10,7 @@ import {
   type CaisseTicketRecord,
   type CaisseTicketStatut,
   type DenominationsComptage,
+  type PaiementPartiel,
   type RapportXData,
   type RapportZData,
 } from "@/lib/types";
@@ -169,6 +170,7 @@ export function enregistrerTicketCaisse(input: {
   modeReglement: CaisseModeReglement;
   montantPaye: number;
   detailsReglementJson?: string;
+  paiementsPartiels?: PaiementPartiel[];
   notes?: string;
   userId: number;
 }): CaisseTicketRecord {
@@ -219,13 +221,99 @@ export function enregistrerTicketCaisse(input: {
   const totalTtc = Math.max(0, Math.round((totalTtcBrut - remiseGlobale) * 100) / 100);
   const totalTva = Math.max(0, Math.round((totalTtc - totalHt) * 100) / 100);
 
-  const montantPaye = Math.max(0, Number(input.montantPaye) || totalTtc);
-  const montantRendu =
-    input.modeReglement === "especes"
-      ? Math.max(0, Math.round((montantPaye - totalTtc) * 100) / 100)
-      : 0;
+  let detailsReglementJson = input.detailsReglementJson || "";
+  if (input.paiementsPartiels && input.paiementsPartiels.length > 0) {
+    detailsReglementJson = JSON.stringify(input.paiementsPartiels);
+  }
 
-  // Numéro de ticket séquentiel TK-YYYY-XXXX
+  let incEspeces = 0;
+  let incCarte = 0;
+  let incCheque = 0;
+  let incBonAchat = 0;
+  let incVirement = 0;
+  let montantRendu = 0;
+  let montantPaye = Math.max(0, Number(input.montantPaye) || totalTtc);
+
+  if (input.modeReglement === "mixte") {
+    if (input.paiementsPartiels && input.paiementsPartiels.length > 0) {
+      let totalRegle = 0;
+      for (const p of input.paiementsPartiels) {
+        const amt = Math.max(0, Number(p.montant) || 0);
+        if (p.mode === "especes") {
+          const recu = p.montant_recu !== undefined ? Math.max(amt, Number(p.montant_recu) || amt) : amt;
+          const rendu = p.montant_rendu !== undefined ? Math.max(0, Number(p.montant_rendu) || 0) : Math.max(0, recu - amt);
+          incEspeces += amt;
+          montantRendu += (isNaN(rendu) ? 0 : rendu);
+          totalRegle += recu;
+        } else if (p.mode === "carte") {
+          incCarte += amt;
+          totalRegle += amt;
+        } else if (p.mode === "cheque") {
+          incCheque += amt;
+          totalRegle += amt;
+        } else if (p.mode === "bon_achat") {
+          incBonAchat += amt;
+          totalRegle += amt;
+        } else if (p.mode === "virement") {
+          incVirement += amt;
+          totalRegle += amt;
+        }
+      }
+      montantPaye = Math.round(totalRegle * 100) / 100;
+    } else if (detailsReglementJson) {
+      try {
+        const parsed = JSON.parse(detailsReglementJson);
+        if (Array.isArray(parsed)) {
+          let totalRegle = 0;
+          for (const p of parsed) {
+            const amt = Math.max(0, Number(p.montant) || 0);
+            if (p.mode === "especes") {
+              const recu = p.montant_recu !== undefined ? Math.max(amt, Number(p.montant_recu) || amt) : amt;
+              const rendu = p.montant_rendu !== undefined ? Math.max(0, Number(p.montant_rendu) || 0) : Math.max(0, recu - amt);
+              incEspeces += amt;
+              montantRendu += (isNaN(rendu) ? 0 : rendu);
+              totalRegle += recu;
+            } else if (p.mode === "carte") {
+              incCarte += amt;
+              totalRegle += amt;
+            } else if (p.mode === "cheque") {
+              incCheque += amt;
+              totalRegle += amt;
+            } else if (p.mode === "bon_achat") {
+              incBonAchat += amt;
+              totalRegle += amt;
+            } else if (p.mode === "virement") {
+              incVirement += amt;
+              totalRegle += amt;
+            }
+          }
+          montantPaye = Math.round(totalRegle * 100) / 100;
+        } else if (typeof parsed === "object") {
+          incEspeces = Number(parsed.especes) || 0;
+          incCarte = Number(parsed.carte) || 0;
+          incCheque = Number(parsed.cheque) || 0;
+          incBonAchat = Number(parsed.bon_achat) || 0;
+          incVirement = Number(parsed.virement) || 0;
+        }
+      } catch {
+        incEspeces = totalTtc;
+      }
+    } else {
+      incEspeces = totalTtc;
+    }
+  } else if (input.modeReglement === "especes") {
+    incEspeces = totalTtc;
+    montantRendu = Math.max(0, Math.round((montantPaye - totalTtc) * 100) / 100);
+  } else if (input.modeReglement === "carte") {
+    incCarte = totalTtc;
+  } else if (input.modeReglement === "cheque") {
+    incCheque = totalTtc;
+  } else if (input.modeReglement === "bon_achat") {
+    incBonAchat = totalTtc;
+  } else if (input.modeReglement === "virement") {
+    incVirement = totalTtc;
+  }
+
   const currentYear = new Date().getFullYear();
   const lastTicket = db
     .prepare(
@@ -244,9 +332,7 @@ export function enregistrerTicketCaisse(input: {
   }
   const numeroTicket = `TK-${currentYear}-${String(nextSeq).padStart(4, "0")}`;
 
-  // Transaction SQLite atomique
   const executeTransaction = db.transaction(() => {
-    // 1. Insertion du ticket
     const ticketRes = db
       .prepare(
         `INSERT INTO caisse_tickets (
@@ -272,17 +358,16 @@ export function enregistrerTicketCaisse(input: {
         totalTva,
         totalTtc,
         remiseGlobale,
-        montantPaye,
-        montantRendu,
+        isNaN(montantPaye) ? totalTtc : montantPaye,
+        isNaN(montantRendu) ? 0 : montantRendu,
         input.modeReglement,
-        input.detailsReglementJson || "",
+        detailsReglementJson,
         input.notes || "",
         input.userId
       );
 
     const ticketId = Number(ticketRes.lastInsertRowid);
 
-    // 2. Insertion des lignes & Déstockage physique
     const insertLigneStmt = db.prepare(`
       INSERT INTO caisse_ticket_lignes (
         ticket_id, produit_id, ref, designation, prix_unitaire_ht,
@@ -300,128 +385,43 @@ export function enregistrerTicketCaisse(input: {
         ligne.prixUnitaireTtc,
         ligne.quantite,
         ligne.tvaRate,
-        ligne.remisePourcent,
+        ligne.remisePourcent || 0,
         ligne.totalHt,
         ligne.totalTtc
       );
 
-      // Gestion du stock si un produit ID est renseigné
       if (ligne.produitId) {
         const prod = db
           .prepare(`SELECT id, nature_produit, mode_destockage_kit FROM produits WHERE id = ?`)
           .get(ligne.produitId) as any;
 
         if (prod && prod.nature_produit === "kit" && prod.mode_destockage_kit === "composants") {
-          // Déstockage des composants individuels du kit selon la BOM
           const nom = getNomenclature(ligne.produitId, companyId, input.branchId);
           if (nom && nom.composants.length > 0) {
             for (const comp of nom.composants) {
-              const qteAEnlever =
-                ligne.quantite * comp.quantite * (1 + (comp.taux_perte_pourcent || 0) / 100);
-
-              const curStockRow = db
-                .prepare(`SELECT quantite FROM stock_depots WHERE branch_id = ? AND produit_id = ?`)
-                .get(input.branchId, comp.composant_id) as { quantite: number } | undefined;
+              const qteAEnlever = ligne.quantite * comp.quantite * (1 + (comp.taux_perte_pourcent || 0) / 100);
+              const curStockRow = db.prepare(`SELECT quantite FROM stock_depots WHERE branch_id = ? AND produit_id = ?`).get(input.branchId, comp.composant_id) as { quantite: number } | undefined;
               const stockAvant = curStockRow ? Number(curStockRow.quantite) : 0;
               const stockApres = stockAvant - qteAEnlever;
-
               if (curStockRow) {
-                db.prepare(
-                  `UPDATE stock_depots
-                   SET quantite = quantite - ?, updated_at = CURRENT_TIMESTAMP
-                   WHERE branch_id = ? AND produit_id = ?`
-                ).run(qteAEnlever, input.branchId, comp.composant_id);
+                db.prepare(`UPDATE stock_depots SET quantite = quantite - ?, updated_at = CURRENT_TIMESTAMP WHERE branch_id = ? AND produit_id = ?`).run(qteAEnlever, input.branchId, comp.composant_id);
               } else {
-                db.prepare(
-                  `INSERT INTO stock_depots (company_id, branch_id, produit_id, quantite, quantite_en_transit)
-                   VALUES (?, ?, ?, ?, 0)`
-                ).run(companyId, input.branchId, comp.composant_id, -qteAEnlever);
+                db.prepare(`INSERT INTO stock_depots (company_id, branch_id, produit_id, quantite, quantite_en_transit) VALUES (?, ?, ?, ?, 0)`).run(companyId, input.branchId, comp.composant_id, -qteAEnlever);
               }
-
-              db.prepare(
-                `INSERT INTO mouvements_stock (
-                   company_id, branch_id, produit_id, type_mouvement,
-                   quantite, stock_avant, stock_apres, reference_document,
-                   motif, user_id
-                 ) VALUES (?, ?, ?, 'ajustement', ?, ?, ?, ?, ?, ?)`
-              ).run(
-                companyId,
-                input.branchId,
-                comp.composant_id,
-                -qteAEnlever,
-                stockAvant,
-                stockApres,
-                numeroTicket,
-                `Vente POS Ticket ${numeroTicket} - Composant pack ${ligne.ref}`,
-                input.userId
-              );
+              db.prepare(`INSERT INTO mouvements_stock (company_id, branch_id, produit_id, type_mouvement, quantite, stock_avant, stock_apres, reference_document, motif, user_id) VALUES (?, ?, ?, 'ajustement', ?, ?, ?, ?, ?, ?)`).run(companyId, input.branchId, comp.composant_id, -qteAEnlever, stockAvant, stockApres, numeroTicket, `Vente POS Ticket ${numeroTicket} - Composant pack ${ligne.ref}`, input.userId);
             }
           }
         } else {
-          // Déstockage direct du produit
-          const curStockRow = db
-            .prepare(`SELECT quantite FROM stock_depots WHERE branch_id = ? AND produit_id = ?`)
-            .get(input.branchId, ligne.produitId) as { quantite: number } | undefined;
+          const curStockRow = db.prepare(`SELECT quantite FROM stock_depots WHERE branch_id = ? AND produit_id = ?`).get(input.branchId, ligne.produitId) as { quantite: number } | undefined;
           const stockAvant = curStockRow ? Number(curStockRow.quantite) : 0;
           const stockApres = stockAvant - ligne.quantite;
-
           if (curStockRow) {
-            db.prepare(
-              `UPDATE stock_depots
-               SET quantite = quantite - ?, updated_at = CURRENT_TIMESTAMP
-               WHERE branch_id = ? AND produit_id = ?`
-            ).run(ligne.quantite, input.branchId, ligne.produitId);
+            db.prepare(`UPDATE stock_depots SET quantite = quantite - ?, updated_at = CURRENT_TIMESTAMP WHERE branch_id = ? AND produit_id = ?`).run(ligne.quantite, input.branchId, ligne.produitId);
           } else {
-            db.prepare(
-              `INSERT INTO stock_depots (company_id, branch_id, produit_id, quantite, quantite_en_transit)
-               VALUES (?, ?, ?, ?, 0)`
-            ).run(companyId, input.branchId, ligne.produitId, -ligne.quantite);
+            db.prepare(`INSERT INTO stock_depots (company_id, branch_id, produit_id, quantite, quantite_en_transit) VALUES (?, ?, ?, ?, 0)`).run(companyId, input.branchId, ligne.produitId, -ligne.quantite);
           }
-
-          db.prepare(
-            `INSERT INTO mouvements_stock (
-               company_id, branch_id, produit_id, type_mouvement,
-               quantite, stock_avant, stock_apres, reference_document,
-               motif, user_id
-             ) VALUES (?, ?, ?, 'ajustement', ?, ?, ?, ?, ?, ?)`
-          ).run(
-            companyId,
-            input.branchId,
-            ligne.produitId,
-            -ligne.quantite,
-            stockAvant,
-            stockApres,
-            numeroTicket,
-            `Vente POS Ticket ${numeroTicket}`,
-            input.userId
-          );
+          db.prepare(`INSERT INTO mouvements_stock (company_id, branch_id, produit_id, type_mouvement, quantite, stock_avant, stock_apres, reference_document, motif, user_id) VALUES (?, ?, ?, 'ajustement', ?, ?, ?, ?, ?, ?)`).run(companyId, input.branchId, ligne.produitId, -ligne.quantite, stockAvant, stockApres, numeroTicket, `Vente POS Ticket ${numeroTicket}`, input.userId);
         }
-      }
-    }
-
-    // 3. Mise à jour des cumuls de la session
-    let incEspeces = 0;
-    let incCarte = 0;
-    let incCheque = 0;
-    let incVirement = 0;
-
-    if (input.modeReglement === "especes") {
-      incEspeces = totalTtc;
-    } else if (input.modeReglement === "carte") {
-      incCarte = totalTtc;
-    } else if (input.modeReglement === "cheque") {
-      incCheque = totalTtc;
-    } else if (input.modeReglement === "virement") {
-      incVirement = totalTtc;
-    } else if (input.modeReglement === "mixte" && input.detailsReglementJson) {
-      try {
-        const details = JSON.parse(input.detailsReglementJson);
-        incEspeces = Number(details.especes) || 0;
-        incCarte = Number(details.carte) || 0;
-        incCheque = Number(details.cheque) || 0;
-        incVirement = Number(details.virement) || 0;
-      } catch {
-        incEspeces = totalTtc;
       }
     }
 
@@ -432,6 +432,7 @@ export function enregistrerTicketCaisse(input: {
            total_especes = total_especes + ?,
            total_carte = total_carte + ?,
            total_cheque = total_cheque + ?,
+           total_bon_achat = total_bon_achat + ?,
            total_virement = total_virement + ?,
            nb_tickets = nb_tickets + 1,
            montant_especes_theorique = fond_caisse_ouverture + (total_especes + ?) + total_entrees - total_sorties,
@@ -443,6 +444,7 @@ export function enregistrerTicketCaisse(input: {
       incEspeces,
       incCarte,
       incCheque,
+      incBonAchat,
       incVirement,
       incEspeces,
       input.sessionId
@@ -616,6 +618,7 @@ export function genererRapportX(sessionId: number): RapportXData {
       especes: Number(session.total_especes),
       carte: Number(session.total_carte),
       cheque: Number(session.total_cheque),
+      bon_achat: Number(session.total_bon_achat || 0),
       virement: Number(session.total_virement),
       mixte: 0,
     },

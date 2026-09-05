@@ -1342,8 +1342,30 @@ export type LabelItemToPrint = {
 // --- CAISSE TACTILE (POS) & SESSIONS (X / Z) ---
 export type CaisseSessionStatut = "ouverte" | "fermee";
 export type CaisseTicketStatut = "en_attente" | "valide" | "annule";
-export type CaisseModeReglement = "especes" | "carte" | "cheque" | "virement" | "mixte";
+export type CaisseModeReglement = "especes" | "carte" | "cheque" | "virement" | "bon_achat" | "mixte";
 export type CaisseMouvementType = "entree" | "sortie";
+
+export type PaiementPartiel = {
+  mode: "especes" | "carte" | "cheque" | "bon_achat" | "virement";
+  montant: number;
+  montant_recu?: number;
+  montant_rendu?: number;
+  reference?: string;
+};
+
+export type ParsedScaleBarcode = {
+  isValidScaleBarcode: boolean;
+  type?: "weight" | "price";
+  prefix?: string;
+  plu?: string;
+  rawWeightGrams?: number;
+  weightKg?: number;
+  rawPriceCents?: number;
+  priceDh?: number;
+  matchedProductId?: number;
+  calculatedQuantity?: number;
+  calculatedTotalTtc?: number;
+};
 
 export type DenominationsComptage = {
   billets200?: number;
@@ -1380,6 +1402,7 @@ export type CaisseSessionRecord = {
   total_especes: number;
   total_carte: number;
   total_cheque: number;
+  total_bon_achat: number;
   total_virement: number;
   total_sorties: number;
   total_entrees: number;
@@ -1455,6 +1478,7 @@ export type RapportXData = {
     especes: number;
     carte: number;
     cheque: number;
+    bon_achat: number;
     virement: number;
     mixte: number;
   };

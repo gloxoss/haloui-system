@@ -33,6 +33,7 @@ import {
   Receipt,
   Scale,
   ShieldAlert,
+  Tag,
 } from "lucide-react";
 import { cloturerSessionCaisseAction, genererRapportXAction } from "@/app/actions";
 import {
@@ -236,6 +237,19 @@ export function SessionClotureModal({
                         </Table.Td>
                         <Table.Td ta="right" fw={700}>
                           {formatNumber(rapportX.par_mode_reglement.carte)} DH
+                        </Table.Td>
+                      </Table.Tr>
+                      <Table.Tr>
+                        <Table.Td>
+                          <Group gap={6}>
+                            <Tag size={14} className="text-purple-600" />
+                            <Text size="xs" fw={600}>
+                              Bons d&apos;Achat
+                            </Text>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td ta="right" fw={700}>
+                          {formatNumber(rapportX.par_mode_reglement.bon_achat || 0)} DH
                         </Table.Td>
                       </Table.Tr>
                       <Table.Tr>

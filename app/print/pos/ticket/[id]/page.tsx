@@ -111,12 +111,13 @@ export default async function PrintTicketPage({
           {/* Lignes d'Articles */}
           <div className="py-2.5 border-b border-black border-dashed space-y-2">
             {ticket.lignes.map((l, i) => {
+              const qtyDisplay = l.quantite % 1 === 0 ? l.quantite : l.quantite.toFixed(3);
               return (
                 <div key={i}>
                   <div className="font-bold text-[11px] truncate">{l.designation}</div>
                   <div className="flex justify-between text-[10px] text-slate-700">
                     <span>
-                      {l.quantite} × {formatNumber(l.prix_unitaire_ttc)} DH
+                      {qtyDisplay} × {formatNumber(l.prix_unitaire_ttc)} DH
                       {(l.remise_pourcent || 0) > 0 ? ` (-${l.remise_pourcent}%)` : ""}
                     </span>
                     <span className="font-bold text-black">{formatNumber(l.total_ttc)} DH</span>
@@ -147,21 +148,72 @@ export default async function PrintTicketPage({
               <span>{formatNumber(ticket.total_ttc)} DH</span>
             </div>
 
-            <div className="pt-2 border-t border-slate-200 mt-1 space-y-0.5 text-[10px]">
-              <div className="flex justify-between">
-                <span>Règlement :</span>
-                <span className="font-bold uppercase">{ticket.mode_reglement}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Montant Reçu :</span>
-                <span>{formatNumber(ticket.montant_paye)} DH</span>
-              </div>
-              {ticket.montant_rendu > 0 && (
-                <div className="flex justify-between font-bold text-black">
-                  <span>Monnaie Rendue :</span>
-                  <span>{formatNumber(ticket.montant_rendu)} DH</span>
-                </div>
-              )}
+            {/* DÉTAILS DU PAIEMENT (MULTI-PAIEMENTS OU UNIQUE) */}
+            <div className="pt-2 border-t border-slate-200 mt-1 space-y-1 text-[10px]">
+              {(() => {
+                let partials: { mode: string; montant: number; reference?: string }[] = [];
+                try {
+                  if (ticket.details_reglement_json) {
+                    partials = JSON.parse(ticket.details_reglement_json);
+                  }
+                } catch {
+                  //
+                }
+
+                const formatModeLabel = (m: string) => {
+                  switch (m) {
+                    case "especes":
+                      return "Espèces";
+                    case "carte":
+                      return "Carte TPE";
+                    case "bon_achat":
+                      return "Bon d'Achat";
+                    case "cheque":
+                      return "Chèque";
+                    case "virement":
+                      return "Virement";
+                    default:
+                      return m.toUpperCase();
+                  }
+                };
+
+                if (partials && partials.length > 0) {
+                  return (
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-black border-b border-slate-200 pb-0.5 mb-1">
+                        Règlements combinés (Multi-Paiements) :
+                      </div>
+                      {partials.map((p, pIdx) => (
+                        <div key={pIdx} className="flex justify-between">
+                          <span className="text-slate-700">
+                            • {formatModeLabel(p.mode)} {p.reference ? `(${p.reference})` : ""}:
+                          </span>
+                          <span className="font-bold">{formatNumber(p.montant)} DH</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Règlement :</span>
+                      <span className="font-bold uppercase">{formatModeLabel(ticket.mode_reglement)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Montant Reçu :</span>
+                      <span>{formatNumber(ticket.montant_paye)} DH</span>
+                    </div>
+                    {ticket.montant_rendu > 0 && (
+                      <div className="flex justify-between font-bold text-black">
+                        <span>Monnaie Rendue :</span>
+                        <span>{formatNumber(ticket.montant_rendu)} DH</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
