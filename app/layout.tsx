@@ -29,6 +29,7 @@ const naskh = Noto_Naskh_Arabic({
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "Système de gestion commerciale : devis, factures, bons, produits, clients et recettes.",
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {

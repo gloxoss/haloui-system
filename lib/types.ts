@@ -30,7 +30,19 @@ export type FeatureKey =
   | "wms_emplacements"
   | "nomenclatures_fabrication"
   | "etiquettes_codes_barres"
-  | "caisse_tactile_pos";
+  | "caisse_tactile_pos"
+  | "fidelite_clients"
+  | "grilles_tarifaires"
+  | "commissions_vendeurs"
+  | "crm_opportunites"
+  | "messagerie"
+  | "pointeuse"
+  | "conges"
+  | "paie"
+  | "notes_frais"
+  | "portail_employe"
+  | "marge_rentabilite"
+  | "declaration_tva";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
@@ -161,6 +173,10 @@ export type EntityRecord = {
   portal_access_code?: string;
   portal_token?: string;
   portal_last_login?: string;
+  fidelite_points?: number;
+  fidelite_palier?: string;
+  fidelite_total_depense?: number;
+  categorie_tarifaire?: string;
 };
 
 export type ProductRecord = {
@@ -187,6 +203,9 @@ export type UserRecord = {
   role: Role;
   active: number;
   is_superadmin?: number;
+  is_commercial?: number;
+  code_commercial?: string;
+  taux_commission_defaut?: number;
   email?: string;
   phone?: string;
   created_at: string;
@@ -217,6 +236,7 @@ export type DocumentRecord = {
   destination_branch_id: number | null;
   client_id: number | null;
   fournisseur_id: number | null;
+  commercial_id?: number | null;
   parent_document_id: number | null;
   total_ht: number;
   total_tva: number;
@@ -243,8 +263,12 @@ export type DocumentRecord = {
 export type EmployeeRecord = {
   id: number;
   numero: number;
+  numero_employe?: string;
   nom: string;
   prenom: string;
+  cin?: string;
+  poste?: string;
+  actif?: number;
   date_naissance: string;
   lieu_naissance: string;
   etat_civil: string;
@@ -255,14 +279,22 @@ export type EmployeeRecord = {
   telephone: string;
   salaire: number;
   photo_path: string;
+  code_pin?: string;
+  badge_qr_token?: string;
+  taux_horaire_base?: number;
+  heures_hebdo_contractuelles?: number;
+  solde_conges_payes?: number;
+  solde_conges_pris?: number;
 };
 
 export type AttestationRecord = {
   id: number;
   employe_id: number;
   date: string;
+  date_delivrance?: string;
   type: EmployeeAttestationType;
   contenu_genere: string;
+  notes?: string;
   created_by: number | null;
   created_at: string;
 };
@@ -1438,6 +1470,7 @@ export type CaisseTicketRecord = {
   numero_ticket: string;
   client_id?: number | null;
   client_nom: string;
+  commercial_id?: number | null;
   total_ht: number;
   total_tva: number;
   total_ttc: number;
@@ -1499,5 +1532,689 @@ export type RapportZData = RapportXData & {
   notes: string;
   signataire: string;
 };
+
+// --- GESTION DES BONS D'ACHAT & AVOIRS ---
+export type BonAchatStatut = "actif" | "utilise" | "expire" | "annule";
+
+export type BonAchatRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  code: string;
+  montant_initial: number;
+  montant_restant: number;
+  statut: BonAchatStatut;
+  date_emission: string;
+  date_expiration: string;
+  client_id?: number | null;
+  client_nom?: string;
+  ticket_origine_id?: number | null;
+  retour_id?: number | null;
+  notes?: string;
+  created_by?: number | null;
+  created_at: string;
+  updated_at?: string;
+};
+
+// --- GESTION DES RETOURS DE CAISSE ---
+export type CaisseRetourCompensation = "bon_achat" | "especes" | "carte" | "autre";
+
+export type CaisseRetourLigneRecord = {
+  id?: number;
+  retour_id?: number;
+  produit_id?: number | null;
+  ref: string;
+  designation: string;
+  prix_unitaire_ht: number;
+  prix_unitaire_ttc: number;
+  quantite: number;
+  tva_rate: number;
+  total_ttc: number;
+  restitue_stock: number;
+  motif_ligne?: string;
+};
+
+export type CaisseRetourRecord = {
+  id: number;
+  company_id: number;
+  branch_id: number;
+  session_id: number;
+  numero_retour: string;
+  ticket_origine_id?: number | null;
+  ticket_origine_numero?: string;
+  client_id?: number | null;
+  client_nom?: string;
+  mode_compensation: CaisseRetourCompensation;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+  bon_achat_id?: number | null;
+  bon_achat_code?: string;
+  motif_general?: string;
+  lignes?: CaisseRetourLigneRecord[];
+  created_by?: number | null;
+  created_at: string;
+};
+
+export type EnregistrerRetourInput = {
+  sessionId: number;
+  companyId?: number;
+  branchId: number;
+  userId: number;
+  ticketOrigineId?: number | null;
+  ticketOrigineNumero?: string;
+  clientId?: number | null;
+  clientNom?: string;
+  modeCompensation: CaisseRetourCompensation;
+  motifGeneral?: string;
+  lignes: Array<{
+    produitId?: number | null;
+    ref: string;
+    designation: string;
+    prixUnitaireHt: number;
+    prixUnitaireTtc: number;
+    quantite: number;
+    tvaRate?: number;
+    restitueStock?: boolean;
+    motifLigne?: string;
+  }>;
+  validiteMois?: number;
+};
+
+export type ValidationBonAchatResult = {
+  valide: boolean;
+  message?: string;
+  bon?: BonAchatRecord;
+};
+
+// --- MODE HORS-LIGNE (OFFLINE FIRST PWA) ---
+export type OfflineTicketRecord = {
+  offlineId: string;
+  timestamp: number;
+  sessionId: number;
+  branchId: number;
+  clientId?: number | null;
+  clientNom?: string;
+  lignes: Array<{
+    produitId?: number | null;
+    ref: string;
+    designation: string;
+    prixUnitaireHt: number;
+    prixUnitaireTtc: number;
+    quantite: number;
+    tvaRate: number;
+    remisePourcent?: number;
+  }>;
+  remiseGlobale?: number;
+  modeReglement: CaisseModeReglement;
+  montantPaye: number;
+  paiementsPartiels?: PaiementPartiel[];
+  totalTtc: number;
+  synced: boolean;
+  syncedAt?: string;
+  officialTicketId?: number;
+  officialNumeroTicket?: string;
+};
+
+// --- PROGRAMME DE FIDÉLITÉ CLIENT AVANCÉ ---
+export type FidelitePalier = "Bronze" | "Silver" | "Gold" | "VIP";
+
+export type FideliteConfigRecord = {
+  id: number;
+  company_id: number;
+  points_par_dh: number;
+  taux_conversion_cashback: number;
+  palier_bronze_min_dh: number;
+  palier_silver_min_dh: number;
+  palier_gold_min_dh: number;
+  palier_vip_min_dh: number;
+  remise_auto_bronze: number;
+  remise_auto_silver: number;
+  remise_auto_gold: number;
+  remise_auto_vip: number;
+  points_expiration_jours: number;
+  actif: boolean;
+};
+
+export type FideliteMouvementType =
+  | "gain_vente"
+  | "utilisation_remise"
+  | "conversion_bon"
+  | "ajustement"
+  | "bonus";
+
+export type FideliteMouvementRecord = {
+  id: number;
+  company_id: number;
+  client_id: number;
+  client_nom?: string;
+  type_mouvement: FideliteMouvementType;
+  points: number;
+  solde_apres: number;
+  ticket_id?: number | null;
+  document_id?: number | null;
+  bon_achat_id?: number | null;
+  motif?: string;
+  created_at: string;
+};
+
+export type FideliteStats = {
+  totalClientsFidelises: number;
+  totalPointsEnCirculation: number;
+  totalPointsDistribues: number;
+  totalPointsConvertis: number;
+  valeurPointsCirculationMAD: number;
+  repartitionPaliers: Record<FidelitePalier, number>;
+};
+
+// --- TARIFICATION PERSONNALISÉE & GRILLES TARIFAIRES ---
+export type ClientCategorieTarifaire = "particulier" | "detaillant" | "grossiste" | "vip";
+
+export type GrilleTarifaireType = "categorie" | "contrat_client";
+
+export type GrilleTarifaireRecord = {
+  id: number;
+  company_id: number;
+  code: string;
+  nom: string;
+  type_grille: GrilleTarifaireType;
+  categorie_cible?: ClientCategorieTarifaire | null;
+  client_id?: number | null;
+  client_nom?: string;
+  date_debut?: string | null;
+  date_fin?: string | null;
+  remise_globale_pourcent: number;
+  actif: boolean;
+  notes?: string;
+  lignes_count?: number;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type GrilleTarifaireLigneRecord = {
+  id?: number;
+  grille_id?: number;
+  produit_id: number;
+  produit_ref?: string;
+  produit_designation?: string;
+  prix_base_ht?: number;
+  prix_specifique_ht?: number | null;
+  remise_pourcent?: number;
+  prix_final_ht?: number;
+};
+
+export type CalculatedPriceResult = {
+  produit_id: number;
+  prix_base_ht: number;
+  prix_applique_ht: number;
+  remise_appliquee_pourcent: number;
+  source: "base" | "contrat_client" | "grille_categorie" | "palier_fidelite";
+  source_nom?: string;
+};
+
+// --- COMMISSIONNEMENT DES COMMERCIAUX & VENDEURS ---
+export type CommissionBaseCalcul = "ca_ht" | "marge_brute";
+
+export type CommissionRegleRecord = {
+  id: number;
+  company_id: number;
+  nom: string;
+  user_id?: number | null;
+  user_nom?: string;
+  categorie_produit?: string | null;
+  base_calcul: CommissionBaseCalcul;
+  taux_pourcent: number;
+  actif: boolean;
+  created_at: string;
+};
+
+export type CommissionFicheStatut = "brouillon" | "validee" | "payee" | "annulee";
+
+export type CommissionFicheRecord = {
+  id: number;
+  company_id: number;
+  numero_fiche: string;
+  commercial_id: number;
+  commercial_nom?: string;
+  periode_mois: string;
+  date_generation: string;
+  total_ca_realise_ht: number;
+  total_marge_realisee_ht: number;
+  total_commission_brute: number;
+  ajustements: number;
+  total_commission_nette: number;
+  statut: CommissionFicheStatut;
+  date_paiement?: string | null;
+  mode_paiement?: string | null;
+  notes?: string;
+  created_at: string;
+};
+
+export type CommissionFicheLigneRecord = {
+  id?: number;
+  fiche_id?: number;
+  type_source: "ticket" | "document";
+  source_id: number;
+  source_numero: string;
+  date_source: string;
+  client_nom?: string;
+  montant_ht: number;
+  marge_ht: number;
+  taux_commission: number;
+  montant_commission: number;
+};
+
+// --- CRM & PIPELINE DES OPPORTUNITÉS ---
+export type CRMEtape =
+  | "nouveau_contact"
+  | "qualification"
+  | "devis_envoye"
+  | "negociation"
+  | "gagne"
+  | "perdu";
+
+export type CRMPriorite = "basse" | "moyenne" | "haute" | "urgente";
+
+export type CRMOpportuniteRecord = {
+  id: number;
+  company_id: number;
+  branch_id?: number | null;
+  titre: string;
+  client_id?: number | null;
+  client_nom: string;
+  client_associe_nom?: string;
+  contact_nom?: string;
+  contact_telephone?: string;
+  contact_email?: string;
+  commercial_id?: number | null;
+  commercial_nom?: string;
+  etape: CRMEtape;
+  probabilite_pourcent: number;
+  montant_estime_ht: number;
+  montant_pondere_ht: number;
+  date_cloture_prevue?: string | null;
+  date_cloture_reelle?: string | null;
+  motif_perte?: string | null;
+  devis_document_id?: number | null;
+  devis_numero?: string | null;
+  notes?: string;
+  ordre_kanban: number;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type CRMOpportuniteActiviteRecord = {
+  id: number;
+  opportunite_id: number;
+  user_id?: number | null;
+  user_nom?: string;
+  type_activite: "appel" | "reunion" | "email" | "devis" | "changement_etape" | "note";
+  titre: string;
+  description?: string;
+  date_activite: string;
+  created_at: string;
+};
+
+export type CRMPipelineKPIs = {
+  totalOpportunites: number;
+  opportunitesActives: number;
+  montantTotalPipelineHT: number;
+  montantPonderePipelineHT: number;
+  montantGagneHT: number;
+  tauxConversion: number;
+};
+
+// ============================================================================
+// 5. MESSAGERIE INTÉGRÉE WHATSAPP BUSINESS & SMS
+// ============================================================================
+export type MessagerieCanal = "whatsapp" | "sms";
+
+export type MessagerieNotificationType =
+  | "commande"
+  | "livraison"
+  | "facture"
+  | "devis"
+  | "rappel"
+  | "libre";
+
+export type MessagerieStatut = "envoye" | "delivre" | "echec" | "en_attente";
+
+export type MessagerieConfigRecord = {
+  id: number;
+  company_id: number;
+  whatsapp_actif: boolean;
+  whatsapp_phone_number_id?: string;
+  whatsapp_access_token?: string;
+  whatsapp_business_account_id?: string;
+  sms_actif: boolean;
+  sms_provider: string;
+  sms_api_key?: string;
+  sms_sender_id: string;
+  auto_notify_commande: boolean;
+  auto_notify_livraison: boolean;
+  auto_notify_facture: boolean;
+  templates_json: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MessagerieLogRecord = {
+  id: number;
+  company_id: number;
+  canal: MessagerieCanal;
+  type_notification: MessagerieNotificationType;
+  document_id?: number | null;
+  document_numero?: string;
+  destinataire_nom: string;
+  destinataire_telephone: string;
+  message: string;
+  statut: MessagerieStatut;
+  external_message_id?: string;
+  erreur_details?: string;
+  created_by?: number | null;
+  created_at: string;
+};
+
+// ============================================================================
+// 6. POINTEUSE VIRTUELLE & TEMPS DE TRAVAIL
+// ============================================================================
+export type PointageMethode = "tactile" | "pin" | "qr_code";
+export type PointageStatut = "en_cours" | "valide" | "anomalie";
+
+export type PointageRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+  employe_numero?: string | number;
+  date_pointage: string; // YYYY-MM-DD
+  heure_arrivee: string; // HH:MM:SS
+  heure_depart?: string; // HH:MM:SS
+  duree_pause_minutes: number;
+  total_heures: number;
+  heures_normales: number;
+  heures_sup: number;
+  methode_pointage: PointageMethode;
+  statut: PointageStatut;
+  motif_anomalie?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PointageStatsJournalieres = {
+  totalPresents: number;
+  enCours: number;
+  pointagesValides: number;
+  totalHeuresJour: number;
+  totalHeuresSupJour: number;
+};
+
+// ============================================================================
+// 7. GESTION DES CONGÉS & ABSENCES
+// ============================================================================
+export type CongeType =
+  | "conge_paye"
+  | "maladie"
+  | "maternite"
+  | "sans_solde"
+  | "evenement_familial"
+  | "autre";
+
+export type CongeStatut = "en_attente" | "approuve" | "refuse" | "annule";
+
+export type CongeDemandeRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+  employe_numero?: string | number;
+  type_conge: CongeType;
+  date_debut: string; // YYYY-MM-DD
+  date_fin: string; // YYYY-MM-DD
+  nb_jours: number;
+  motif?: string;
+  justificatif_path?: string;
+  statut: CongeStatut;
+  valide_par?: number | null;
+  valide_par_nom?: string;
+  date_decision?: string;
+  motif_refus?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CongeMouvementRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  type_mouvement: "acquisition" | "prise" | "ajustement";
+  nb_jours: number;
+  date_mouvement: string;
+  description?: string;
+  demande_id?: number | null;
+  created_by?: number | null;
+};
+
+// ============================================================================
+// 8. PRÊTS, AVANCES SUR SALAIRE & BULLETINS DE PAIE
+// ============================================================================
+export type PretType = "avance_salaire" | "pret_personnel";
+export type PretStatut = "actif" | "solde" | "suspendu" | "annule";
+export type PretEcheanceStatut = "a_prelever" | "preleve" | "reporte";
+
+export type PretAvanceRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+  type: PretType;
+  montant_total: number;
+  date_octroi: string;
+  nb_mensualites: number;
+  montant_mensualite: number;
+  montant_rembourse: number;
+  solde_restant: number;
+  mode_paiement: string;
+  statut: PretStatut;
+  notes?: string;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+  echeances?: PretEcheancierRecord[];
+};
+
+export type PretEcheancierRecord = {
+  id: number;
+  pret_id: number;
+  employe_id: number;
+  numero_mensualite: number;
+  mois_prelevement: string; // YYYY-MM
+  montant_echeance: number;
+  montant_preleve: number;
+  date_prelevement?: string;
+  bulletin_id?: number | null;
+  statut: PretEcheanceStatut;
+};
+
+export type BulletinPaieStatut = "brouillon" | "valide" | "paye";
+
+export type BulletinPaieRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+  employe_numero?: string | number;
+  employe_cnss?: string;
+  numero_bulletin: string;
+  periode_mois: string; // YYYY-MM
+  date_emission: string;
+  salaire_base: number;
+  heures_normales: number;
+  heures_sup: number;
+  taux_horaire: number;
+  montant_heures_sup: number;
+  primes: number;
+  retenue_cnss: number;
+  retenue_amo: number;
+  retenue_ir: number;
+  retenue_prets_avances: number;
+  autres_retenues: number;
+  salaire_brut: number;
+  total_retenues: number;
+  salaire_net: number;
+  statut: BulletinPaieStatut;
+  date_paiement?: string;
+  mode_paiement: string;
+  notes?: string;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ============================================================================
+// MODULE : NOTES DE FRAIS & FRAIS KILOMÉTRIQUES
+// ============================================================================
+
+export type NoteFraisCategorie =
+  | "deplacement"
+  | "repas"
+  | "hotel"
+  | "peage"
+  | "carburant"
+  | "frais_km"
+  | "fournitures"
+  | "autre";
+
+export type NoteFraisStatut = "en_attente" | "approuve" | "refuse" | "rembourse";
+export type NoteFraisModeRemboursement = "especes" | "virement" | "paie" | "cheque";
+
+export type NoteFraisRecord = {
+  id: number;
+  company_id: number;
+  employe_id: number;
+  employe_nom?: string;
+  employe_prenom?: string;
+  employe_numero?: string;
+  numero: string;
+  date_depense: string;
+  categorie: NoteFraisCategorie;
+  description: string;
+  montant_ttc: number;
+  tva_rate: number;
+  montant_tva: number;
+  montant_ht: number;
+  distance_km: number;
+  bareme_km_unitaire: number;
+  vehicule_immatriculation?: string;
+  justificatif_path?: string;
+  statut: NoteFraisStatut;
+  valide_par?: number | null;
+  valide_par_nom?: string;
+  date_decision?: string;
+  motif_refus?: string;
+  date_remboursement?: string;
+  mode_remboursement: NoteFraisModeRemboursement;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ============================================================================
+// MODULE : RAPPROCHEMENT FISCAL & DÉCLARATION TVA
+// ============================================================================
+
+export type TVARegime = "encaissement" | "debit";
+export type TVADeclarationStatut = "brouillon" | "validee" | "teledeclaree" | "payee";
+
+export type TVADeclarationRecord = {
+  id: number;
+  company_id: number;
+  periode_type: "mensuelle" | "trimestrielle";
+  periode_code: string;
+  regime: TVARegime;
+  tva_collectee_total: number;
+  tva_collectee_20: number;
+  tva_collectee_14: number;
+  tva_collectee_10: number;
+  tva_collectee_7: number;
+  tva_deductible_total: number;
+  tva_deductible_immo: number;
+  tva_deductible_charges: number;
+  tva_deductible_20: number;
+  tva_deductible_14: number;
+  tva_deductible_10: number;
+  tva_deductible_7: number;
+  credit_tva_precedent: number;
+  tva_nette_due: number;
+  credit_tva_a_reporter: number;
+  statut: TVADeclarationStatut;
+  date_declaration?: string;
+  reference_telepaiement?: string;
+  notes?: string;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ============================================================================
+// MODULE : MARGE BRUTE & RENTABILITÉ
+// ============================================================================
+
+export type MargeProduitItem = {
+  produit_id: number;
+  ref: string;
+  designation: string;
+  categorie: string;
+  quantite_vendue: number;
+  ca_ht: number;
+  cout_total_achat: number;
+  marge_brute: number;
+  taux_marge: number; // (marge / ca) * 100
+  taux_marque: number; // (marge / cout) * 100
+};
+
+export type MargeFamilleItem = {
+  famille: string;
+  nb_produits: number;
+  quantite_vendue: number;
+  ca_ht: number;
+  cout_total_achat: number;
+  marge_brute: number;
+  taux_marge: number;
+};
+
+export type MargeClientItem = {
+  client_id: number;
+  client_nom: string;
+  categorie_tarifaire: string;
+  ca_ht: number;
+  cout_total_achat: number;
+  marge_brute: number;
+  taux_marge: number;
+};
+
+export type MargeBranchItem = {
+  branch_id: number;
+  branch_nom: string;
+  ca_ht: number;
+  cout_total_achat: number;
+  marge_brute: number;
+  taux_marge: number;
+};
+
+export type MargeStatsGlobales = {
+  ca_total_ht: number;
+  cout_total_achat: number;
+  marge_brute_totale: number;
+  taux_marge_global: number;
+  taux_marque_global: number;
+  nb_ventes: number;
+};
+
 
 

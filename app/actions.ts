@@ -134,7 +134,140 @@ import {
   genererRapportX,
   cloturerSessionCaisse,
   listSessionsCaisse,
+  enregistrerRetourCaisse,
+  getTicketPourRetour,
+  validerBonAchat,
+  consommerBonAchat,
+  getBonAchatByCode,
+  getBonAchatById,
+  getRetourById,
+  listBonsAchat,
+  listRetoursCaisse,
+  synchroniserTicketsHorsLigne,
 } from "@/lib/pos";
+import {
+  getFideliteConfig,
+  updateFideliteConfig,
+  convertirPointsEnBonAchat,
+  getHistoriqueFideliteClient,
+  getFideliteStats,
+  ajusterPointsManuel,
+} from "@/lib/fidelite";
+import {
+  getGrillesTarifaires,
+  getGrilleTarifaireById,
+  creerGrilleTarifaire,
+  updateGrilleTarifaire,
+  supprimerGrilleTarifaire,
+  calculerPrixArticleClient,
+  assignerCategorieClient,
+} from "@/lib/tarification";
+import {
+  getCommissionRegles,
+  creerCommissionRegle,
+  updateCommissionRegle,
+  supprimerCommissionRegle,
+  getCommerciaux,
+  assignerCommercialAUser,
+  getCommissionFiches,
+  getCommissionFicheById,
+  genererFicheCommissionMensuelle,
+  changerStatutFicheCommission,
+} from "@/lib/commissions";
+import {
+  getCRMOpportunites,
+  getCRMOpportuniteById,
+  creerCRMOpportunite,
+  deplacerEtapeOpportunite,
+  convertirOpportuniteEnDevis,
+  ajouterActiviteOpportunite,
+  getCRMPipelineKPIs,
+  supprimerCRMOpportunite,
+} from "@/lib/crm";
+import {
+  getMessagerieConfig,
+  updateMessagerieConfig,
+  envoyerNotificationMessage,
+  getMessagerieLogs,
+  genererLienWhatsAppWeb,
+} from "@/lib/messagerie";
+import {
+  pointerHeure,
+  getPointagesJour,
+  getPointagesPeriode,
+  getPointageStatsJournalieres,
+  verifierCodePinEmploye,
+  ajusterPointageManuel,
+} from "@/lib/pointeuse";
+import {
+  creerDemandeConge,
+  validerDemandeConge,
+  getCongesDemandes,
+  getSoldesCongesEmployes,
+} from "@/lib/conges";
+import {
+  creerPretAvance,
+  getPretsAvances,
+  getPretById,
+  genererBulletinsPaieMensuels,
+  getBulletinsPaie,
+  changerStatutBulletin,
+} from "@/lib/paie-prets";
+import {
+  creerNoteFrais,
+  validerNoteFrais,
+  rembourserNoteFrais,
+  getNotesFrais,
+  getNoteFraisById,
+  getNotesFraisStats,
+} from "@/lib/notes-frais";
+import {
+  authentifierEmployePortal,
+  setEmployePortalSession,
+  clearEmployePortalSession,
+  getEmployePortalSession,
+  getEmployePortalData,
+} from "@/lib/employe-portal-auth";
+import {
+  getMargeStatsGlobales,
+  getMargeParProduit,
+  getMargeParFamille,
+  getMargeParClient,
+  getMargeParBranch,
+  getMargeEvolutionMensuelle,
+} from "@/lib/marge";
+import {
+  calculerDeclarationTVA,
+  enregistrerDeclarationTVA,
+  changerStatutDeclarationTVA,
+  getDeclarationsTVA,
+  getDeclarationTVAById,
+} from "@/lib/tva";
+import {
+  type NoteFraisCategorie,
+  type NoteFraisModeRemboursement,
+  type NoteFraisStatut,
+  type TVADeclarationStatut,
+  type TVARegime,
+} from "@/lib/types";
+import {
+  type MessagerieCanal,
+  type MessagerieNotificationType,
+  type PointageMethode,
+  type CongeType,
+  type CongeStatut,
+  type PretType,
+  type PretStatut,
+  type BulletinPaieStatut,
+  type FideliteConfigRecord,
+  type ClientCategorieTarifaire,
+  type GrilleTarifaireType,
+  type GrilleTarifaireRecord,
+  type CommissionBaseCalcul,
+  type CommissionFicheStatut,
+  type CommissionRegleRecord,
+  type CRMEtape,
+} from "@/lib/types";
 import {
   type InventaireType,
   type SerieStatut,
@@ -147,7 +280,10 @@ import {
   type LabelConfig,
   type CaisseModeReglement,
   type CaisseMouvementType,
+  type CaisseRetourCompensation,
   type DenominationsComptage,
+  type EnregistrerRetourInput,
+  type OfflineTicketRecord,
   type PaiementPartiel,
 } from "@/lib/types";
 import { createDatabaseBackup, getDb } from "@/lib/db";
@@ -2403,6 +2539,7 @@ export async function enregistrerTicketCaisseAction(input: {
   branchId: number;
   clientId?: number | null;
   clientNom?: string;
+  commercialId?: number | null;
   lignes: Array<{
     produitId?: number | null;
     ref: string;
@@ -2513,6 +2650,1216 @@ export async function getTicketByIdAction(ticketId: number) {
     return { success: false as const, error: msg, ticket: null };
   }
 }
+
+// ============================================================================
+// ACTIONS : RETOURS DE CAISSE & BONS D'ACHAT
+// ============================================================================
+
+export async function enregistrerRetourCaisseAction(
+  input: Omit<EnregistrerRetourInput, "userId" | "companyId">
+) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const result = enregistrerRetourCaisse({
+      ...input,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/pos", "/produits", "/chiffre-affaires", "/dashboard"]);
+    return { success: true as const, retour: result.retour, bonAchat: result.bonAchat };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getTicketPourRetourAction(ticketNumeroOrId: string | number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const ticket = getTicketPourRetour(ticketNumeroOrId, companyId);
+    return { success: true as const, ticket };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, ticket: null };
+  }
+}
+
+export async function validerBonAchatAction(code: string) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = validerBonAchat(code, companyId);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, valide: false, message: msg };
+  }
+}
+
+export async function getBonAchatByCodeAction(code: string) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const bon = getBonAchatByCode(code, companyId);
+    return { success: true as const, bon };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, bon: null };
+  }
+}
+
+export async function listBonsAchatAction(branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const bons = listBonsAchat(companyId, branchId);
+    return { success: true as const, bons };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, bons: [] };
+  }
+}
+
+export async function listRetoursCaisseAction(branchId?: number) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const retours = listRetoursCaisse(companyId, branchId);
+    return { success: true as const, retours };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, retours: [] };
+  }
+}
+
+// ============================================================================
+// ACTIONS : SYNCHRONISATION HORS-LIGNE (OFFLINE FIRST PWA)
+// ============================================================================
+
+export async function synchroniserTicketsHorsLigneAction(
+  tickets: OfflineTicketRecord[],
+  branchId: number
+) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = synchroniserTicketsHorsLigne(tickets, branchId, session.user.id, companyId);
+    refresh(["/pos", "/chiffre-affaires", "/produits", "/dashboard"]);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, successes: [], errors: [] };
+  }
+}
+
+// ============================================================================
+// ACTIONS : PROGRAMME DE FIDÉLITÉ CLIENT & CASHBACK
+// ============================================================================
+
+export async function getFideliteConfigAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const config = getFideliteConfig(companyId);
+    return { success: true as const, config };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, config: null };
+  }
+}
+
+export async function updateFideliteConfigAction(patch: Partial<FideliteConfigRecord>) {
+  await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const config = updateFideliteConfig(companyId, patch);
+    refresh(["/pos", "/clients", "/parametres"]);
+    return { success: true as const, config };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, config: null };
+  }
+}
+
+export async function convertirPointsEnBonAchatAction(params: {
+  branchId: number;
+  clientId: number;
+  pointsAConvertir: number;
+  validiteMois?: number;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const result = convertirPointsEnBonAchat({
+      companyId,
+      branchId: params.branchId,
+      clientId: params.clientId,
+      userId: session.user.id,
+      pointsAConvertir: params.pointsAConvertir,
+      validiteMois: params.validiteMois,
+    });
+    refresh(["/pos", "/clients"]);
+    return { ...result };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getHistoriqueFideliteClientAction(clientId: number) {
+  await requireAuth();
+  try {
+    const mouvements = getHistoriqueFideliteClient(clientId);
+    return { success: true as const, mouvements };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, mouvements: [] };
+  }
+}
+
+export async function getFideliteStatsAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const stats = getFideliteStats(companyId);
+    return { success: true as const, stats };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, stats: null };
+  }
+}
+
+export async function ajusterPointsManuelAction(params: {
+  clientId: number;
+  points: number;
+  motif: string;
+}) {
+  await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = ajusterPointsManuel({
+      companyId,
+      clientId: params.clientId,
+      points: params.points,
+      motif: params.motif,
+    });
+    refresh(["/clients", "/pos"]);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// ACTIONS : TARIFICATION PERSONNALISÉE & GRILLES TARIFAIRES
+// ============================================================================
+
+export async function getGrillesTarifairesAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const grilles = getGrillesTarifaires(companyId);
+    return { success: true as const, grilles };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, grilles: [] };
+  }
+}
+
+export async function getGrilleTarifaireByIdAction(id: number) {
+  await requireAuth();
+  try {
+    const data = getGrilleTarifaireById(id);
+    return { success: true as const, ...data };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, grille: null, lignes: [] };
+  }
+}
+
+export async function creerGrilleTarifaireAction(data: {
+  code: string;
+  nom: string;
+  typeGrille: GrilleTarifaireType;
+  categorieCible?: ClientCategorieTarifaire | null;
+  clientId?: number | null;
+  dateDebut?: string | null;
+  dateFin?: string | null;
+  remiseGlobalePourcent?: number;
+  notes?: string;
+  lignes?: Array<{
+    produitId: number;
+    prixSpecifiqueHt?: number | null;
+    remisePourcent?: number;
+  }>;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const grille = creerGrilleTarifaire({
+      ...data,
+      companyId,
+    });
+    refresh(["/grilles-tarifaires", "/produits", "/clients", "/pos"]);
+    return { success: true as const, grille };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, grille: null };
+  }
+}
+
+export async function updateGrilleTarifaireAction(
+  id: number,
+  data: Partial<GrilleTarifaireRecord> & {
+    lignes?: Array<{
+      produitId: number;
+      prixSpecifiqueHt?: number | null;
+      remisePourcent?: number;
+    }>;
+  }
+) {
+  await requireAuth();
+  try {
+    const grille = updateGrilleTarifaire(id, data);
+    refresh(["/grilles-tarifaires", "/produits", "/clients", "/pos"]);
+    return { success: true as const, grille };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, grille: null };
+  }
+}
+
+export async function supprimerGrilleTarifaireAction(id: number) {
+  await requireAuth();
+  try {
+    supprimerGrilleTarifaire(id);
+    refresh(["/grilles-tarifaires", "/produits", "/clients"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function calculerPrixArticleClientAction(params: {
+  produitId: number;
+  clientId?: number | null;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = calculerPrixArticleClient({
+      companyId,
+      produitId: params.produitId,
+      clientId: params.clientId,
+    });
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, prix_applique_ht: 0, remise_appliquee_pourcent: 0 };
+  }
+}
+
+export async function assignerCategorieClientAction(
+  clientId: number,
+  categorie: ClientCategorieTarifaire
+) {
+  await requireAuth();
+  try {
+    assignerCategorieClient(clientId, categorie);
+    refresh(["/clients", "/grilles-tarifaires", "/pos"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// ACTIONS : COMMISSIONNEMENT DES COMMERCIAUX & VENDEURS
+// ============================================================================
+
+export async function getCommissionReglesAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const regles = getCommissionRegles(companyId);
+    return { success: true as const, regles };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, regles: [] };
+  }
+}
+
+export async function creerCommissionRegleAction(data: {
+  nom: string;
+  userId?: number | null;
+  categorieProduit?: string | null;
+  baseCalcul: CommissionBaseCalcul;
+  tauxPourcent: number;
+}) {
+  await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const regle = creerCommissionRegle({
+      ...data,
+      companyId,
+    });
+    refresh(["/commissions"]);
+    return { success: true as const, regle };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, regle: null };
+  }
+}
+
+export async function updateCommissionRegleAction(
+  id: number,
+  patch: Partial<CommissionRegleRecord>
+) {
+  await requireAdmin();
+  try {
+    const regle = updateCommissionRegle(id, patch);
+    refresh(["/commissions"]);
+    return { success: true as const, regle };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, regle: null };
+  }
+}
+
+export async function supprimerCommissionRegleAction(id: number) {
+  await requireAdmin();
+  try {
+    supprimerCommissionRegle(id);
+    refresh(["/commissions"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getCommerciauxAction() {
+  await requireAuth();
+  try {
+    const commerciaux = getCommerciaux();
+    return { success: true as const, commerciaux };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, commerciaux: [] };
+  }
+}
+
+export async function assignerCommercialAUserAction(
+  userId: number,
+  data: {
+    isCommercial: boolean;
+    codeCommercial?: string;
+    tauxCommissionDefaut?: number;
+  }
+) {
+  await requireAdmin();
+  try {
+    assignerCommercialAUser(userId, data);
+    refresh(["/commissions", "/utilisateurs"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getCommissionFichesAction(periodeMois?: string) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const fiches = getCommissionFiches(companyId, periodeMois);
+    return { success: true as const, fiches };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, fiches: [] };
+  }
+}
+
+export async function getCommissionFicheByIdAction(id: number) {
+  await requireAuth();
+  try {
+    const data = getCommissionFicheById(id);
+    return { success: true as const, ...data };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, fiche: null, lignes: [] };
+  }
+}
+
+export async function genererFicheCommissionMensuelleAction(params: {
+  commercialId: number;
+  periodeMois: string;
+  ajustements?: number;
+  notes?: string;
+}) {
+  await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = genererFicheCommissionMensuelle({
+      ...params,
+      companyId,
+    });
+    refresh(["/commissions"]);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, fiche: null, lignesCount: 0 };
+  }
+}
+
+export async function changerStatutFicheCommissionAction(
+  ficheId: number,
+  statut: CommissionFicheStatut,
+  detailsPaiement?: {
+    datePaiement?: string;
+    modePaiement?: string;
+  }
+) {
+  await requireAdmin();
+  try {
+    const fiche = changerStatutFicheCommission(ficheId, statut, detailsPaiement);
+    refresh(["/commissions"]);
+    return { success: true as const, fiche };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, fiche: null };
+  }
+}
+
+// ============================================================================
+// ACTIONS : CRM & PIPELINE DES OPPORTUNITÉS
+// ============================================================================
+
+export async function getCRMOpportunitesAction(options?: {
+  commercialId?: number;
+  search?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const opportunites = getCRMOpportunites(companyId, options);
+    return { success: true as const, opportunites };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, opportunites: [] };
+  }
+}
+
+export async function getCRMOpportuniteByIdAction(id: number) {
+  await requireAuth();
+  try {
+    const data = getCRMOpportuniteById(id);
+    return { success: true as const, ...data };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, opportunite: null, activites: [] };
+  }
+}
+
+export async function creerCRMOpportuniteAction(data: {
+  branchId?: number | null;
+  titre: string;
+  clientId?: number | null;
+  clientNom: string;
+  contactNom?: string;
+  contactTelephone?: string;
+  contactEmail?: string;
+  commercialId?: number | null;
+  etape?: CRMEtape;
+  probabilitePourcent?: number;
+  montantEstimeHt: number;
+  dateCloturePrevue?: string | null;
+  notes?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const opportunite = creerCRMOpportunite({
+      ...data,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/opportunites"]);
+    return { success: true as const, opportunite };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, opportunite: null };
+  }
+}
+
+export async function deplacerEtapeOpportuniteAction(
+  id: number,
+  nouvelleEtape: CRMEtape,
+  options?: {
+    probabiliteCustom?: number;
+    notes?: string;
+    motifPerte?: string;
+  }
+) {
+  const session = await requireAuth();
+  try {
+    const opportunite = deplacerEtapeOpportunite(id, nouvelleEtape, {
+      ...options,
+      userId: session.user.id,
+    });
+    refresh(["/opportunites"]);
+    return { success: true as const, opportunite };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, opportunite: null };
+  }
+}
+
+export async function convertirOpportuniteEnDevisAction(opportuniteId: number) {
+  const session = await requireAuth();
+  try {
+    const res = convertirOpportuniteEnDevis(opportuniteId, session.user.id);
+    refresh(["/opportunites", "/devis"]);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, documentId: 0, numeroDevis: 0 };
+  }
+}
+
+export async function ajouterActiviteOpportuniteAction(
+  opportuniteId: number,
+  data: {
+    typeActivite: "appel" | "reunion" | "email" | "devis" | "changement_etape" | "note";
+    titre: string;
+    description?: string;
+  }
+) {
+  const session = await requireAuth();
+  try {
+    ajouterActiviteOpportunite(opportuniteId, {
+      ...data,
+      userId: session.user.id,
+    });
+    refresh(["/opportunites"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getCRMPipelineKPIsAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const kpis = getCRMPipelineKPIs(companyId);
+    return { success: true as const, kpis };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, kpis: null };
+  }
+}
+
+export async function supprimerCRMOpportuniteAction(id: number) {
+  await requireAuth();
+  try {
+    supprimerCRMOpportunite(id);
+    refresh(["/opportunites"]);
+    return { success: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : MESSAGERIE INTÉGRÉE WHATSAPP BUSINESS & SMS
+// ============================================================================
+
+export async function getMessagerieConfigAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const config = getMessagerieConfig(companyId);
+    return { success: true as const, config };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, config: null };
+  }
+}
+
+export async function updateMessagerieConfigAction(patch: any) {
+  await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const config = updateMessagerieConfig(companyId, patch);
+    refresh(["/messagerie", "/parametres"]);
+    return { success: true as const, config };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, config: null };
+  }
+}
+
+export async function envoyerNotificationMessageAction(data: {
+  canal: MessagerieCanal;
+  typeNotification: MessagerieNotificationType;
+  documentId?: number | null;
+  documentNumero?: string;
+  destinataireNom: string;
+  destinataireTelephone: string;
+  message: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = await envoyerNotificationMessage({
+      ...data,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/messagerie", "/factures", "/devis", "/bons-commande", "/bons-livraison"]);
+    return { success: res.success, logId: res.logId, error: res.error, whatsappUrl: res.whatsappUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, logId: 0 };
+  }
+}
+
+export async function getMessagerieLogsAction(options?: { limit?: number; canal?: MessagerieCanal }) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const logs = getMessagerieLogs(companyId, options);
+    return { success: true as const, logs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, logs: [] };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : POINTEUSE VIRTUELLE & TEMPS DE TRAVAIL
+// ============================================================================
+
+export async function pointerHeureAction(data: {
+  employeId?: number;
+  pin?: string;
+  qrToken?: string;
+  typePointage?: "auto" | "arrivee" | "depart";
+  methode?: PointageMethode;
+  notes?: string;
+}) {
+  const companyId = await getActiveCompanyId();
+  try {
+    const res = pointerHeure({
+      ...data,
+      companyId,
+    });
+    refresh(["/pointeuse", "/personnel"]);
+    return { success: true as const, ...res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, message: msg };
+  }
+}
+
+export async function getPointagesJourAction(date?: string) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const pointages = getPointagesJour(companyId, date);
+    const stats = getPointageStatsJournalieres(companyId, date);
+    return { success: true as const, pointages, stats };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, pointages: [], stats: null };
+  }
+}
+
+export async function verifierCodePinAction(pin: string) {
+  try {
+    const emp = verifierCodePinEmploye(pin);
+    if (!emp) return { success: false as const, error: "Code PIN incorrect." };
+    return { success: true as const, employe: { id: emp.id, nom: emp.nom, prenom: emp.prenom, numero: emp.numero } };
+  } catch (err) {
+    return { success: false as const, error: "Erreur lors de la vérification." };
+  }
+}
+
+export async function ajusterPointageManuelAction(pointageId: number, patch: any) {
+  await requireAdmin();
+  try {
+    const updated = ajusterPointageManuel(pointageId, patch);
+    refresh(["/pointeuse", "/personnel"]);
+    return { success: true as const, pointage: updated };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : GESTION DES CONGÉS & ABSENCES
+// ============================================================================
+
+export async function creerDemandeCongeAction(data: {
+  employeId: number;
+  typeConge: CongeType;
+  dateDebut: string;
+  dateFin: string;
+  nbJours?: number;
+  motif?: string;
+  justificatifPath?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const demande = creerDemandeConge({
+      ...data,
+      companyId,
+    });
+    refresh(["/conges", "/personnel"]);
+    return { success: true as const, demande };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function validerDemandeCongeAction(
+  demandeId: number,
+  decision: "approuve" | "refuse",
+  motifRefus?: string
+) {
+  const session = await requireAdmin();
+  try {
+    const demande = validerDemandeConge(demandeId, {
+      decision,
+      validePar: session.user.id,
+      motifRefus,
+    });
+    refresh(["/conges", "/personnel"]);
+    return { success: true as const, demande };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getCongesDemandesAction(options?: { statut?: CongeStatut; employeId?: number }) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const demandes = getCongesDemandes(companyId, options);
+    const soldes = getSoldesCongesEmployes(companyId);
+    return { success: true as const, demandes, soldes };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, demandes: [], soldes: [] };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : PRÊTS, AVANCES & BULLETINS DE PAIE
+// ============================================================================
+
+export async function creerPretAvanceAction(data: {
+  employeId: number;
+  type: PretType;
+  montantTotal: number;
+  dateOctroi: string;
+  nbMensualites: number;
+  modePaiement?: string;
+  notes?: string;
+}) {
+  const session = await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const pret = creerPretAvance({
+      ...data,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/paie", "/personnel"]);
+    return { success: true as const, pret };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function getPretsAvancesAction(options?: { employeId?: number; statut?: PretStatut }) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const prets = getPretsAvances(companyId, options);
+    return { success: true as const, prets };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, prets: [] };
+  }
+}
+
+export async function getPretByIdAction(id: number) {
+  await requireAuth();
+  try {
+    const pret = getPretById(id);
+    return { success: true as const, pret };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, pret: null };
+  }
+}
+
+export async function genererBulletinsPaieMensuelsAction(periodeMois: string) {
+  const session = await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const bulletins = genererBulletinsPaieMensuels({
+      companyId,
+      periodeMois,
+      userId: session.user.id,
+    });
+    refresh(["/paie", "/personnel"]);
+    return { success: true as const, bulletins };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, bulletins: [] };
+  }
+}
+
+export async function getBulletinsPaieAction(options?: { periodeMois?: string; employeId?: number }) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const bulletins = getBulletinsPaie(companyId, options);
+    return { success: true as const, bulletins };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, bulletins: [] };
+  }
+}
+
+export async function changerStatutBulletinAction(
+  bulletinId: number,
+  statut: BulletinPaieStatut,
+  options?: { datePaiement?: string; modePaiement?: string }
+) {
+  await requireAdmin();
+  try {
+    const bulletin = changerStatutBulletin(bulletinId, statut, options);
+    refresh(["/paie", "/personnel"]);
+    return { success: true as const, bulletin };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : NOTES DE FRAIS & FRAIS KILOMÉTRIQUES
+// ============================================================================
+
+export async function getNotesFraisAction(filters?: {
+  employeId?: number;
+  statut?: NoteFraisStatut;
+  categorie?: NoteFraisCategorie;
+  dateDebut?: string;
+  dateFin?: string;
+  search?: string;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const notes = getNotesFrais(companyId, filters);
+    return { success: true as const, notes };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, notes: [] };
+  }
+}
+
+export async function creerNoteFraisAction(params: {
+  employeId: number;
+  dateDepense: string;
+  categorie: NoteFraisCategorie;
+  description: string;
+  montantTtc: number;
+  tvaRate?: number;
+  distanceKm?: number;
+  baremeKmUnitaire?: number;
+  vehiculeImmatriculation?: string;
+  justificatifPath?: string;
+}) {
+  const session = await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const note = creerNoteFrais({
+      ...params,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/notes-frais", "/espace-employe"]);
+    return { success: true as const, note };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, note: null };
+  }
+}
+
+export async function validerNoteFraisAction(
+  id: number,
+  decision: "approuve" | "refuse",
+  motifRefus?: string
+) {
+  const session = await requireAdmin();
+  try {
+    const note = validerNoteFrais(id, decision, motifRefus, session.user.id);
+    refresh(["/notes-frais", "/espace-employe"]);
+    return { success: true as const, note };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, note: null };
+  }
+}
+
+export async function rembourserNoteFraisAction(
+  id: number,
+  modeRemboursement: NoteFraisModeRemboursement = "virement",
+  dateRemboursement?: string
+) {
+  const session = await requireAdmin();
+  try {
+    const note = rembourserNoteFrais(id, modeRemboursement, dateRemboursement, session.user.id);
+    refresh(["/notes-frais", "/espace-employe"]);
+    return { success: true as const, note };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, note: null };
+  }
+}
+
+export async function getNotesFraisStatsAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const stats = getNotesFraisStats(companyId);
+    return { success: true as const, stats };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, stats: null };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : PORTAIL EMPLOYÉ EN LIBRE-SERVICE
+// ============================================================================
+
+export async function loginEmployePortalAction(identifiant: string, pin: string) {
+  try {
+    const res = authentifierEmployePortal(identifiant, pin);
+    if (!res.success || !res.employe) {
+      return { success: false as const, error: res.error || "Échec de connexion." };
+    }
+
+    const today = new Date().toISOString();
+    await setEmployePortalSession({
+      employeId: res.employe.id,
+      nom: res.employe.nom,
+      prenom: res.employe.prenom,
+      matricule: String(res.employe.numero_employe || res.employe.numero),
+      cin: res.employe.cin || res.employe.cnss || "N/A",
+      loginAt: today,
+    });
+
+    return { success: true as const, employe: res.employe };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function logoutEmployePortalAction() {
+  await clearEmployePortalSession();
+  redirect("/espace-employe/login");
+}
+
+export async function soumettreDemandeCongePortalAction(params: {
+  employeId: number;
+  typeConge: CongeType;
+  dateDebut: string;
+  dateFin: string;
+  nbJours: number;
+  motif?: string;
+}) {
+  const session = await getEmployePortalSession();
+  if (!session || session.employeId !== params.employeId) {
+    return { success: false as const, error: "Session collaborateur non autorisée." };
+  }
+
+  const companyId = await getActiveCompanyId();
+  try {
+    const demande = creerDemandeConge({
+      ...params,
+      companyId,
+    });
+    refresh(["/conges", "/espace-employe"]);
+    return { success: true as const, demande };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+export async function soumettreNoteFraisPortalAction(params: {
+  employeId: number;
+  dateDepense: string;
+  categorie: NoteFraisCategorie;
+  description: string;
+  montantTtc: number;
+  tvaRate?: number;
+  distanceKm?: number;
+  baremeKmUnitaire?: number;
+  vehiculeImmatriculation?: string;
+  justificatifPath?: string;
+}) {
+  const session = await getEmployePortalSession();
+  if (!session || session.employeId !== params.employeId) {
+    return { success: false as const, error: "Session collaborateur non autorisée." };
+  }
+
+  const companyId = await getActiveCompanyId();
+  try {
+    const note = creerNoteFrais({
+      ...params,
+      companyId,
+    });
+    refresh(["/notes-frais", "/espace-employe"]);
+    return { success: true as const, note };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : ANALYSE DE MARGE BRUTE & RENTABILITÉ
+// ============================================================================
+
+export async function getMargeDashboardDataAction(filters?: {
+  dateDebut?: string;
+  dateFin?: string;
+  branchId?: number;
+  famille?: string;
+  clientId?: number;
+}) {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const stats = getMargeStatsGlobales(companyId, filters);
+    const produits = getMargeParProduit(companyId, filters, 25);
+    const familles = getMargeParFamille(companyId, filters);
+    const clients = getMargeParClient(companyId, filters, 15);
+    const branches = getMargeParBranch(companyId, filters);
+    const evolution = getMargeEvolutionMensuelle(companyId);
+
+    return {
+      success: true as const,
+      data: {
+        stats,
+        produits,
+        familles,
+        clients,
+        branches,
+        evolution,
+      },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg };
+  }
+}
+
+// ============================================================================
+// SERVER ACTIONS : RAPPROCHEMENT FISCAL & DÉCLARATION TVA (DGI)
+// ============================================================================
+
+export async function calculerDeclarationTVAAction(periodeCode: string, regime: TVARegime = "encaissement") {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const calc = calculerDeclarationTVA({
+      companyId,
+      periodeCode,
+      regime,
+    });
+    return { success: true as const, calcul: calc };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, calcul: null };
+  }
+}
+
+export async function enregistrerDeclarationTVAAction(params: {
+  periodeCode: string;
+  regime?: TVARegime;
+  statut?: TVADeclarationStatut;
+  notes?: string;
+}) {
+  const session = await requireAdmin();
+  const companyId = await getActiveCompanyId();
+  try {
+    const decl = enregistrerDeclarationTVA({
+      ...params,
+      companyId,
+      userId: session.user.id,
+    });
+    refresh(["/declaration-tva"]);
+    return { success: true as const, declaration: decl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, declaration: null };
+  }
+}
+
+export async function changerStatutDeclarationTVAAction(
+  id: number,
+  statut: TVADeclarationStatut,
+  referenceTelepaiement?: string
+) {
+  await requireAdmin();
+  try {
+    const decl = changerStatutDeclarationTVA(id, statut, referenceTelepaiement);
+    refresh(["/declaration-tva"]);
+    return { success: true as const, declaration: decl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, declaration: null };
+  }
+}
+
+export async function getDeclarationsTVAAction() {
+  await requireAuth();
+  const companyId = await getActiveCompanyId();
+  try {
+    const declarations = getDeclarationsTVA(companyId);
+    return { success: true as const, declarations };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false as const, error: msg, declarations: [] };
+  }
+}
+
+
+
+
 
 
 

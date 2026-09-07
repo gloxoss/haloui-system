@@ -135,6 +135,18 @@ export const FEATURE_TOGGLE_DEFINITIONS: Array<{
   { key: "nomenclatures_fabrication", label: "Nomenclatures & Kits (BOM)", description: "Produits composés (Kits/Packs), calcul du coût de revient, déstockage des composants et ordres de fabrication.", category: "commercial" },
   { key: "etiquettes_codes_barres", label: "Étiquettes & Codes-Barres", description: "Édition et impression en masse d'étiquettes de prix (EAN-13, Code 128, QR Code) pour imprimantes thermiques et A4.", category: "commercial" },
   { key: "caisse_tactile_pos", label: "Caisse Tactile Plein Écran (POS)", description: "Point de vente rapide au comptoir optimisé écran tactile, douchette code-barres, multi-tickets et clôture X/Z.", category: "caisse" },
+  { key: "fidelite_clients", label: "Programme de Fidélité & Cashback", description: "Attribution de points aux achats, paliers (Bronze, Silver, Gold, VIP) et conversion en bons d'achat.", category: "commercial" },
+  { key: "grilles_tarifaires", label: "Grilles Tarifaires & Contrats", description: "Tarifs personnalisés par groupe (Grossiste, Détaillant, VIP) et remises contractuelles datées.", category: "commercial" },
+  { key: "commissions_vendeurs", label: "Commissionnement Commerciaux", description: "Taux de commissionnement par vendeur, par famille ou sur la marge brute avec fiches mensuelles.", category: "commercial" },
+  { key: "crm_opportunites", label: "Pipeline CRM & Opportunités", description: "Vue Kanban des pistes commerciales, prévisionnel pondéré du chiffre d'affaires et conversion devis.", category: "commercial" },
+  { key: "messagerie", label: "Messagerie WhatsApp & SMS", description: "Envoi direct des confirmations de commande, livraison et factures par WhatsApp Business et SMS.", category: "commercial" },
+  { key: "pointeuse", label: "Pointeuse & Suivi du Temps", description: "Borne de pointage tactile/PIN/QR Code avec décompte automatique des heures normales et heures supplémentaires.", category: "rh" },
+  { key: "conges", label: "Congés & Absences", description: "Demandes de congés en ligne, validation hiérarchique et calcul automatique des soldes légaux restants.", category: "rh" },
+  { key: "paie", label: "Paie, Prêts & Avances", description: "Amortissement mensuel des prêts accordés au personnel et retenues automatiques sur les bulletins de paie.", category: "rh" },
+  { key: "notes_frais", label: "Notes de Frais & Frais Km", description: "Saisie des dépenses collaborateur, calcul automatique du barème kilométrique et circuit de remboursement.", category: "rh" },
+  { key: "portail_employe", label: "Portail Employé Libre-Service", description: "Accès privé pour chaque salarié : fiches de paie, attestations de travail, suivi des congés et notes de frais.", category: "rh" },
+  { key: "marge_rentabilite", label: "Analyse Marge & Rentabilité", description: "Suivi en temps réel de la marge brute et du taux de marge par produit, famille, client et magasin.", category: "commercial" },
+  { key: "declaration_tva", label: "Déclaration de TVA (DGI)", description: "Rapprochement fiscal automatique de la TVA collectée vs déductible (20%, 14%, 10%, 7%) et état SIMPL-TVA.", category: "commercial" },
 ];
 
 export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
@@ -167,6 +179,18 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureKey, boolean> = {
   nomenclatures_fabrication: true,
   etiquettes_codes_barres: true,
   caisse_tactile_pos: true,
+  fidelite_clients: true,
+  grilles_tarifaires: true,
+  commissions_vendeurs: true,
+  crm_opportunites: true,
+  messagerie: true,
+  pointeuse: true,
+  conges: true,
+  paie: true,
+  notes_frais: true,
+  portail_employe: true,
+  marge_rentabilite: true,
+  declaration_tva: true,
 };
 
 export const DEFAULT_PRODUCT_UNITS = [
@@ -685,11 +709,97 @@ export const CATEGORIES_PRODUIT = [
 
 
 export const MORE_NAV_ITEMS = [
+  { href: "/opportunites", label: "Pipeline CRM", feature: "crm_opportunites" as const },
+  { href: "/grilles-tarifaires", label: "Grilles & Tarifs", feature: "grilles_tarifaires" as const },
+  { href: "/commissions", label: "Commissions", feature: "commissions_vendeurs" as const },
+  { href: "/messagerie", label: "Messagerie & WhatsApp", feature: "messagerie" as const },
+  { href: "/pointeuse", label: "Pointeuse Virtuelle", feature: "pointeuse" as const },
+  { href: "/conges", label: "Congés & Absences", feature: "conges" as const },
+  { href: "/paie", label: "Paie & Prêts Personnel", feature: "paie" as const },
+  { href: "/notes-frais", label: "Notes de Frais", feature: "notes_frais" as const },
+  { href: "/marge-rentabilite", label: "Marge & Rentabilité", feature: "marge_rentabilite" as const },
+  { href: "/declaration-tva", label: "Déclaration TVA (DGI)", feature: "declaration_tva" as const },
   { href: "/produits", label: "Produits", feature: "produits" as const },
   { href: "/clients", label: "Clients", feature: "clients" as const },
   { href: "/fournisseurs", label: "Fournisseurs", feature: "fournisseurs" as const },
   { href: "/utilisateurs", label: "Utilisateurs", feature: "utilisateurs" as const, superadminOnly: true as const },
   { href: "/parametres", label: "Paramètres" },
+] as const;
+
+export const CRM_ETAPES_CONFIG: Record<
+  string,
+  { label: string; labelAr: string; probabilite: number; color: string; border: string; bg: string }
+> = {
+  nouveau_contact: {
+    label: "Nouveau contact",
+    labelAr: "جهة اتصال جديدة",
+    probabilite: 10,
+    color: "blue",
+    border: "border-blue-500/40",
+    bg: "bg-blue-500/10",
+  },
+  nouveau: {
+    label: "Nouveau contact",
+    labelAr: "جهة اتصال جديدة",
+    probabilite: 10,
+    color: "blue",
+    border: "border-blue-500/40",
+    bg: "bg-blue-500/10",
+  },
+  qualification: {
+    label: "Qualification",
+    labelAr: "تأهيل العميل",
+    probabilite: 30,
+    color: "teal",
+    border: "border-teal-500/40",
+    bg: "bg-teal-500/10",
+  },
+  devis_envoye: {
+    label: "Devis envoyé",
+    labelAr: "إرسال عرض السعر",
+    probabilite: 60,
+    color: "yellow",
+    border: "border-amber-500/40",
+    bg: "bg-amber-500/10",
+  },
+  negociation: {
+    label: "Négociation",
+    labelAr: "مفاوضة",
+    probabilite: 80,
+    color: "orange",
+    border: "border-orange-500/40",
+    bg: "bg-orange-500/10",
+  },
+  gagne: {
+    label: "Gagné (Conclu)",
+    labelAr: "صفقة ناجحة",
+    probabilite: 100,
+    color: "emerald",
+    border: "border-emerald-500/40",
+    bg: "bg-emerald-500/10",
+  },
+  perdu: {
+    label: "Perdu (Sans suite)",
+    labelAr: "صفقة ملغاة",
+    probabilite: 0,
+    color: "rose",
+    border: "border-rose-500/40",
+    bg: "bg-rose-500/10",
+  },
+};
+
+export const FIDELITE_PALIERS_CONFIG = {
+  Bronze: { minDh: 0, remise: 0, badge: "Bronze", color: "amber", nextPalier: "Silver", thresholdNext: 2000 },
+  Silver: { minDh: 2000, remise: 2, badge: "Argent", color: "slate", nextPalier: "Gold", thresholdNext: 5000 },
+  Gold: { minDh: 5000, remise: 5, badge: "Or", color: "yellow", nextPalier: "VIP", thresholdNext: 10000 },
+  VIP: { minDh: 10000, remise: 10, badge: "VIP Platine", color: "purple", nextPalier: null, thresholdNext: 0 },
+} as const;
+
+export const CLIENT_CATEGORIES_TARIFAIRES = [
+  { value: "particulier", label: "Particulier (Standard)", labelAr: "أفراد (قياسي)" },
+  { value: "detaillant", label: "Détaillant (B2B)", labelAr: "تاجر تقسيط" },
+  { value: "grossiste", label: "Grossiste (Gros volume)", labelAr: "تاجر جملة" },
+  { value: "vip", label: "Client VIP / Grand Compte", labelAr: "عميل ممتاز / شركات" },
 ] as const;
 
 export function getDocumentModule(slug: string) {

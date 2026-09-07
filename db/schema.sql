@@ -943,4 +943,515 @@ CREATE TABLE IF NOT EXISTS caisse_mouvements (
 CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_session ON caisse_mouvements(session_id);
 CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_type ON caisse_mouvements(type);
 
+CREATE TABLE IF NOT EXISTS bons_achat (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  branch_id INTEGER NOT NULL,
+  code TEXT NOT NULL UNIQUE,
+  montant_initial REAL NOT NULL,
+  montant_restant REAL NOT NULL,
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'utilise', 'expire', 'annule')),
+  date_emission TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  date_expiration TEXT NOT NULL,
+  client_id INTEGER,
+  client_nom TEXT DEFAULT '',
+  ticket_origine_id INTEGER,
+  retour_id INTEGER,
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bons_achat_code ON bons_achat(code);
+CREATE INDEX IF NOT EXISTS idx_bons_achat_statut ON bons_achat(statut);
+CREATE INDEX IF NOT EXISTS idx_bons_achat_company ON bons_achat(company_id);
+
+CREATE TABLE IF NOT EXISTS caisse_retours (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  branch_id INTEGER NOT NULL,
+  session_id INTEGER NOT NULL,
+  numero_retour TEXT NOT NULL UNIQUE,
+  ticket_origine_id INTEGER,
+  ticket_origine_numero TEXT DEFAULT '',
+  client_id INTEGER,
+  client_nom TEXT DEFAULT 'Client Comptoir',
+  mode_compensation TEXT NOT NULL DEFAULT 'bon_achat' CHECK (mode_compensation IN ('bon_achat', 'especes', 'carte', 'autre')),
+  total_ht REAL NOT NULL DEFAULT 0,
+  total_tva REAL NOT NULL DEFAULT 0,
+  total_ttc REAL NOT NULL DEFAULT 0,
+  bon_achat_id INTEGER,
+  motif_general TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES caisse_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+  FOREIGN KEY (ticket_origine_id) REFERENCES caisse_tickets(id) ON DELETE SET NULL,
+  FOREIGN KEY (bon_achat_id) REFERENCES bons_achat(id) ON DELETE SET NULL,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_caisse_retours_session ON caisse_retours(session_id);
+CREATE INDEX IF NOT EXISTS idx_caisse_retours_ticket ON caisse_retours(ticket_origine_id);
+CREATE INDEX IF NOT EXISTS idx_caisse_retours_numero ON caisse_retours(numero_retour);
+
+CREATE TABLE IF NOT EXISTS caisse_retour_lignes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  retour_id INTEGER NOT NULL,
+  produit_id INTEGER,
+  ref TEXT NOT NULL,
+  designation TEXT NOT NULL,
+  prix_unitaire_ht REAL NOT NULL DEFAULT 0,
+  prix_unitaire_ttc REAL NOT NULL DEFAULT 0,
+  quantite REAL NOT NULL DEFAULT 1,
+  tva_rate REAL NOT NULL DEFAULT 20,
+  total_ttc REAL NOT NULL DEFAULT 0,
+  restitue_stock INTEGER NOT NULL DEFAULT 1,
+  motif_ligne TEXT DEFAULT '',
+  FOREIGN KEY (retour_id) REFERENCES caisse_retours(id) ON DELETE CASCADE,
+  FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_caisse_retour_lignes_retour ON caisse_retour_lignes(retour_id);
+CREATE INDEX IF NOT EXISTS idx_caisse_retour_lignes_produit ON caisse_retour_lignes(produit_id);
+
+-- ============================================================================
+-- 1. PROGRAMME DE FIDÉLITÉ CLIENT & CASHBACK
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS fidelite_config (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  taux_dh_par_point REAL NOT NULL DEFAULT 1.0,
+  valeur_cashback_par_100_pts REAL NOT NULL DEFAULT 5.0,
+  seuil_conversion_min_pts INTEGER NOT NULL DEFAULT 100,
+  palier_silver_pts INTEGER NOT NULL DEFAULT 500,
+  palier_gold_pts INTEGER NOT NULL DEFAULT 1500,
+  palier_vip_pts INTEGER NOT NULL DEFAULT 5000,
+  remise_silver_pct REAL NOT NULL DEFAULT 2.0,
+  remise_gold_pct REAL NOT NULL DEFAULT 5.0,
+  remise_vip_pct REAL NOT NULL DEFAULT 10.0,
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS fidelite_mouvements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  client_id INTEGER NOT NULL,
+  type_mouvement TEXT NOT NULL CHECK (type_mouvement IN ('gain_achat', 'conversion_remise', 'conversion_bon_achat', 'ajustement_manuel', 'expiration')),
+  points REAL NOT NULL,
+  points_avant REAL NOT NULL,
+  points_apres REAL NOT NULL,
+  document_type TEXT DEFAULT '',
+  document_id INTEGER,
+  bon_achat_id INTEGER,
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (bon_achat_id) REFERENCES bons_achat(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fidelite_mouvements_client ON fidelite_mouvements(client_id);
+CREATE INDEX IF NOT EXISTS idx_fidelite_mouvements_type ON fidelite_mouvements(type_mouvement);
+
+-- ============================================================================
+-- 2. TARIFICATION PERSONNALISÉE & GRILLES TARIFAIRES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS grilles_tarifaires (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  code TEXT NOT NULL UNIQUE,
+  nom TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  type_application TEXT NOT NULL CHECK (type_application IN ('groupe_client', 'contrat_client')),
+  categorie_client TEXT DEFAULT '',
+  client_id INTEGER,
+  date_debut TEXT DEFAULT '',
+  date_fin TEXT DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_grilles_tarifaires_cat ON grilles_tarifaires(categorie_client);
+CREATE INDEX IF NOT EXISTS idx_grilles_tarifaires_client ON grilles_tarifaires(client_id);
+
+CREATE TABLE IF NOT EXISTS grille_tarifaire_lignes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  grille_id INTEGER NOT NULL,
+  produit_id INTEGER,
+  famille_produit TEXT DEFAULT '',
+  prix_special_ht REAL,
+  remise_pourcentage REAL DEFAULT 0,
+  quantite_min REAL NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (grille_id) REFERENCES grilles_tarifaires(id) ON DELETE CASCADE,
+  FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_grille_lignes_grille ON grille_tarifaire_lignes(grille_id);
+CREATE INDEX IF NOT EXISTS idx_grille_lignes_produit ON grille_tarifaire_lignes(produit_id);
+
+-- ============================================================================
+-- 3. COMMISSIONNEMENT DES COMMERCIAUX & VENDEURS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS commission_regles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  commercial_id INTEGER NOT NULL,
+  base_calcul TEXT NOT NULL CHECK (base_calcul IN ('chiffre_affaires_ht', 'marge_brute')),
+  taux_pourcentage REAL NOT NULL DEFAULT 5,
+  famille_produit TEXT DEFAULT '',
+  produit_id INTEGER,
+  date_debut TEXT DEFAULT '',
+  date_fin TEXT DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commission_regles_comm ON commission_regles(commercial_id);
+
+CREATE TABLE IF NOT EXISTS commission_fiches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  commercial_id INTEGER NOT NULL,
+  periode TEXT NOT NULL,
+  total_ca_ht REAL NOT NULL DEFAULT 0,
+  total_marge_brute REAL NOT NULL DEFAULT 0,
+  montant_commission REAL NOT NULL DEFAULT 0,
+  statut TEXT NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'validee', 'payee')),
+  date_validation TEXT DEFAULT '',
+  date_paiement TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (company_id, commercial_id, periode),
+  FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commission_fiches_comm ON commission_fiches(commercial_id);
+CREATE INDEX IF NOT EXISTS idx_commission_fiches_periode ON commission_fiches(periode);
+
+CREATE TABLE IF NOT EXISTS commission_fiches_lignes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fiche_id INTEGER NOT NULL,
+  document_type TEXT NOT NULL CHECK (document_type IN ('facture', 'ticket')),
+  document_id INTEGER NOT NULL,
+  document_numero TEXT NOT NULL,
+  date_vente TEXT NOT NULL,
+  client_nom TEXT DEFAULT '',
+  total_ht REAL NOT NULL DEFAULT 0,
+  marge_brute REAL NOT NULL DEFAULT 0,
+  taux_applique REAL NOT NULL DEFAULT 0,
+  montant_commission REAL NOT NULL DEFAULT 0,
+  FOREIGN KEY (fiche_id) REFERENCES commission_fiches(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_commission_lignes_fiche ON commission_fiches_lignes(fiche_id);
+
+-- ============================================================================
+-- 4. PIPELINE CRM KANBAN & OPPORTUNITÉS COMMERCIALES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS crm_opportunites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  branch_id INTEGER,
+  titre TEXT NOT NULL,
+  client_id INTEGER,
+  contact_nom TEXT DEFAULT '',
+  contact_phone TEXT DEFAULT '',
+  contact_email TEXT DEFAULT '',
+  commercial_id INTEGER,
+  etape TEXT NOT NULL DEFAULT 'nouveau_contact' CHECK (etape IN ('nouveau_contact', 'qualification', 'devis_envoye', 'negociation', 'gagne', 'perdu')),
+  montant_estime REAL NOT NULL DEFAULT 0,
+  probabilite REAL NOT NULL DEFAULT 10,
+  date_cloture_prevue TEXT DEFAULT '',
+  devis_id INTEGER,
+  notes TEXT DEFAULT '',
+  motif_perte TEXT DEFAULT '',
+  ordre INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (devis_id) REFERENCES documents(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_crm_opp_etape ON crm_opportunites(etape);
+CREATE INDEX IF NOT EXISTS idx_crm_opp_commercial ON crm_opportunites(commercial_id);
+CREATE INDEX IF NOT EXISTS idx_crm_opp_client ON crm_opportunites(client_id);
+
+CREATE TABLE IF NOT EXISTS crm_opportunite_activites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunite_id INTEGER NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('appel', 'reunion', 'email', 'note', 'changement_etape')),
+  titre TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  date_activite TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (opportunite_id) REFERENCES crm_opportunites(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_crm_act_opp ON crm_opportunite_activites(opportunite_id);
+
+-- ============================================================================
+-- 5. MESSAGERIE INTÉGRÉE WHATSAPP BUSINESS & SMS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS messagerie_config (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1 UNIQUE,
+  whatsapp_actif INTEGER NOT NULL DEFAULT 1,
+  whatsapp_phone_number_id TEXT DEFAULT '',
+  whatsapp_access_token TEXT DEFAULT '',
+  whatsapp_business_account_id TEXT DEFAULT '',
+  sms_actif INTEGER NOT NULL DEFAULT 0,
+  sms_provider TEXT DEFAULT 'generic',
+  sms_api_key TEXT DEFAULT '',
+  sms_sender_id TEXT DEFAULT 'HALOUI',
+  auto_notify_commande INTEGER NOT NULL DEFAULT 1,
+  auto_notify_livraison INTEGER NOT NULL DEFAULT 1,
+  auto_notify_facture INTEGER NOT NULL DEFAULT 1,
+  templates_json TEXT DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messagerie_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  canal TEXT NOT NULL CHECK (canal IN ('whatsapp', 'sms')),
+  type_notification TEXT NOT NULL CHECK (type_notification IN ('commande', 'livraison', 'facture', 'devis', 'rappel', 'libre')),
+  document_id INTEGER,
+  document_numero TEXT DEFAULT '',
+  destinataire_nom TEXT NOT NULL,
+  destinataire_telephone TEXT NOT NULL,
+  message TEXT NOT NULL,
+  statut TEXT NOT NULL DEFAULT 'envoye' CHECK (statut IN ('envoye', 'delivre', 'echec', 'en_attente')),
+  external_message_id TEXT DEFAULT '',
+  erreur_details TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messagerie_company ON messagerie_logs(company_id);
+CREATE INDEX IF NOT EXISTS idx_messagerie_canal ON messagerie_logs(canal);
+CREATE INDEX IF NOT EXISTS idx_messagerie_date ON messagerie_logs(created_at);
+
+-- ============================================================================
+-- 6. POINTEUSE VIRTUELLE & SUIVI DU TEMPS DE TRAVAIL
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS pointages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  date_pointage TEXT NOT NULL,
+  heure_arrivee TEXT NOT NULL,
+  heure_depart TEXT DEFAULT '',
+  duree_pause_minutes REAL NOT NULL DEFAULT 0,
+  total_heures REAL NOT NULL DEFAULT 0,
+  heures_normales REAL NOT NULL DEFAULT 0,
+  heures_sup REAL NOT NULL DEFAULT 0,
+  methode_pointage TEXT NOT NULL DEFAULT 'tactile' CHECK (methode_pointage IN ('tactile', 'pin', 'qr_code')),
+  statut TEXT NOT NULL DEFAULT 'en_cours' CHECK (statut IN ('en_cours', 'valide', 'anomalie')),
+  motif_anomalie TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pointages_emp_date ON pointages(employe_id, date_pointage);
+CREATE INDEX IF NOT EXISTS idx_pointages_company_date ON pointages(company_id, date_pointage);
+
+-- ============================================================================
+-- 7. GESTION COMPLÈTE DES CONGÉS & ABSENCES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS conges_demandes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  type_conge TEXT NOT NULL CHECK (type_conge IN ('conge_paye', 'maladie', 'maternite', 'sans_solde', 'evenement_familial', 'autre')),
+  date_debut TEXT NOT NULL,
+  date_fin TEXT NOT NULL,
+  nb_jours REAL NOT NULL DEFAULT 1,
+  motif TEXT DEFAULT '',
+  justificatif_path TEXT DEFAULT '',
+  statut TEXT NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'approuve', 'refuse', 'annule')),
+  valide_par INTEGER,
+  date_decision TEXT DEFAULT '',
+  motif_refus TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+  FOREIGN KEY (valide_par) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conges_emp ON conges_demandes(employe_id);
+CREATE INDEX IF NOT EXISTS idx_conges_statut ON conges_demandes(statut);
+
+CREATE TABLE IF NOT EXISTS conges_mouvements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  type_mouvement TEXT NOT NULL CHECK (type_mouvement IN ('acquisition', 'prise', 'ajustement')),
+  nb_jours REAL NOT NULL,
+  date_mouvement TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  description TEXT DEFAULT '',
+  demande_id INTEGER,
+  created_by INTEGER,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+  FOREIGN KEY (demande_id) REFERENCES conges_demandes(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conges_mvt_emp ON conges_mouvements(employe_id);
+
+-- ============================================================================
+-- 8. PRÊTS, AVANCES SUR SALAIRE & BULLETINS DE PAIE
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS prets_avances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('avance_salaire', 'pret_personnel')),
+  montant_total REAL NOT NULL,
+  date_octroi TEXT NOT NULL,
+  nb_mensualites INTEGER NOT NULL DEFAULT 1,
+  montant_mensualite REAL NOT NULL,
+  montant_rembourse REAL NOT NULL DEFAULT 0,
+  solde_restant REAL NOT NULL,
+  mode_paiement TEXT NOT NULL DEFAULT 'virement',
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'solde', 'suspendu', 'annule')),
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_prets_emp ON prets_avances(employe_id);
+
+CREATE TABLE IF NOT EXISTS prets_echeancier (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pret_id INTEGER NOT NULL,
+  employe_id INTEGER NOT NULL,
+  numero_mensualite INTEGER NOT NULL,
+  mois_prelevement TEXT NOT NULL,
+  montant_echeance REAL NOT NULL,
+  montant_preleve REAL NOT NULL DEFAULT 0,
+  date_prelevement TEXT DEFAULT '',
+  bulletin_id INTEGER,
+  statut TEXT NOT NULL DEFAULT 'a_prelever' CHECK (statut IN ('a_prelever', 'preleve', 'reporte')),
+  FOREIGN KEY (pret_id) REFERENCES prets_avances(id) ON DELETE CASCADE,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_prets_ech_pret ON prets_echeancier(pret_id);
+CREATE INDEX IF NOT EXISTS idx_prets_ech_mois ON prets_echeancier(mois_prelevement);
+
+CREATE TABLE IF NOT EXISTS bulletins_paie (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  numero_bulletin TEXT NOT NULL UNIQUE,
+  periode_mois TEXT NOT NULL,
+  date_emission TEXT NOT NULL,
+  salaire_base REAL NOT NULL DEFAULT 0,
+  heures_normales REAL NOT NULL DEFAULT 0,
+  heures_sup REAL NOT NULL DEFAULT 0,
+  taux_horaire REAL NOT NULL DEFAULT 0,
+  montant_heures_sup REAL NOT NULL DEFAULT 0,
+  primes REAL NOT NULL DEFAULT 0,
+  retenue_cnss REAL NOT NULL DEFAULT 0,
+  retenue_amo REAL NOT NULL DEFAULT 0,
+  retenue_ir REAL NOT NULL DEFAULT 0,
+  retenue_prets_avances REAL NOT NULL DEFAULT 0,
+  autres_retenues REAL NOT NULL DEFAULT 0,
+  salaire_brut REAL NOT NULL DEFAULT 0,
+  total_retenues REAL NOT NULL DEFAULT 0,
+  salaire_net REAL NOT NULL DEFAULT 0,
+  statut TEXT NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'valide', 'paye')),
+  date_paiement TEXT DEFAULT '',
+  mode_paiement TEXT DEFAULT 'virement',
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_id, employe_id, periode_mois),
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bulletins_emp ON bulletins_paie(employe_id);
+CREATE INDEX IF NOT EXISTS idx_bulletins_periode ON bulletins_paie(periode_mois);
+
+CREATE TABLE IF NOT EXISTS notes_frais (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  employe_id INTEGER NOT NULL,
+  numero TEXT NOT NULL UNIQUE,
+  date_depense TEXT NOT NULL,
+  categorie TEXT NOT NULL CHECK (categorie IN ('deplacement', 'repas', 'hotel', 'peage', 'carburant', 'frais_km', 'fournitures', 'autre')),
+  description TEXT NOT NULL,
+  montant_ttc REAL NOT NULL DEFAULT 0,
+  tva_rate REAL DEFAULT 0,
+  montant_tva REAL DEFAULT 0,
+  montant_ht REAL DEFAULT 0,
+  distance_km REAL DEFAULT 0,
+  bareme_km_unitaire REAL DEFAULT 2.5,
+  vehicule_immatriculation TEXT DEFAULT '',
+  justificatif_path TEXT DEFAULT '',
+  statut TEXT NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'approuve', 'refuse', 'rembourse')),
+  valide_par INTEGER,
+  date_decision TEXT DEFAULT '',
+  motif_refus TEXT DEFAULT '',
+  date_remboursement TEXT DEFAULT '',
+  mode_remboursement TEXT DEFAULT 'virement' CHECK (mode_remboursement IN ('especes', 'virement', 'paie', 'cheque')),
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+  FOREIGN KEY (valide_par) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notes_frais_emp ON notes_frais(employe_id);
+CREATE INDEX IF NOT EXISTS idx_notes_frais_statut ON notes_frais(statut);
+
+CREATE TABLE IF NOT EXISTS tva_declarations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL DEFAULT 1,
+  periode_type TEXT NOT NULL CHECK (periode_type IN ('mensuelle', 'trimestrielle')),
+  periode_code TEXT NOT NULL,
+  regime TEXT NOT NULL DEFAULT 'encaissement' CHECK (regime IN ('encaissement', 'debit')),
+  tva_collectee_total REAL NOT NULL DEFAULT 0,
+  tva_collectee_20 REAL NOT NULL DEFAULT 0,
+  tva_collectee_14 REAL NOT NULL DEFAULT 0,
+  tva_collectee_10 REAL NOT NULL DEFAULT 0,
+  tva_collectee_7 REAL NOT NULL DEFAULT 0,
+  tva_deductible_total REAL NOT NULL DEFAULT 0,
+  tva_deductible_immo REAL NOT NULL DEFAULT 0,
+  tva_deductible_charges REAL NOT NULL DEFAULT 0,
+  tva_deductible_20 REAL NOT NULL DEFAULT 0,
+  tva_deductible_14 REAL NOT NULL DEFAULT 0,
+  tva_deductible_10 REAL NOT NULL DEFAULT 0,
+  tva_deductible_7 REAL NOT NULL DEFAULT 0,
+  credit_tva_precedent REAL NOT NULL DEFAULT 0,
+  tva_nette_due REAL NOT NULL DEFAULT 0,
+  credit_tva_a_reporter REAL NOT NULL DEFAULT 0,
+  statut TEXT NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'validee', 'teledeclaree', 'payee')),
+  date_declaration TEXT DEFAULT '',
+  reference_telepaiement TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_id, periode_code),
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tva_periode ON tva_declarations(periode_code);
+
+
+
+
 

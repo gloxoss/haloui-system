@@ -19,11 +19,32 @@ export default async function PosPage() {
   // Récupérer la session de caisse active
   const activeSession = getSessionActive(companyId, defaultBranchId);
 
-  // Clients
-  const clients = listEntities("clients").map((c: any) => ({
-    id: c.id,
-    name: c.name,
-  }));
+  // Clients avec infos fidélité & tarification
+  const clients = db
+    .prepare(`
+      SELECT id, name, COALESCE(fidelite_points, 0) as fidelite_points,
+             COALESCE(fidelite_palier, 'Bronze') as fidelite_palier,
+             COALESCE(categorie_tarifaire, 'particulier') as categorie_tarifaire
+      FROM clients
+      ORDER BY name ASC
+    `)
+    .all() as Array<{
+      id: number;
+      name: string;
+      fidelite_points: number;
+      fidelite_palier: string;
+      categorie_tarifaire: string;
+    }>;
+
+  // Commerciaux pour attribution des ventes
+  const commerciaux = db
+    .prepare(`
+      SELECT id, full_name as name, COALESCE(code_commercial, '') as code
+      FROM users
+      WHERE is_commercial = 1 OR role IN ('admin', 'user')
+      ORDER BY is_commercial DESC, full_name ASC
+    `)
+    .all() as Array<{ id: number; name: string; code: string }>;
 
   // Produits avec stock dans le dépôt de la branche
   const products = db
@@ -53,6 +74,7 @@ export default async function PosPage() {
       branches={branches}
       products={products}
       clients={clients}
+      commerciaux={commerciaux}
       companyName={company?.name || "HALOUI"}
       currentUserId={session.user.id}
       currentUserName={session.user.name || session.user.username}

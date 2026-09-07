@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import {
   AlertCircle,
+  Award,
   Banknote,
   Barcode,
   Check,
@@ -49,6 +50,7 @@ import {
   Printer,
   QrCode,
   Receipt,
+  RefreshCw,
   RotateCcw,
   Scale,
   Search,
@@ -57,23 +59,40 @@ import {
   Store,
   Tag,
   Trash2,
+  Undo2,
   User,
   UserCheck,
   UserRound,
+  Wifi,
+  WifiOff,
   X,
 } from "lucide-react";
-import { enregistrerTicketCaisseAction } from "@/app/actions";
+import {
+  enregistrerTicketCaisseAction,
+  synchroniserTicketsHorsLigneAction,
+  validerBonAchatAction,
+} from "@/app/actions";
 import {
   type CaisseModeReglement,
   type CaisseSessionRecord,
   type CaisseTicketRecord,
+  type OfflineTicketRecord,
   type PaiementPartiel,
   type RapportZData,
 } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 import { parseScaleBarcode } from "@/lib/scale-barcode";
+import {
+  enqueueOfflineTicket,
+  getOfflineQueueCount,
+  getQueuedOfflineTickets,
+  registerPosServiceWorker,
+  removeOfflineTicket,
+  saveOfflineCatalog,
+} from "@/lib/pos-offline";
 import { BalanceModal } from "./balance-modal";
 import { MouvementCaisseModal } from "./mouvement-caisse-modal";
+import { RetourModal } from "./retour-modal";
 import { SessionClotureModal } from "./session-cloture-modal";
 import { SessionOuvertureModal } from "./session-ouverture-modal";
 
@@ -109,6 +128,7 @@ interface HeldTicket {
   label: string;
   clientId: number | null;
   clientNom: string;
+  commercialId?: number | null;
   items: CartItem[];
   remiseGlobale: number;
 }
@@ -117,7 +137,18 @@ interface PosTerminalProps {
   initialSession: CaisseSessionRecord | null;
   branches: Array<{ id: number; name: string }>;
   products: PosProductItem[];
-  clients: Array<{ id: number; name: string }>;
+  clients: Array<{
+    id: number;
+    name: string;
+    fidelite_points?: number;
+    fidelite_palier?: string;
+    categorie_tarifaire?: string;
+  }>;
+  commerciaux?: Array<{
+    id: number;
+    name: string;
+    code?: string;
+  }>;
   companyName: string;
   currentUserId: number;
   currentUserName: string;
@@ -128,6 +159,7 @@ export function PosTerminal({
   branches,
   products,
   clients,
+  commerciaux,
   companyName,
   currentUserId,
   currentUserName,
@@ -167,6 +199,7 @@ export function PosTerminal({
       label: "Ticket 1 (Comptoir)",
       clientId: null,
       clientNom: "Client Comptoir",
+      commercialId: null,
       items: [],
       remiseGlobale: 0,
     },
@@ -207,6 +240,58 @@ export function PosTerminal({
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState<boolean>(false);
   const [balanceTargetProduct, setBalanceTargetProduct] = useState<PosProductItem | null>(null);
   const [scaleBarcodeScanNotice, setScaleBarcodeScanNotice] = useState<string>("");
+
+  // --- GESTION DES RETOURS & BONS D'ACHAT ---
+  const [isRetourModalOpen, setIsRetourModalOpen] = useState(false);
+  const [bonAchatCheckStatus, setBonAchatCheckStatus] = useState<{
+    loading: boolean;
+    checkedCode?: string;
+    valid?: boolean;
+    message?: string;
+    montantRestant?: number;
+    clientNom?: string;
+  }>({ loading: false });
+
+  // --- MODE HORS-LIGNE (OFFLINE FIRST PWA) ---
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [queuedOfflineCount, setQueuedOfflineCount] = useState<number>(0);
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const [syncNotice, setSyncNotice] = useState<string>("");
+
+  // Initialisation Réseau, Service Worker et Cache Catalogue Hors-Ligne
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Synchronisation automatique en tâche de fond dès le retour d'Internet
+      handleSyncOfflineTickets();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Enregistrement PWA Service Worker
+    registerPosServiceWorker();
+
+    // Mise en cache locale IndexedDB du catalogue pour recherche et pesée hors-ligne
+    if (products && products.length > 0) {
+      saveOfflineCatalog(products);
+    }
+
+    // Calcul initial des tickets en attente de synchronisation
+    getOfflineQueueCount().then((count) => setQueuedOfflineCount(count));
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [products]);
 
   // Extraire les catégories uniques
   const categories = useMemo(() => {
@@ -461,6 +546,7 @@ export function PosTerminal({
       label: `Ticket #${nextNum}`,
       clientId: null,
       clientNom: "Client Comptoir",
+      commercialId: null,
       items: [],
       remiseGlobale: 0,
     };
@@ -619,11 +705,97 @@ export function PosTerminal({
         finalMontantPaye = ticketTotals.totalTtc;
       }
 
+      // 1. TRAITEMENT DU MODE HORS-LIGNE (OFFLINE FIRST PWA)
+      if (!isOnline) {
+        const offlineId = `offline_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const localNumero = `TK-OFFLINE-${Date.now().toString().slice(-6)}`;
+
+        const offlineTicket: OfflineTicketRecord = {
+          offlineId,
+          timestamp: Date.now(),
+          sessionId: activeSession.id,
+          branchId: selectedBranchId,
+          clientId: currentTicket.clientId,
+          clientNom: currentTicket.clientNom,
+          lignes: currentTicket.items.map((i) => ({
+            produitId: i.produitId,
+            ref: i.ref,
+            designation: i.designation,
+            prixUnitaireHt: i.prixUnitaireHt,
+            prixUnitaireTtc: i.prixUnitaireTtc,
+            quantite: i.quantite,
+            tvaRate: i.tvaRate,
+            remisePourcent: i.remisePourcent,
+          })),
+          remiseGlobale: currentTicket.remiseGlobale,
+          modeReglement: paymentMode,
+          montantPaye: finalMontantPaye,
+          paiementsPartiels: finalPaiementsPartiels,
+          totalTtc: ticketTotals.totalTtc,
+          synced: false,
+        };
+
+        await enqueueOfflineTicket(offlineTicket);
+        const newCount = await getOfflineQueueCount();
+        setQueuedOfflineCount(newCount);
+
+        const syntheticTicket: CaisseTicketRecord = {
+          id: -Date.now(),
+          company_id: 1,
+          branch_id: selectedBranchId,
+          session_id: activeSession.id,
+          numero_ticket: localNumero,
+          client_id: currentTicket.clientId,
+          client_nom: currentTicket.clientNom,
+          statut: "valide",
+          mode_reglement: paymentMode,
+          total_ht: ticketTotals.totalHt,
+          total_tva: ticketTotals.totalTva,
+          total_ttc: ticketTotals.totalTtc,
+          remise_globale: currentTicket.remiseGlobale,
+          montant_paye: finalMontantPaye,
+          montant_rendu: changeDue,
+          created_at: new Date().toISOString(),
+          lignes: currentTicket.items.map((i, idx) => ({
+            id: idx + 1,
+            ticket_id: -1,
+            produit_id: i.produitId || null,
+            ref: i.ref,
+            designation: i.designation,
+            prix_unitaire_ht: i.prixUnitaireHt,
+            prix_unitaire_ttc: i.prixUnitaireTtc,
+            quantite: i.quantite,
+            tva_rate: i.tvaRate,
+            remise_pourcent: i.remisePourcent,
+            total_ht: i.quantite * i.prixUnitaireHt,
+            total_ttc: i.quantite * i.prixUnitaireTtc,
+          })),
+        };
+
+        setLastCompletedTicket(syntheticTicket);
+        setIsPaymentModalOpen(false);
+        setShowSuccessModal(true);
+        handleClearCart();
+
+        setActiveSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                total_ventes_ttc: prev.total_ventes_ttc + ticketTotals.totalTtc,
+                nb_tickets: prev.nb_tickets + 1,
+              }
+            : null
+        );
+        return;
+      }
+
+      // 2. ENREGISTREMENT SERVEUR STANDARD EN LIGNE
       const res = await enregistrerTicketCaisseAction({
         sessionId: activeSession.id,
         branchId: selectedBranchId,
         clientId: currentTicket.clientId,
         clientNom: currentTicket.clientNom,
+        commercialId: currentTicket.commercialId || null,
         lignes: currentTicket.items.map((i) => ({
           produitId: i.produitId,
           ref: i.ref,
@@ -669,9 +841,81 @@ export function PosTerminal({
     }
   };
 
+  // Vérification de validité et solde d'un bon d'achat
+  const handleCheckBonAchat = async (code: string) => {
+    if (!code.trim()) return;
+    setBonAchatCheckStatus({ loading: true, checkedCode: code.trim() });
+    try {
+      const res = await validerBonAchatAction(code.trim());
+      if (res.success && res.valide && res.bon) {
+        setBonAchatCheckStatus({
+          loading: false,
+          checkedCode: code.trim(),
+          valid: true,
+          montantRestant: res.bon.montant_restant,
+          clientNom: res.bon.client_nom,
+        });
+      } else {
+        setBonAchatCheckStatus({
+          loading: false,
+          checkedCode: code.trim(),
+          valid: false,
+          message: res.message || "Bon d'achat invalide, expiré ou introuvable.",
+        });
+      }
+    } catch {
+      setBonAchatCheckStatus({
+        loading: false,
+        checkedCode: code.trim(),
+        valid: false,
+        message: "Erreur lors de la vérification du bon d'achat.",
+      });
+    }
+  };
+
+  // Synchronisation manuelle ou automatique des tickets hors-ligne
+  const handleSyncOfflineTickets = async () => {
+    if (isSyncingOffline) return;
+    setIsSyncingOffline(true);
+    setSyncNotice("");
+    try {
+      const queued = await getQueuedOfflineTickets();
+      if (!queued || queued.length === 0) {
+        setQueuedOfflineCount(0);
+        setIsSyncingOffline(false);
+        return;
+      }
+
+      const res = await synchroniserTicketsHorsLigneAction(queued, selectedBranchId);
+      if (res.success && res.successes) {
+        for (const s of res.successes) {
+          await removeOfflineTicket(s.offlineId);
+        }
+        const remainingCount = await getOfflineQueueCount();
+        setQueuedOfflineCount(remainingCount);
+
+        setSyncNotice(
+          `✅ Synchronisation réussie : ${res.successes.length} ticket(s) synchronisé(s) avec le serveur central !`
+        );
+        setTimeout(() => setSyncNotice(""), 7000);
+      } else if (res.error) {
+        setSyncNotice(`⚠️ Erreur synchronisation : ${res.error}`);
+        setTimeout(() => setSyncNotice(""), 7000);
+      }
+    } catch (err) {
+      console.error("Erreur sync offline:", err);
+    } finally {
+      setIsSyncingOffline(false);
+    }
+  };
+
   // Raccourci pour imprimer le ticket thermique
   const handlePrintTicket = (ticketId: number) => {
-    window.open(`/print/pos/ticket/${ticketId}`, "_blank");
+    if (ticketId > 0) {
+      window.open(`/print/pos/ticket/${ticketId}`, "_blank");
+    } else {
+      window.print();
+    }
   };
 
   return (
@@ -765,8 +1009,45 @@ export function PosTerminal({
           </ActionIcon>
         </div>
 
-        {/* Horloge & Boutons d'Action Clôture / Mouvements */}
+        {/* Horloge & Boutons d'Action Clôture / Mouvements / Retours / Mode Hors-Ligne */}
         <div className="flex items-center gap-2">
+          {/* Indicateur Réseau & Synchronisation Hors-Ligne (Offline First PWA) */}
+          {!isOnline ? (
+            <Badge
+              size="sm"
+              color="orange"
+              variant="filled"
+              leftSection={<WifiOff size={12} />}
+              className="cursor-default animate-pulse"
+              title="Caisse autonome hors-ligne : les ventes sont sauvegardées localement et se synchroniseront au retour du réseau"
+            >
+              Hors-Ligne {queuedOfflineCount > 0 ? `(${queuedOfflineCount})` : ""}
+            </Badge>
+          ) : queuedOfflineCount > 0 ? (
+            <Button
+              size="compact-xs"
+              color="orange"
+              variant="light"
+              loading={isSyncingOffline}
+              leftSection={<RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />}
+              onClick={handleSyncOfflineTickets}
+              title="Synchroniser les tickets enregistrés en mode hors-ligne"
+            >
+              Sync ({queuedOfflineCount})
+            </Button>
+          ) : (
+            <Badge
+              size="sm"
+              color="teal"
+              variant="light"
+              leftSection={<Wifi size={12} />}
+              className="hidden md:inline-flex"
+              title="Caisse connectée au serveur"
+            >
+              En Ligne
+            </Badge>
+          )}
+
           <div className="hidden xl:flex items-center gap-1 text-xs text-slate-400 font-mono">
             <Clock size={14} className="text-indigo-400" />
             <span>{currentTime}</span>
@@ -775,6 +1056,17 @@ export function PosTerminal({
           <div className="flex items-center gap-1.5">
             {activeSession && (
               <>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  color="orange"
+                  leftSection={<RotateCcw size={13} />}
+                  onClick={() => setIsRetourModalOpen(true)}
+                  title="Gestion des retours articles et émission de bons d'achat ou remboursement"
+                >
+                  Retours & Avoirs
+                </Button>
+
                 <Button
                   size="compact-xs"
                   variant="light"
@@ -819,6 +1111,32 @@ export function PosTerminal({
           </div>
         </div>
       </header>
+
+      {/* 1.1 Bannières Statut Réseau & Synchronisation Hors-Ligne */}
+      {syncNotice && (
+        <div className="bg-emerald-600/90 text-white px-4 py-1.5 text-xs font-semibold flex items-center justify-between shrink-0 shadow-md">
+          <span>{syncNotice}</span>
+          <button
+            onClick={() => setSyncNotice("")}
+            className="text-white/80 hover:text-white font-bold ml-2 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {!isOnline && (
+        <div className="bg-amber-600/95 text-white px-4 py-1 text-xs font-semibold flex items-center justify-center gap-2 shrink-0 border-b border-amber-500">
+          <WifiOff size={13} />
+          <span>
+            <strong>Mode Hors-Ligne Actif (PWA) :</strong> La caisse continue d&apos;encaisser normalement. Les tickets sont stockés localement et seront synchronisés automatiquement dès le retour d&apos;Internet.
+          </span>
+          {queuedOfflineCount > 0 && (
+            <Badge size="xs" color="dark" variant="filled">
+              {queuedOfflineCount} ticket(s) en attente
+            </Badge>
+          )}
+        </div>
+      )}
 
       {/* 2. CORPS PRINCIPAL DIVISÉ : GAUCHE (CATALOGUE & DOUCHETTE) / DROITE (PANIER & ENCAISSEMENT) */}
       <div className="flex-1 grid grid-cols-12 overflow-hidden">
@@ -981,44 +1299,107 @@ export function PosTerminal({
 
         {/* === SECTION DROITE : PANIER TICKET & FAST CHECKOUT (5 COLS) === */}
         <div className="col-span-5 bg-slate-950 flex flex-col overflow-hidden">
-          {/* Sélecteur Client & Actions Panier */}
-          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex-1">
-              <Select
-                placeholder="Client"
-                leftSection={<UserRound size={14} className="text-slate-400" />}
-                data={[
-                  { value: "0", label: "Client Comptoir (Standard)" },
-                  ...clients.map((c) => ({ value: String(c.id), label: c.name })),
-                ]}
-                value={currentTicket.clientId ? String(currentTicket.clientId) : "0"}
-                onChange={(val) => {
-                  const cId = val && val !== "0" ? Number(val) : null;
-                  const cNom = clients.find((c) => c.id === cId)?.name || "Client Comptoir";
-                  setTickets((prev) =>
-                    prev.map((t) =>
-                      t.id === activeTicketId ? { ...t, clientId: cId, clientNom: cNom } : t
-                    )
-                  );
-                }}
+          {/* Sélecteur Client & Commercial & Actions Panier */}
+          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1">
+                <Select
+                  placeholder="Client"
+                  leftSection={<UserRound size={14} className="text-slate-400" />}
+                  data={[
+                    { value: "0", label: "Client Comptoir (Standard)" },
+                    ...clients.map((c) => ({
+                      value: String(c.id),
+                      label: `${c.name} ${c.fidelite_palier ? `[${c.fidelite_palier}]` : ""}`,
+                    })),
+                  ]}
+                  value={currentTicket.clientId ? String(currentTicket.clientId) : "0"}
+                  onChange={(val) => {
+                    const cId = val && val !== "0" ? Number(val) : null;
+                    const c = clients.find((client) => client.id === cId);
+                    const cNom = c?.name || "Client Comptoir";
+                    setTickets((prev) =>
+                      prev.map((t) =>
+                        t.id === activeTicketId ? { ...t, clientId: cId, clientNom: cNom } : t
+                      )
+                    );
+                  }}
+                  size="xs"
+                  radius="md"
+                  styles={{
+                    input: { backgroundColor: "#0f172a", borderColor: "#334155", color: "#ffffff" },
+                  }}
+                />
+              </div>
+
+              {commerciaux && commerciaux.length > 0 && (
+                <div className="w-36">
+                  <Select
+                    placeholder="Vendeur"
+                    clearable
+                    data={commerciaux.map((com) => ({
+                      value: String(com.id),
+                      label: com.name.split(" ")[0] + (com.code ? ` (${com.code})` : ""),
+                    }))}
+                    value={currentTicket.commercialId ? String(currentTicket.commercialId) : null}
+                    onChange={(val) => {
+                      const commId = val ? Number(val) : null;
+                      setTickets((prev) =>
+                        prev.map((t) =>
+                          t.id === activeTicketId ? { ...t, commercialId: commId } : t
+                        )
+                      );
+                    }}
+                    size="xs"
+                    radius="md"
+                    styles={{
+                      input: { backgroundColor: "#0f172a", borderColor: "#334155", color: "#ffffff" },
+                    }}
+                  />
+                </div>
+              )}
+
+              <Button
                 size="xs"
-                radius="md"
-                styles={{
-                  input: { backgroundColor: "#0f172a", borderColor: "#334155", color: "#ffffff" },
-                }}
-              />
+                variant="subtle"
+                color="red"
+                leftSection={<Trash2 size={13} />}
+                onClick={handleClearCart}
+                disabled={currentTicket.items.length === 0}
+              >
+                Vider
+              </Button>
             </div>
 
-            <Button
-              size="xs"
-              variant="subtle"
-              color="red"
-              leftSection={<Trash2 size={13} />}
-              onClick={handleClearCart}
-              disabled={currentTicket.items.length === 0}
-            >
-              Vider
-            </Button>
+            {/* Badge Fidélité Client si sélectionné */}
+            {currentTicket.clientId && (() => {
+              const selectedC = clients.find((c) => c.id === currentTicket.clientId);
+              if (!selectedC) return null;
+              const palier = selectedC.fidelite_palier || "Bronze";
+              const badgeColor =
+                palier === "VIP"
+                  ? "purple"
+                  : palier === "Gold"
+                  ? "yellow"
+                  : palier === "Silver"
+                  ? "gray"
+                  : "amber";
+
+              return (
+                <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-900 rounded-lg border border-slate-800 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Award size={14} className="text-amber-400" />
+                    <span className="text-slate-400 font-medium">Palier :</span>
+                    <Badge size="xs" variant="light" color={badgeColor}>
+                      {palier}
+                    </Badge>
+                  </div>
+                  <div className="text-slate-300">
+                    Solde : <span className="text-emerald-400 font-bold">{selectedC.fidelite_points || 0}</span> pts
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Lignes du Panier */}
@@ -1386,13 +1767,59 @@ export function PosTerminal({
                     />
                   </div>
 
-                  <TextInput
-                    label="Réf / N° de bon / N° chèque (optionnel)"
-                    placeholder="Ex: TPE-98234, CHQ-5542, BON-CADEAU-100..."
-                    size="xs"
-                    value={splitRefDraft}
-                    onChange={(e) => setSplitRefDraft(e.currentTarget.value)}
-                  />
+                  <div className="flex gap-2 items-end">
+                    <TextInput
+                      label="Réf / N° de bon / N° chèque (optionnel)"
+                      placeholder="Ex: BON-2026-X88, TPE-98234, CHQ-5542..."
+                      size="xs"
+                      value={splitRefDraft}
+                      onChange={(e) => setSplitRefDraft(e.currentTarget.value)}
+                      className="flex-1"
+                    />
+                    {splitModeDraft === "bon_achat" && (
+                      <Button
+                        size="xs"
+                        color="grape"
+                        variant="light"
+                        loading={bonAchatCheckStatus.loading}
+                        disabled={!splitRefDraft.trim()}
+                        onClick={async () => {
+                          await handleCheckBonAchat(splitRefDraft);
+                        }}
+                      >
+                        Vérifier
+                      </Button>
+                    )}
+                  </div>
+
+                  {splitModeDraft === "bon_achat" && bonAchatCheckStatus.valid === true && (
+                    <div className="p-2 bg-emerald-950/60 border border-emerald-800 rounded-lg flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-emerald-400 font-bold">Bon Valide : </span>
+                        <span className="text-white font-black">{formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH disponible</span>
+                        {bonAchatCheckStatus.clientNom && <span className="text-slate-400 block text-[11px]">Client: {bonAchatCheckStatus.clientNom}</span>}
+                      </div>
+                      <Button
+                        size="compact-xs"
+                        color="teal"
+                        onClick={() => {
+                          const maxApp = Math.min(
+                            remainingSplitDue,
+                            bonAchatCheckStatus.montantRestant || remainingSplitDue
+                          );
+                          setSplitMontantDraft(maxApp);
+                        }}
+                      >
+                        Appliquer
+                      </Button>
+                    </div>
+                  )}
+
+                  {splitModeDraft === "bon_achat" && bonAchatCheckStatus.valid === false && (
+                    <Text size="xs" c="red" fw={600}>
+                      ⚠️ {bonAchatCheckStatus.message}
+                    </Text>
+                  )}
 
                   <Button
                     size="xs"
@@ -1481,15 +1908,60 @@ export function PosTerminal({
                   Règlement par Bon d&apos;Achat ou Titre Cadeau
                 </Text>
               </div>
-              <TextInput
-                label="Référence / Code du Bon d'Achat"
-                placeholder="Ex: BON-2026-X88, CARTE-CADEAU-..."
-                value={bonAchatReference}
-                onChange={(e) => setBonAchatReference(e.currentTarget.value)}
-                size="sm"
-                radius="md"
-                required
-              />
+              <div className="flex gap-2 items-end">
+                <TextInput
+                  label="Référence / Code du Bon d'Achat"
+                  placeholder="Ex: BON-2026-X88..."
+                  value={bonAchatReference}
+                  onChange={(e) => {
+                    setBonAchatReference(e.currentTarget.value);
+                    if (bonAchatCheckStatus.checkedCode !== e.currentTarget.value) {
+                      setBonAchatCheckStatus({ loading: false });
+                    }
+                  }}
+                  size="sm"
+                  radius="md"
+                  className="flex-1"
+                  required
+                />
+                <Button
+                  size="sm"
+                  color="grape"
+                  variant="light"
+                  onClick={() => handleCheckBonAchat(bonAchatReference)}
+                  loading={bonAchatCheckStatus.loading}
+                  disabled={!bonAchatReference.trim()}
+                >
+                  Vérifier
+                </Button>
+              </div>
+
+              {/* Résultat de la vérification */}
+              {bonAchatCheckStatus.valid === true && (
+                <div className="p-2.5 bg-emerald-950/60 border border-emerald-800 rounded-lg text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-emerald-400 font-bold">✓ Bon d&apos;Achat Actif</span>
+                    <span className="text-white font-black text-sm">
+                      Solde : {formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH
+                    </span>
+                  </div>
+                  {bonAchatCheckStatus.clientNom && (
+                    <div className="text-slate-400 text-[11px]">Client : {bonAchatCheckStatus.clientNom}</div>
+                  )}
+                  {Number(bonAchatCheckStatus.montantRestant) < ticketTotals.totalTtc && (
+                    <div className="text-amber-400 font-semibold text-[11px] mt-1">
+                      ⚠️ Le solde de ce bon ({formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH) ne couvre pas la totalité du ticket ({formatNumber(ticketTotals.totalTtc)} DH). Privilégiez le mode Multi-Paiement.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {bonAchatCheckStatus.valid === false && (
+                <div className="p-2 bg-red-950/60 border border-red-800 rounded-lg text-xs text-red-300 font-semibold">
+                  ⚠️ {bonAchatCheckStatus.message}
+                </div>
+              )}
+
               <Text size="xs" c="dimmed">
                 Le montant total de <strong>{formatNumber(ticketTotals.totalTtc)} DH</strong> sera débité sur ce bon d&apos;achat.
               </Text>
@@ -1506,8 +1978,8 @@ export function PosTerminal({
               <TextInput
                 label="Référence Transaction / Numéro (Optionnel)"
                 placeholder="Ex: Autorisation TPE, N° Chèque..."
-                value={bonAchatReference}
-                onChange={(e) => setBonAchatReference(e.currentTarget.value)}
+                value={splitRefDraft}
+                onChange={(e) => setSplitRefDraft(e.currentTarget.value)}
                 size="sm"
                 radius="md"
               />
@@ -1527,6 +1999,8 @@ export function PosTerminal({
           >
             {paymentMode === "mixte"
               ? `Valider l'encaissement mixte (${formatNumber(totalSplitRegle)} DH)`
+              : !isOnline
+              ? `Encaisser Hors-Ligne (${formatNumber(ticketTotals.totalTtc)} DH)`
               : `Valider l'encaissement (${formatNumber(ticketTotals.totalTtc)} DH)`}
           </Button>
         </Stack>
@@ -1562,6 +2036,11 @@ export function PosTerminal({
             <Text size="sm" c="dimmed" mt={2}>
               Total TTC : <strong>{formatNumber(lastCompletedTicket?.total_ttc || 0)} DH</strong>
             </Text>
+            {lastCompletedTicket?.id && lastCompletedTicket.id < 0 && (
+              <Badge size="md" color="orange" variant="light" mt="xs">
+                💾 Encaissé Hors-Ligne (Stocké localement)
+              </Badge>
+            )}
             {lastCompletedTicket?.montant_rendu && lastCompletedTicket.montant_rendu > 0 ? (
               <Badge size="lg" color="amber" variant="filled" mt="xs">
                 Monnaie rendue : {formatNumber(lastCompletedTicket.montant_rendu)} DH
@@ -1649,6 +2128,14 @@ export function PosTerminal({
         products={products}
         preselectedProduct={balanceTargetProduct}
         onAddWeighedItem={handleAddWeighedItem}
+      />
+
+      {/* 7. MODALE GESTION DES RETOURS & ÉMISSION D'AVOIRS / BONS D'ACHAT */}
+      <RetourModal
+        opened={isRetourModalOpen}
+        onClose={() => setIsRetourModalOpen(false)}
+        sessionId={activeSession?.id || 0}
+        branchId={selectedBranchId}
       />
     </div>
   );

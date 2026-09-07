@@ -4,25 +4,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  Award,
+  BadgePercent,
   BellRing,
   Boxes,
   Building2,
+  CalendarCheck,
   CalendarClock,
   ChevronDown,
   ClipboardList,
+  Clock,
   Coins,
   FileSpreadsheet,
   FileText,
+  FileCheck2,
+  HandCoins,
+  Kanban,
   Landmark,
   Layers,
   LayoutDashboard,
   MapPin,
+  MessageSquare,
   MoreHorizontal,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  PieChart,
   QrCode,
   Receipt,
+  ReceiptText,
   ScanBarcode,
   ShieldCheck,
   ShoppingCart,
@@ -72,6 +82,16 @@ const navIcons = {
   "/emplacements": MapPin,
   "/nomenclatures": Layers,
   "/etiquettes": QrCode,
+  "/opportunites": Kanban,
+  "/grilles-tarifaires": BadgePercent,
+  "/commissions": Award,
+  "/messagerie": MessageSquare,
+  "/pointeuse": Clock,
+  "/conges": CalendarCheck,
+  "/paie": HandCoins,
+  "/notes-frais": ReceiptText,
+  "/marge-rentabilite": PieChart,
+  "/declaration-tva": FileCheck2,
   "/produits": Package,
   "/clients": UserRound,
   "/fournisseurs": Building2,
@@ -166,6 +186,16 @@ export function SidebarNav({
       case "/reapprovisionnement": return locale === "ar" ? "إعادة التموين الذكية" : "Réapprovisionnement";
       case "/emplacements": return locale === "ar" ? "إدارة المواقع والالتقاط" : "Emplacements & WMS";
       case "/produits": return t.nav.produits;
+      case "/opportunites": return locale === "ar" ? "فرص البيع (CRM)" : "Pipeline CRM";
+      case "/grilles-tarifaires": return locale === "ar" ? "جداول الأسعار" : "Grilles & Tarifs";
+      case "/commissions": return locale === "ar" ? "عمولات المبيعات" : "Commissions";
+      case "/messagerie": return locale === "ar" ? "المراسلات والواتساب" : "Messagerie & WhatsApp";
+      case "/pointeuse": return locale === "ar" ? "تسجيل الحضور الرقمي" : "Pointeuse";
+      case "/conges": return locale === "ar" ? "الإجازات والغياب" : "Congés & Absences";
+      case "/paie": return locale === "ar" ? "الأجور والقروض" : "Paie & Prêts";
+      case "/notes-frais": return locale === "ar" ? "بيان المصاريف" : "Notes de Frais";
+      case "/marge-rentabilite": return locale === "ar" ? "الهامش والربحية" : "Marge & Rentabilité";
+      case "/declaration-tva": return locale === "ar" ? "إقرار الضريبة (TVA)" : "Déclaration TVA";
       case "/clients": return t.nav.clients;
       case "/fournisseurs": return t.nav.fournisseurs;
       case "/utilisateurs": return t.nav.utilisateurs;

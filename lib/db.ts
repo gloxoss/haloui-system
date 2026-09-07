@@ -1124,13 +1124,347 @@ function migrateDatabase(db: Database.Database) {
       FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_session ON caisse_mouvements(session_id);
-    CREATE INDEX IF NOT EXISTS idx_caisse_mouvements_type ON caisse_mouvements(type);
+    CREATE TABLE IF NOT EXISTS bons_achat (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      code TEXT NOT NULL UNIQUE,
+      montant_initial REAL NOT NULL,
+      montant_restant REAL NOT NULL,
+      statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'utilise', 'expire', 'annule')),
+      date_emission TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      date_expiration TEXT NOT NULL,
+      client_id INTEGER,
+      client_nom TEXT DEFAULT '',
+      ticket_origine_id INTEGER,
+      retour_id INTEGER,
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_bons_achat_code ON bons_achat(code);
+    CREATE INDEX IF NOT EXISTS idx_bons_achat_statut ON bons_achat(statut);
+    CREATE INDEX IF NOT EXISTS idx_bons_achat_company ON bons_achat(company_id);
+
+    CREATE TABLE IF NOT EXISTS caisse_retours (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER NOT NULL,
+      session_id INTEGER NOT NULL,
+      numero_retour TEXT NOT NULL UNIQUE,
+      ticket_origine_id INTEGER,
+      ticket_origine_numero TEXT DEFAULT '',
+      client_id INTEGER,
+      client_nom TEXT DEFAULT 'Client Comptoir',
+      mode_compensation TEXT NOT NULL DEFAULT 'bon_achat' CHECK (mode_compensation IN ('bon_achat', 'especes', 'carte', 'autre')),
+      total_ht REAL NOT NULL DEFAULT 0,
+      total_tva REAL NOT NULL DEFAULT 0,
+      total_ttc REAL NOT NULL DEFAULT 0,
+      bon_achat_id INTEGER,
+      motif_general TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES caisse_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
+      FOREIGN KEY (ticket_origine_id) REFERENCES caisse_tickets(id) ON DELETE SET NULL,
+      FOREIGN KEY (bon_achat_id) REFERENCES bons_achat(id) ON DELETE SET NULL,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_retours_session ON caisse_retours(session_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_retours_ticket ON caisse_retours(ticket_origine_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_retours_numero ON caisse_retours(numero_retour);
+
+    CREATE TABLE IF NOT EXISTS caisse_retour_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      retour_id INTEGER NOT NULL,
+      produit_id INTEGER,
+      ref TEXT NOT NULL,
+      designation TEXT NOT NULL,
+      prix_unitaire_ht REAL NOT NULL DEFAULT 0,
+      prix_unitaire_ttc REAL NOT NULL DEFAULT 0,
+      quantite REAL NOT NULL DEFAULT 1,
+      tva_rate REAL NOT NULL DEFAULT 20,
+      total_ttc REAL NOT NULL DEFAULT 0,
+      restitue_stock INTEGER NOT NULL DEFAULT 1,
+      motif_ligne TEXT DEFAULT '',
+      FOREIGN KEY (retour_id) REFERENCES caisse_retours(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_caisse_retour_lignes_retour ON caisse_retour_lignes(retour_id);
+    CREATE INDEX IF NOT EXISTS idx_caisse_retour_lignes_produit ON caisse_retour_lignes(produit_id);
+
+    -- 1. Programme de Fidélité
+    CREATE TABLE IF NOT EXISTS fidelite_config (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      taux_dh_par_point REAL NOT NULL DEFAULT 1.0,
+      valeur_cashback_par_100_pts REAL NOT NULL DEFAULT 5.0,
+      seuil_conversion_min_pts INTEGER NOT NULL DEFAULT 100,
+      palier_silver_pts INTEGER NOT NULL DEFAULT 500,
+      palier_gold_pts INTEGER NOT NULL DEFAULT 1500,
+      palier_vip_pts INTEGER NOT NULL DEFAULT 5000,
+      remise_silver_pct REAL NOT NULL DEFAULT 2.0,
+      remise_gold_pct REAL NOT NULL DEFAULT 5.0,
+      remise_vip_pct REAL NOT NULL DEFAULT 10.0,
+      active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS fidelite_mouvements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      client_id INTEGER NOT NULL,
+      type_mouvement TEXT NOT NULL CHECK (type_mouvement IN ('gain_achat', 'conversion_remise', 'conversion_bon_achat', 'ajustement_manuel', 'expiration')),
+      points REAL NOT NULL,
+      points_avant REAL NOT NULL,
+      points_apres REAL NOT NULL,
+      document_type TEXT DEFAULT '',
+      document_id INTEGER,
+      bon_achat_id INTEGER,
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (bon_achat_id) REFERENCES bons_achat(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fidelite_mouvements_client ON fidelite_mouvements(client_id);
+    CREATE INDEX IF NOT EXISTS idx_fidelite_mouvements_type ON fidelite_mouvements(type_mouvement);
+
+    -- 2. Tarification Personnalisée & Grilles Tarifaires
+    CREATE TABLE IF NOT EXISTS grilles_tarifaires (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      code TEXT NOT NULL UNIQUE,
+      nom TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      type_application TEXT NOT NULL CHECK (type_application IN ('groupe_client', 'contrat_client')),
+      categorie_client TEXT DEFAULT '',
+      client_id INTEGER,
+      date_debut TEXT DEFAULT '',
+      date_fin TEXT DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_grilles_tarifaires_cat ON grilles_tarifaires(categorie_client);
+    CREATE INDEX IF NOT EXISTS idx_grilles_tarifaires_client ON grilles_tarifaires(client_id);
+
+    CREATE TABLE IF NOT EXISTS grille_tarifaire_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      grille_id INTEGER NOT NULL,
+      produit_id INTEGER,
+      famille_produit TEXT DEFAULT '',
+      prix_special_ht REAL,
+      remise_pourcentage REAL DEFAULT 0,
+      quantite_min REAL NOT NULL DEFAULT 1,
+      active INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (grille_id) REFERENCES grilles_tarifaires(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_grille_lignes_grille ON grille_tarifaire_lignes(grille_id);
+    CREATE INDEX IF NOT EXISTS idx_grille_lignes_produit ON grille_tarifaire_lignes(produit_id);
+
+    -- 3. Commissionnement des Commerciaux
+    CREATE TABLE IF NOT EXISTS commission_regles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      commercial_id INTEGER NOT NULL,
+      base_calcul TEXT NOT NULL CHECK (base_calcul IN ('chiffre_affaires_ht', 'marge_brute')),
+      taux_pourcentage REAL NOT NULL DEFAULT 5,
+      famille_produit TEXT DEFAULT '',
+      produit_id INTEGER,
+      date_debut TEXT DEFAULT '',
+      date_fin TEXT DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (produit_id) REFERENCES produits(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_commission_regles_comm ON commission_regles(commercial_id);
+
+    CREATE TABLE IF NOT EXISTS commission_fiches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      commercial_id INTEGER NOT NULL,
+      periode TEXT NOT NULL,
+      total_ca_ht REAL NOT NULL DEFAULT 0,
+      total_marge_brute REAL NOT NULL DEFAULT 0,
+      montant_commission REAL NOT NULL DEFAULT 0,
+      statut TEXT NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'validee', 'payee')),
+      date_validation TEXT DEFAULT '',
+      date_paiement TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (company_id, commercial_id, periode),
+      FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_commission_fiches_comm ON commission_fiches(commercial_id);
+    CREATE INDEX IF NOT EXISTS idx_commission_fiches_periode ON commission_fiches(periode);
+
+    CREATE TABLE IF NOT EXISTS commission_fiches_lignes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fiche_id INTEGER NOT NULL,
+      document_type TEXT NOT NULL CHECK (document_type IN ('facture', 'ticket')),
+      document_id INTEGER NOT NULL,
+      document_numero TEXT NOT NULL,
+      date_vente TEXT NOT NULL,
+      client_nom TEXT DEFAULT '',
+      total_ht REAL NOT NULL DEFAULT 0,
+      marge_brute REAL NOT NULL DEFAULT 0,
+      taux_applique REAL NOT NULL DEFAULT 0,
+      montant_commission REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (fiche_id) REFERENCES commission_fiches(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_commission_lignes_fiche ON commission_fiches_lignes(fiche_id);
+
+    -- 4. Pipeline CRM Kanban
+    CREATE TABLE IF NOT EXISTS crm_opportunites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      branch_id INTEGER,
+      titre TEXT NOT NULL,
+      client_id INTEGER,
+      contact_nom TEXT DEFAULT '',
+      contact_phone TEXT DEFAULT '',
+      contact_email TEXT DEFAULT '',
+      commercial_id INTEGER,
+      etape TEXT NOT NULL DEFAULT 'nouveau_contact' CHECK (etape IN ('nouveau_contact', 'qualification', 'devis_envoye', 'negociation', 'gagne', 'perdu')),
+      montant_estime REAL NOT NULL DEFAULT 0,
+      probabilite REAL NOT NULL DEFAULT 10,
+      date_cloture_prevue TEXT DEFAULT '',
+      devis_id INTEGER,
+      notes TEXT DEFAULT '',
+      motif_perte TEXT DEFAULT '',
+      ordre INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+      FOREIGN KEY (commercial_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (devis_id) REFERENCES documents(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_crm_opp_etape ON crm_opportunites(etape);
+    CREATE INDEX IF NOT EXISTS idx_crm_opp_commercial ON crm_opportunites(commercial_id);
+    CREATE INDEX IF NOT EXISTS idx_crm_opp_client ON crm_opportunites(client_id);
+
+    CREATE TABLE IF NOT EXISTS crm_opportunite_activites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      opportunite_id INTEGER NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('appel', 'reunion', 'email', 'note', 'changement_etape')),
+      titre TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      date_activite TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (opportunite_id) REFERENCES crm_opportunites(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS notes_frais (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      employe_id INTEGER NOT NULL,
+      numero TEXT NOT NULL UNIQUE,
+      date_depense TEXT NOT NULL,
+      categorie TEXT NOT NULL CHECK (categorie IN ('deplacement', 'repas', 'hotel', 'peage', 'carburant', 'frais_km', 'fournitures', 'autre')),
+      description TEXT NOT NULL,
+      montant_ttc REAL NOT NULL DEFAULT 0,
+      tva_rate REAL DEFAULT 0,
+      montant_tva REAL DEFAULT 0,
+      montant_ht REAL DEFAULT 0,
+      distance_km REAL DEFAULT 0,
+      bareme_km_unitaire REAL DEFAULT 2.5,
+      vehicule_immatriculation TEXT DEFAULT '',
+      justificatif_path TEXT DEFAULT '',
+      statut TEXT NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'approuve', 'refuse', 'rembourse')),
+      valide_par INTEGER,
+      date_decision TEXT DEFAULT '',
+      motif_refus TEXT DEFAULT '',
+      date_remboursement TEXT DEFAULT '',
+      mode_remboursement TEXT DEFAULT 'virement' CHECK (mode_remboursement IN ('especes', 'virement', 'paie', 'cheque')),
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employe_id) REFERENCES employes(id) ON DELETE CASCADE,
+      FOREIGN KEY (valide_par) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_notes_frais_emp ON notes_frais(employe_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_frais_statut ON notes_frais(statut);
+
+    CREATE TABLE IF NOT EXISTS tva_declarations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
+      periode_type TEXT NOT NULL CHECK (periode_type IN ('mensuelle', 'trimestrielle')),
+      periode_code TEXT NOT NULL,
+      regime TEXT NOT NULL DEFAULT 'encaissement' CHECK (regime IN ('encaissement', 'debit')),
+      tva_collectee_total REAL NOT NULL DEFAULT 0,
+      tva_collectee_20 REAL NOT NULL DEFAULT 0,
+      tva_collectee_14 REAL NOT NULL DEFAULT 0,
+      tva_collectee_10 REAL NOT NULL DEFAULT 0,
+      tva_collectee_7 REAL NOT NULL DEFAULT 0,
+      tva_deductible_total REAL NOT NULL DEFAULT 0,
+      tva_deductible_immo REAL NOT NULL DEFAULT 0,
+      tva_deductible_charges REAL NOT NULL DEFAULT 0,
+      tva_deductible_20 REAL NOT NULL DEFAULT 0,
+      tva_deductible_14 REAL NOT NULL DEFAULT 0,
+      tva_deductible_10 REAL NOT NULL DEFAULT 0,
+      tva_deductible_7 REAL NOT NULL DEFAULT 0,
+      credit_tva_precedent REAL NOT NULL DEFAULT 0,
+      tva_nette_due REAL NOT NULL DEFAULT 0,
+      credit_tva_a_reporter REAL NOT NULL DEFAULT 0,
+      statut TEXT NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'validee', 'teledeclaree', 'payee')),
+      date_declaration TEXT DEFAULT '',
+      reference_telepaiement TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_by INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(company_id, periode_code),
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_tva_periode ON tva_declarations(periode_code);
   `);
 
   ensureColumnExists(db, "caisse_sessions", "total_bon_achat", "REAL NOT NULL DEFAULT 0");
   ensureColumnExists(db, "produits", "vendu_au_poids", "INTEGER NOT NULL DEFAULT 0");
   ensureColumnExists(db, "produits", "code_plu", "TEXT DEFAULT ''");
+
+  // Nouvelles colonnes pour les 4 modules
+  ensureColumnExists(db, "clients", "fidelite_points", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "clients", "fidelite_palier", "TEXT NOT NULL DEFAULT 'Bronze'");
+  ensureColumnExists(db, "clients", "fidelite_total_depense", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "clients", "categorie_tarifaire", "TEXT NOT NULL DEFAULT 'particulier'");
+  ensureColumnExists(db, "users", "is_commercial", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "users", "code_commercial", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "users", "taux_commission_defaut", "REAL NOT NULL DEFAULT 0");
+  ensureColumnExists(db, "documents", "commercial_id", "INTEGER");
+  ensureColumnExists(db, "caisse_tickets", "commercial_id", "INTEGER");
+
+  // Nouvelles colonnes RH (Pointeuse, Congés, Paie)
+  ensureColumnExists(db, "employes", "code_pin", "TEXT DEFAULT '1234'");
+  ensureColumnExists(db, "employes", "badge_qr_token", "TEXT DEFAULT ''");
+  ensureColumnExists(db, "employes", "taux_horaire_base", "REAL NOT NULL DEFAULT 35");
+  ensureColumnExists(db, "employes", "heures_hebdo_contractuelles", "REAL NOT NULL DEFAULT 44");
+  ensureColumnExists(db, "employes", "solde_conges_payes", "REAL NOT NULL DEFAULT 18");
+  ensureColumnExists(db, "employes", "solde_conges_pris", "REAL NOT NULL DEFAULT 0");
+
+  // Initialiser la configuration fidélité si vide
+  db.prepare(`
+    INSERT INTO fidelite_config (id, company_id) VALUES (1, 1)
+    ON CONFLICT(id) DO NOTHING
+  `).run();
 
   createSettingsTable(db);
   seedFeatureFlags(db);
@@ -1864,6 +2198,411 @@ function seedWmsAndReapproIfEmpty(db: Database.Database, actorId: number) {
   }
 }
 
+function seedFideliteTarifsCommissionsCrmIfEmpty(db: Database.Database, superadminId: number) {
+  // 1. Fidelite configs
+  const countFid = db.prepare("SELECT COUNT(*) as count FROM fidelite_config").get() as { count: number };
+  if (countFid.count === 0) {
+    db.prepare(`
+      INSERT INTO fidelite_config (
+        id, company_id, taux_dh_par_point, valeur_cashback_par_100_pts,
+        seuil_conversion_min_pts, palier_silver_pts, palier_gold_pts, palier_vip_pts,
+        remise_silver_pct, remise_gold_pct, remise_vip_pct, active
+      ) VALUES
+      (1, 1, 1.0, 5.0, 100, 500, 1500, 5000, 2.0, 5.0, 10.0, 1),
+      (2, 2, 1.0, 5.0, 100, 500, 1500, 5000, 2.0, 5.0, 10.0, 1)
+    `).run();
+  }
+
+  // 2. Clients loyalty and category initialization
+  const clientSkoura = db.prepare("SELECT id FROM clients WHERE name LIKE '%SKOURA%' LIMIT 1").get() as { id: number } | undefined;
+  const clientSosef = db.prepare("SELECT id FROM clients WHERE name LIKE '%SOSEF%' LIMIT 1").get() as { id: number } | undefined;
+
+  if (clientSkoura) {
+    db.prepare(`
+      UPDATE clients
+      SET fidelite_points = 2450,
+          fidelite_palier = 'Silver',
+          fidelite_total_depense = 48500,
+          categorie_tarifaire = 'grossiste'
+      WHERE id = ? AND (fidelite_points IS NULL OR fidelite_points = 0)
+    `).run(clientSkoura.id);
+  }
+
+  if (clientSosef) {
+    db.prepare(`
+      UPDATE clients
+      SET fidelite_points = 820,
+          fidelite_palier = 'Bronze',
+          fidelite_total_depense = 18400,
+          categorie_tarifaire = 'detaillant'
+      WHERE id = ? AND (fidelite_points IS NULL OR fidelite_points = 0)
+    `).run(clientSosef.id);
+  }
+
+  // 3. Mark superadmin as a commercial
+  db.prepare(`
+    UPDATE users
+    SET is_commercial = 1,
+        code_commercial = 'COMM-01',
+        taux_commission_defaut = 3.0
+    WHERE id = ? AND (is_commercial IS NULL OR is_commercial = 0)
+  `).run(superadminId);
+
+  // 4. Commission rules
+  const countRegles = db.prepare("SELECT COUNT(*) as count FROM commission_regles").get() as { count: number };
+  if (countRegles.count === 0) {
+    db.prepare(`
+      INSERT INTO commission_regles (
+        company_id, commercial_id, base_calcul, taux_pourcentage,
+        famille_produit, active
+      ) VALUES
+      (1, ?, 'chiffre_affaires_ht', 3.0, '', 1),
+      (1, ?, 'marge_brute', 8.0, 'Équipements & Batteries', 1),
+      (2, ?, 'chiffre_affaires_ht', 4.0, 'Logistique', 1)
+    `).run(superadminId, superadminId, superadminId);
+  }
+
+  // 5. Grilles Tarifaires
+  const countGrilles = db.prepare("SELECT COUNT(*) as count FROM grilles_tarifaires").get() as { count: number };
+  if (countGrilles.count === 0) {
+    // Grossistes (8% discount globally)
+    db.prepare(`
+      INSERT INTO grilles_tarifaires (
+        company_id, code, nom, description, type_application, categorie_client,
+        active, created_by, created_at, updated_at
+      ) VALUES (
+        1, 'CAT-GROSSISTES', 'Grille Tarifaire Grossistes', 'Remise spéciale 8% pour clients grossistes', 'groupe_client', 'grossiste',
+        1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `).run(superadminId);
+
+    // Détaillants (4% discount globally)
+    db.prepare(`
+      INSERT INTO grilles_tarifaires (
+        company_id, code, nom, description, type_application, categorie_client,
+        active, created_by, created_at, updated_at
+      ) VALUES (
+        1, 'CAT-DETAILLANTS', 'Grille Tarifaire Détaillants', 'Remise spéciale 4% pour détaillants', 'groupe_client', 'detaillant',
+        1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `).run(superadminId);
+
+    // Client Contract for Skoura Voyage
+    if (clientSkoura) {
+      const resContrat = db.prepare(`
+        INSERT INTO grilles_tarifaires (
+          company_id, code, nom, description, type_application, client_id,
+          date_debut, date_fin, active, created_by, created_at, updated_at
+        ) VALUES (
+          1, 'CTR-SKOURA-2026', 'Contrat Flotte STE SKOURA VOYAGE 2026', 'Contrat cadre annuel pour approvisionnement carburant', 'contrat_client', ?,
+          '2026-01-01', '2026-12-31', 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+      `).run(clientSkoura.id, superadminId);
+      const contratId = Number(resContrat.lastInsertRowid);
+
+      // Specific product line for Gasoil in Skoura Contract: 9.20 DH
+      const gasoil = db.prepare("SELECT id FROM produits WHERE ref LIKE 'GASOIL%' LIMIT 1").get() as { id: number } | undefined;
+      if (gasoil) {
+        db.prepare(`
+          INSERT INTO grille_tarifaire_lignes (grille_id, produit_id, prix_special_ht, remise_pourcentage, quantite_min, active)
+          VALUES (?, ?, 9.20, 0, 1, 1)
+        `).run(contratId, gasoil.id);
+      }
+    }
+  }
+
+  // 6. CRM Opportunities (Pipeline Kanban)
+  const countOpp = db.prepare("SELECT COUNT(*) as count FROM crm_opportunites").get() as { count: number };
+  if (countOpp.count === 0) {
+    const opps = [
+      {
+        titre: "Fourniture Carburant Flotte Skoura (10 Autocars)",
+        clientId: clientSkoura?.id || null,
+        contactNom: "Si Mohammed Skouri",
+        contactTel: "06 61 22 33 44",
+        etape: "nouveau_contact",
+        probabilite: 10,
+        montant: 45000,
+        notes: "Demande de carte carburant et approvisionnement mensuel",
+      },
+      {
+        titre: "Contrat Lubrifiants Synthétiques Chantier Atlas",
+        clientId: clientSosef?.id || null,
+        contactNom: "Karim Bennani",
+        contactTel: "06 62 88 99 00",
+        etape: "qualification",
+        probabilite: 30,
+        montant: 28000,
+        notes: "Besoin de fûts de 208L pour engins de terrassement",
+      },
+      {
+        titre: "Installation Cuve Gasoil & Distributeur Privé",
+        clientId: null,
+        contactNom: "Hadj Driss",
+        contactTel: "06 61 77 88 99",
+        etape: "devis_envoye",
+        probabilite: 60,
+        montant: 65000,
+        notes: "Cuve 10 000L + automate de gestion des badges conducteurs",
+      },
+      {
+        titre: "Approvisionnement Ciment CPJ-45 (100 Tonnes)",
+        clientId: clientSosef?.id || null,
+        contactNom: "Karim Bennani",
+        contactTel: "06 62 88 99 00",
+        etape: "negociation",
+        probabilite: 80,
+        montant: 82500,
+        notes: "Négociation finale des délais de livraison et franco de port",
+      },
+      {
+        titre: "Entretien Annuel Flotte Poids Lourds Ananas",
+        clientId: clientSkoura?.id || null,
+        contactNom: "Direction Technique",
+        contactTel: "05 35 66 21 01",
+        etape: "gagne",
+        probabilite: 100,
+        montant: 36000,
+        notes: "Contrat signé pour vidange et graissage trimestriel",
+      },
+      {
+        titre: "Devis Lavage Automatique Station Fès",
+        clientId: null,
+        contactNom: "Omar Tazi",
+        contactTel: "06 63 11 22 33",
+        etape: "perdu",
+        probabilite: 0,
+        montant: 15000,
+        notes: "Client a opté pour un prestataire local",
+      },
+    ];
+
+    const insertOpp = db.prepare(`
+      INSERT INTO crm_opportunites (
+        company_id, titre, client_id, contact_nom, contact_phone,
+        commercial_id, etape, probabilite, montant_estime,
+        notes, ordre, created_by, created_at, updated_at
+      ) VALUES (
+        1, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `);
+
+    for (const op of opps) {
+      insertOpp.run(
+        op.titre,
+        op.clientId,
+        op.contactNom,
+        op.contactTel,
+        superadminId,
+        op.etape,
+        op.probabilite,
+        op.montant,
+        op.notes,
+        superadminId
+      );
+    }
+  }
+}
+
+function seedRhMessagerieIfEmpty(db: Database.Database, superadminId: number) {
+  // 1. Messagerie Config
+  const messagerieCount = (db.prepare("SELECT COUNT(*) as c FROM messagerie_config").get() as any)?.c || 0;
+  if (messagerieCount === 0) {
+    const defaultTemplates = {
+      commande: "Bonjour {client_nom},\nVotre commande #{numero_document} d'un montant de {total_ttc} DH a bien été confirmée.\nMerci pour votre confiance !\n- {company_name}",
+      livraison: "Bonjour {client_nom},\nVotre livraison #{numero_document} est en cours d'acheminement.\nSuivez votre colis ou consultez votre bon ici : {lien_document}\n- {company_name}",
+      facture: "Bonjour {client_nom},\nVotre facture #{numero_document} de {total_ttc} DH (Reste à payer: {reste} DH) est disponible.\nConsultez et réglez en ligne : {lien_document}\n- {company_name}",
+      devis: "Bonjour {client_nom},\nVotre devis personnalisé #{numero_document} d'un montant de {total_ttc} DH est prêt.\nConsultez le détail : {lien_document}\n- {company_name}",
+    };
+
+    db.prepare(`
+      INSERT INTO messagerie_config (
+        company_id, whatsapp_actif, sms_actif, auto_notify_commande, auto_notify_livraison, auto_notify_facture, templates_json
+      ) VALUES (1, 1, 1, 1, 1, 1, ?)
+    `).run(JSON.stringify(defaultTemplates));
+  }
+
+  // 2. Ensure Employes have PINs and tokens
+  const emps = db.prepare("SELECT id, nom, prenom, code_pin FROM employes").all() as any[];
+  if (emps.length === 0) {
+    // Insert sample employees if none exist
+    const insEmp = db.prepare(`
+      INSERT INTO employes (numero, nom, prenom, date_entree, cnss, telephone, salaire, code_pin, taux_horaire_base, solde_conges_payes, created_by)
+      VALUES (?, ?, ?, '2024-01-15', ?, ?, ?, ?, ?, 18, ?)
+    `);
+    insEmp.run("EMP-001", "EL AMRANI", "Rachid", "123456789", "0661234567", 6500, "1001", 37.0, superadminId);
+    insEmp.run("EMP-002", "BENJELLOUN", "Fatima", "987654321", "0662345678", 5500, "1002", 31.25, superadminId);
+    insEmp.run("EMP-003", "TAZI", "Youssef", "456789123", "0663456789", 4800, "1003", 27.27, superadminId);
+  } else {
+    let pinBase = 1001;
+    for (const e of emps) {
+      if (!e.code_pin || e.code_pin === "1234") {
+        const pin = String(pinBase++);
+        const qr = `BADGE-EMP-${e.id}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+        db.prepare("UPDATE employes SET code_pin = ?, badge_qr_token = COALESCE(NULLIF(badge_qr_token, ''), ?) WHERE id = ?").run(pin, qr, e.id);
+      }
+    }
+  }
+
+  // 3. Seed demo pointages if empty
+  const ptgCount = (db.prepare("SELECT COUNT(*) as c FROM pointages").get() as any)?.c || 0;
+  if (ptgCount === 0) {
+    const firstEmp = db.prepare("SELECT id FROM employes LIMIT 1").get() as any;
+    if (firstEmp) {
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      // Pointage hier (complet avec heures sup)
+      db.prepare(`
+        INSERT INTO pointages (
+          company_id, employe_id, date_pointage, heure_arrivee, heure_depart,
+          duree_pause_minutes, total_heures, heures_normales, heures_sup,
+          methode_pointage, statut, notes
+        ) VALUES (
+          1, ?, ?, '08:00:00', '18:00:00',
+          60, 9.0, 8.0, 1.0,
+          'pin', 'valide', 'Journée complète avec 1h sup'
+        )
+      `).run(firstEmp.id, yesterday);
+
+      // Pointage aujourd'hui (en cours)
+      db.prepare(`
+        INSERT INTO pointages (
+          company_id, employe_id, date_pointage, heure_arrivee,
+          methode_pointage, statut, notes
+        ) VALUES (
+          1, ?, ?, '08:25:00',
+          'tactile', 'en_cours', 'Arrivée pointée borne atelier'
+        )
+      `).run(firstEmp.id, today);
+    }
+  }
+
+  // 4. Seed demo congés if empty
+  const cngCount = (db.prepare("SELECT COUNT(*) as c FROM conges_demandes").get() as any)?.c || 0;
+  if (cngCount === 0) {
+    const firstEmp = db.prepare("SELECT id FROM employes LIMIT 1").get() as any;
+    if (firstEmp) {
+      const nextWeekStart = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const nextWeekEnd = new Date(Date.now() + 11 * 86400000).toISOString().slice(0, 10);
+      db.prepare(`
+        INSERT INTO conges_demandes (
+          company_id, employe_id, type_conge, date_debut, date_fin,
+          nb_jours, motif, statut, created_at
+        ) VALUES (
+          1, ?, 'conge_paye', ?, ?,
+          5, 'Congé annuel d''été en famille', 'en_attente', CURRENT_TIMESTAMP
+        )
+      `).run(firstEmp.id, nextWeekStart, nextWeekEnd);
+    }
+  }
+
+  // 5. Seed demo prêts & avances if empty
+  const pretCount = (db.prepare("SELECT COUNT(*) as c FROM prets_avances").get() as any)?.c || 0;
+  if (pretCount === 0) {
+    const firstEmp = db.prepare("SELECT id FROM employes LIMIT 1").get() as any;
+    if (firstEmp) {
+      const today = new Date().toISOString().slice(0, 10);
+      const resPret = db.prepare(`
+        INSERT INTO prets_avances (
+          company_id, employe_id, type, montant_total, date_octroi,
+          nb_mensualites, montant_mensualite, montant_rembourse, solde_restant,
+          mode_paiement, statut, notes, created_by
+        ) VALUES (
+          1, ?, 'pret_personnel', 6000, ?,
+          6, 1000, 1000, 5000,
+          'virement', 'actif', 'Avance exceptionnelle rentrée scolaire', ?
+        )
+      `).run(firstEmp.id, today, superadminId);
+
+      const pretId = Number(resPret.lastInsertRowid);
+      const insertEch = db.prepare(`
+        INSERT INTO prets_echeancier (
+          pret_id, employe_id, numero_mensualite, mois_prelevement,
+          montant_echeance, montant_preleve, date_prelevement, statut
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date();
+        d.setMonth(d.getMonth() + (i - 1));
+        const mois = d.toISOString().slice(0, 7);
+        if (i === 1) {
+          insertEch.run(pretId, firstEmp.id, i, mois, 1000, 1000, today, "preleve");
+        } else {
+          insertEch.run(pretId, firstEmp.id, i, mois, 1000, 0, "", "a_prelever");
+        }
+      }
+    }
+  }
+}
+
+function seedNotesFraisAndTvaIfEmpty(db: Database.Database, superadminId: number) {
+  const nfCount = (db.prepare("SELECT COUNT(*) as c FROM notes_frais").get() as any)?.c || 0;
+  if (nfCount === 0) {
+    const firstEmp = db.prepare("SELECT id FROM employes LIMIT 1").get() as any;
+    if (firstEmp) {
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      db.prepare(`
+        INSERT INTO notes_frais (
+          company_id, employe_id, numero, date_depense, categorie,
+          description, montant_ttc, tva_rate, montant_tva, montant_ht,
+          statut, valide_par, date_decision, date_remboursement, mode_remboursement, created_by
+        ) VALUES (
+          1, ?, 'NDF-202609-001', ?, 'deplacement',
+          'Mission livraison spéciale et installation matériel Fès', 840.0, 20.0, 140.0, 700.0,
+          'rembourse', ?, ?, ?, 'virement', ?
+        )
+      `).run(firstEmp.id, yesterday, superadminId, yesterday, today, superadminId);
+
+      db.prepare(`
+        INSERT INTO notes_frais (
+          company_id, employe_id, numero, date_depense, categorie,
+          description, montant_ttc, montant_ht, distance_km, bareme_km_unitaire,
+          vehicule_immatriculation, statut, valide_par, date_decision, created_by
+        ) VALUES (
+          1, ?, 'NDF-202609-002', ?, 'frais_km',
+          'Visite commerciale prospection zone industrielle Sefrou (180 km)', 450.0, 450.0, 180.0, 2.5,
+          '12345-A-26', 'approuve', ?, ?, ?
+        )
+      `).run(firstEmp.id, today, superadminId, today, superadminId);
+
+      db.prepare(`
+        INSERT INTO notes_frais (
+          company_id, employe_id, numero, date_depense, categorie,
+          description, montant_ttc, tva_rate, montant_tva, montant_ht,
+          statut, created_by
+        ) VALUES (
+          1, ?, 'NDF-202609-003', ?, 'repas',
+          'Déjeuner d''affaires avec client transporteur VIP', 360.0, 10.0, 32.73, 327.27,
+          'en_attente', ?
+        )
+      `).run(firstEmp.id, today, superadminId);
+    }
+  }
+
+  const tvaCount = (db.prepare("SELECT COUNT(*) as c FROM tva_declarations").get() as any)?.c || 0;
+  if (tvaCount === 0) {
+    db.prepare(`
+      INSERT INTO tva_declarations (
+        company_id, periode_type, periode_code, regime,
+        tva_collectee_total, tva_collectee_20, tva_collectee_14, tva_collectee_10, tva_collectee_7,
+        tva_deductible_total, tva_deductible_immo, tva_deductible_charges, tva_deductible_20, tva_deductible_14, tva_deductible_10, tva_deductible_7,
+        credit_tva_precedent, tva_nette_due, credit_tva_a_reporter, statut, date_declaration, reference_telepaiement, created_by
+      ) VALUES (
+        1, 'mensuelle', '2026-08', 'encaissement',
+        38600.0, 32400.0, 2800.0, 2400.0, 1000.0,
+        19250.0, 4500.0, 14750.0, 15200.0, 1800.0, 1500.0, 750.0,
+        0.0, 19350.0, 0.0, 'payee', '2026-09-01', 'DGI-SIMPL-202608-8472', ?
+      )
+    `).run(superadminId);
+  }
+}
+
 function initializeDatabase() {
   ensureDataDirectories();
   const isNewDatabase = !fs.existsSync(DB_PATH);
@@ -1883,6 +2622,9 @@ function initializeDatabase() {
   seedStockDepotsIfEmpty(db, superadminId);
   seedInventairesAndLotsIfEmpty(db, superadminId);
   seedWmsAndReapproIfEmpty(db, superadminId);
+  seedFideliteTarifsCommissionsCrmIfEmpty(db, superadminId);
+  seedRhMessagerieIfEmpty(db, superadminId);
+  seedNotesFraisAndTvaIfEmpty(db, superadminId);
 
   if (!isNewDatabase) {
     backupDatabase(db);

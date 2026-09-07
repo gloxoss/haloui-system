@@ -1,0 +1,20 @@
+{
+  "name": "Haloui POS - Système de Caisse Tactile",
+  "short_name": "Haloui POS",
+  "description": "Terminal de point de vente et encaissement tactile avec mode hors-ligne pour Haloui",
+  "start_url": "/pos",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"]
+}
