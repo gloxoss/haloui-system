@@ -85,3 +85,6 @@ node_modules/electron/dist/electron.exe
 .next/cache/webpack/server-production/3.pack
 .next/cache/webpack/server-production/index.pack
 .next/cache/webpack/server-production/index.pack.old
+
+# Independent client base clone
+/haloui-system-base/

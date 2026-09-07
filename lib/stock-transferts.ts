@@ -370,7 +370,7 @@ export function expedierStockTransfert(
             expedie_par_nom = @userFullName,
             chauffeur_nom = COALESCE(NULLIF(@chauffeurNom, ''), chauffeur_nom),
             vehicule_matricule = COALESCE(NULLIF(@vehiculeMatricule, ''), vehicule_matricule),
-            bon_transport_ref = COALESCE(NULLIF(@bonTransportRef, ''), bonTransport_ref),
+            bon_transport_ref = COALESCE(NULLIF(@bonTransportRef, ''), bon_transport_ref),
             notes = COALESCE(NULLIF(@notes, ''), notes),
             updated_by = @userId,
             updated_at = @now
