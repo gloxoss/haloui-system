@@ -352,10 +352,10 @@ export function RetourModal({
 
           {/* Tableau des articles du ticket à retourner */}
           {returnItems.length > 0 && (
-            <div className="border border-slate-800 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
               <Table striped highlightOnHover verticalSpacing="xs">
                 <Table.Thead>
-                  <Table.Tr className="bg-slate-900 text-[11px] text-slate-400">
+                  <Table.Tr className="bg-slate-50 text-[11px] text-slate-600">
                     <Table.Th>Article</Table.Th>
                     <Table.Th>PU TTC</Table.Th>
                     <Table.Th>Acheté</Table.Th>
@@ -371,8 +371,8 @@ export function RetourModal({
                     return (
                       <Table.Tr key={idx} className="text-xs">
                         <Table.Td>
-                          <div className="font-bold text-white text-xs">{item.designation}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{item.ref}</div>
+                          <div className="font-bold text-slate-900 text-xs">{item.designation}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">{item.ref}</div>
                         </Table.Td>
                         <Table.Td>{formatNumber(item.prixUnitaireTtc)} DH</Table.Td>
                         <Table.Td>
@@ -395,7 +395,7 @@ export function RetourModal({
                             }}
                           />
                         </Table.Td>
-                        <Table.Td className="font-bold text-emerald-400">
+                        <Table.Td className="font-bold text-emerald-600">
                           {formatNumber(lineTotal)} DH
                         </Table.Td>
                         <Table.Td>

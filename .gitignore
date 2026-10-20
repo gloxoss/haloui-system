@@ -88,3 +88,5 @@ node_modules/electron/dist/electron.exe
 
 # Independent client base clone
 /haloui-system-base/
+.env.*
+!.env.example

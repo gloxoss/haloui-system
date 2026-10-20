@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS produits (
   prix_ht REAL NOT NULL DEFAULT 0,
   tva_rate REAL NOT NULL DEFAULT 20,
   active INTEGER NOT NULL DEFAULT 1,
+  image_url TEXT DEFAULT '',
   created_by INTEGER,
   updated_by INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

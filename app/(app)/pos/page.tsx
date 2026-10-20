@@ -60,6 +60,7 @@ export default async function PosPage() {
         COALESCE(p.unite, 'u') AS unite,
         COALESCE(p.categorie, 'Général') AS categorie,
         COALESCE(p.nature_produit, 'simple') AS nature_produit,
+        COALESCE(p.image_url, '') AS image_url,
         COALESCE(sd.quantite, 0) AS stock_actuel
       FROM produits p
       LEFT JOIN stock_depots sd ON sd.produit_id = p.id AND sd.branch_id = ?

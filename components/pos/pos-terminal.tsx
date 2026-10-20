@@ -23,6 +23,7 @@ import {
   ThemeIcon,
   Title,
   Tooltip,
+  Menu,
 } from "@mantine/core";
 import {
   AlertCircle,
@@ -31,13 +32,16 @@ import {
   Barcode,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Coins,
   CreditCard,
   Delete,
   DollarSign,
+  Droplets,
   FileSpreadsheet,
   FileText,
+  Fuel,
   Gift,
   Layers,
   Lock,
@@ -55,6 +59,8 @@ import {
   Scale,
   Search,
   ShoppingCart,
+  SlidersHorizontal,
+  Sparkles,
   Split,
   Store,
   Tag,
@@ -63,9 +69,13 @@ import {
   User,
   UserCheck,
   UserRound,
+  Utensils,
+  Coffee,
   Wifi,
   WifiOff,
+  Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import {
   enregistrerTicketCaisseAction,
@@ -110,6 +120,69 @@ export interface PosProductItem {
   nature_produit?: string;
   vendu_au_poids?: number;
   code_plu?: string;
+  image_url?: string;
+}
+
+// Génère un monogramme clair de 2 lettres pour les articles sans photo
+function getProductMonogram(designation: string, ref: string): string {
+  const clean = (designation || "").replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  if (words.length === 1 && words[0].length >= 2) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+  return (ref || "PR").slice(0, 2).toUpperCase();
+}
+
+// Thème visuel subtil selon la catégorie pour cartes sans photo
+function getCategoryVisualTheme(cat: string): {
+  gradient: string;
+  badgeBg: string;
+  badgeText: string;
+} {
+  const c = (cat || "").toLowerCase();
+  if (c.includes("boisson") || c.includes("alimentaire") || c.includes("frais")) {
+    return {
+      gradient: "from-emerald-50 via-teal-50 to-emerald-100/70",
+      badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      badgeText: "text-emerald-700",
+    };
+  }
+  if (c.includes("café") || c.includes("epicerie") || c.includes("épicerie")) {
+    return {
+      gradient: "from-amber-50 via-yellow-50 to-orange-100/70",
+      badgeBg: "bg-amber-50 text-amber-800 border-amber-200",
+      badgeText: "text-amber-700",
+    };
+  }
+  if (c.includes("carburant") || c.includes("fuel")) {
+    return {
+      gradient: "from-sky-50 via-cyan-50 to-blue-100/70",
+      badgeBg: "bg-sky-50 text-sky-800 border-sky-200",
+      badgeText: "text-sky-700",
+    };
+  }
+  if (c.includes("lubrifiant") || c.includes("huile") || c.includes("vidange")) {
+    return {
+      gradient: "from-blue-50 via-indigo-50 to-blue-100/70",
+      badgeBg: "bg-blue-50 text-blue-800 border-blue-200",
+      badgeText: "text-blue-700",
+    };
+  }
+  if (c.includes("auto") || c.includes("batterie") || c.includes("pièce") || c.includes("piece")) {
+    return {
+      gradient: "from-purple-50 via-violet-50 to-pink-100/70",
+      badgeBg: "bg-purple-50 text-purple-800 border-purple-200",
+      badgeText: "text-purple-700",
+    };
+  }
+  return {
+    gradient: "from-slate-50 via-gray-50 to-indigo-50/70",
+    badgeBg: "bg-slate-100 text-slate-800 border-slate-200",
+    badgeText: "text-slate-700",
+  };
 }
 
 interface CartItem {
@@ -302,6 +375,43 @@ export function PosTerminal({
     return Array.from(set).sort();
   }, [products]);
 
+  // Compter les articles par catégorie pour affichage dynamique
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    products.forEach((p) => {
+      const cat = p.categorie || "Général";
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [products]);
+
+  // Icône et couleur visuelle thématique par catégorie de produit
+  const getCategoryIcon = (categoryName: string) => {
+    const c = (categoryName || "").toLowerCase();
+    if (c.includes("alim") || c.includes("boiss") || c.includes("nourr") || c.includes("épic") || c.includes("snack")) {
+      return <Utensils size={13} className="text-amber-400" />;
+    }
+    if (c.includes("café") || c.includes("thé") || c.includes("pause")) {
+      return <Coffee size={13} className="text-amber-300" />;
+    }
+    if (c.includes("carb") || c.includes("essence") || c.includes("gazole") || c.includes("fioul") || c.includes("énergie")) {
+      return <Fuel size={13} className="text-emerald-400" />;
+    }
+    if (c.includes("lubrif") || c.includes("huile") || c.includes("liquide") || c.includes("graiss")) {
+      return <Droplets size={13} className="text-sky-400" />;
+    }
+    if (c.includes("batt") || c.includes("élec")) {
+      return <Zap size={13} className="text-yellow-400" />;
+    }
+    if (c.includes("équip") || c.includes("outil") || c.includes("pièce") || c.includes("méc")) {
+      return <Wrench size={13} className="text-blue-400" />;
+    }
+    if (c.includes("serv") || c.includes("lavage") || c.includes("entretien")) {
+      return <Sparkles size={13} className="text-purple-400" />;
+    }
+    return <Tag size={13} className="text-indigo-400" />;
+  };
+
   // Filtrer les produits
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -343,11 +453,34 @@ export function PosTerminal({
     };
   }, [currentTicket]);
 
-  // Calcul du rendu de monnaie en mode Espèces
+  // Calcul du rendu de monnaie en mode Espèces (modale)
   const changeDue = useMemo(() => {
     const tender = Number(tenderAmount) || 0;
     return Math.max(0, Math.round((tender - ticketTotals.totalTtc) * 100) / 100);
   }, [tenderAmount, ticketTotals.totalTtc]);
+
+  // --- ACTIONS RAPIDES D'ENCAISSEMENT ESPÈCES DIRECT & LIVE TIROIR ---
+  const [quickCashTender, setQuickCashTender] = useState<number | "exact" | null>(null);
+  const [sessionCashAccumulated, setSessionCashAccumulated] = useState<number>(0);
+
+  // Fond initial & Espèces en caisse en temps réel
+  const fondInitial = activeSession?.fond_caisse_ouverture || 0;
+  const liveDrawerCash = useMemo(() => {
+    return (
+      fondInitial +
+      (activeSession?.total_especes || 0) +
+      (activeSession?.total_entrees || 0) -
+      (activeSession?.total_sorties || 0) +
+      sessionCashAccumulated
+    );
+  }, [activeSession, fondInitial, sessionCashAccumulated]);
+
+  // Rendu de monnaie instantané pour l'action rapide en espèces sur le panneau principal
+  const quickChangeDue = useMemo(() => {
+    if (quickCashTender === null) return null;
+    if (quickCashTender === "exact") return 0;
+    return Math.max(0, Math.round((quickCashTender - ticketTotals.totalTtc) * 100) / 100);
+  }, [quickCashTender, ticketTotals.totalTtc]);
 
   // Calculs du Multi-Paiements
   const totalSplitRegle = useMemo(() => {
@@ -450,17 +583,42 @@ export function PosTerminal({
     }
   };
 
-  // --- ÉCOUTEUR GLOBAL DE SCANNER CODE-BARRES & RACCOURCI BALANCE F4 ---
+  // --- ÉCOUTEUR GLOBAL DE SCANNER CODE-BARRES & RACCOURCIS CLAVIER ---
   useEffect(() => {
     let barcodeBuffer = "";
     let lastKeyTime = Date.now();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Raccourci F4 pour ouvrir la balance
+      // Raccourci F4 pour ouvrir la balance de pesage
       if (e.key === "F4") {
         e.preventDefault();
         setBalanceTargetProduct(null);
         setIsBalanceModalOpen(true);
+        return;
+      }
+
+      // Raccourci F8 pour règlement rapide en Espèces
+      if (e.key === "F8") {
+        e.preventDefault();
+        if (currentTicket.items.length > 0) {
+          handleOpenPayment("especes");
+        }
+        return;
+      }
+
+      // Raccourci F9 pour règlement rapide par Carte TPE
+      if (e.key === "F9") {
+        e.preventDefault();
+        if (currentTicket.items.length > 0) {
+          handleOpenPayment("carte");
+        }
+        return;
+      }
+
+      // Raccourci F2 pour créer un nouveau ticket
+      if (e.key === "F2") {
+        e.preventDefault();
+        handleNewTicketTab();
         return;
       }
 
@@ -497,6 +655,7 @@ export function PosTerminal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     products,
+    currentTicket.items.length,
     isPaymentModalOpen,
     isOuvertureModalOpen,
     isClotureModalOpen,
@@ -571,6 +730,22 @@ export function PosTerminal({
   const handleNumpadPress = (char: string) => {
     if (selectedLineIndex === null && numpadTarget !== "tender") return;
 
+    if (char === "OK") {
+      setSelectedLineIndex(null);
+      setNumpadBuffer("");
+      return;
+    }
+
+    if (char === "+1" && selectedLineIndex !== null) {
+      handleUpdateItemQty(selectedLineIndex, 1);
+      return;
+    }
+
+    if (char === "+5" && selectedLineIndex !== null) {
+      handleUpdateItemQty(selectedLineIndex, 5);
+      return;
+    }
+
     if (char === "C") {
       setNumpadBuffer("");
       if (numpadTarget === "tender") setTenderAmount("");
@@ -617,6 +792,17 @@ export function PosTerminal({
       setTenderAmount(ticketTotals.totalTtc);
     } else {
       setTenderAmount(val);
+    }
+  };
+
+  // Sélection rapide de coupures directement sur le panneau du ticket
+  const handleSelectQuickCash = (denom: number | "exact") => {
+    if (currentTicket.items.length === 0) return;
+    setQuickCashTender(denom);
+    if (denom === "exact") {
+      setTenderAmount(ticketTotals.totalTtc);
+    } else {
+      setTenderAmount(denom);
     }
   };
 
@@ -822,11 +1008,17 @@ export function PosTerminal({
         handleClearCart();
 
         // Mettre à jour l'état local de la session
+        if (paymentMode === "especes") {
+          setSessionCashAccumulated((prev) => prev + res.ticket.total_ttc);
+        }
+        setQuickCashTender(null);
+
         setActiveSession((prev) =>
           prev
             ? {
                 ...prev,
                 total_ventes_ttc: prev.total_ventes_ttc + res.ticket.total_ttc,
+                total_especes: paymentMode === "especes" ? prev.total_especes + res.ticket.total_ttc : prev.total_especes,
                 nb_tickets: prev.nb_tickets + 1,
               }
             : null
@@ -920,41 +1112,76 @@ export function PosTerminal({
 
   return (
     <div
-      className={`flex flex-col h-screen w-screen bg-slate-950 text-slate-100 select-none overflow-hidden ${
-        isFullscreen ? "fixed inset-0 z-[9999]" : ""
+      className={`flex flex-col select-none overflow-hidden bg-slate-100/80 text-slate-800 ${
+        isFullscreen
+          ? "fixed inset-0 z-[9999] h-screen w-screen bg-slate-100"
+          : "h-[calc(100dvh-var(--app-shell-header-offset,70px)-3rem)] min-h-[620px] w-full max-w-full rounded-2xl border border-slate-200/90 shadow-xl"
       }`}
     >
-      {/* 1. BARRE SUPÉRIEURE : STATUT SESSION & RACCOURCIS RAPIDES */}
-      <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Store className="w-5 h-5 text-indigo-400" />
-            <span className="font-black text-sm tracking-wide text-white uppercase hidden sm:inline">
-              Haloui Caisse
-            </span>
+      {/* 1. BARRE SUPÉRIEURE : STATUT SESSION, TICKETS & ACTIONS */}
+      <header className="h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 z-10 shadow-xs">
+        {/* GAUCHE : Logo Caisse + Session & Dépôt */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center text-white shadow-sm shadow-indigo-600/30">
+              <Store className="w-4 h-4" />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="font-black text-xs sm:text-sm tracking-wide text-slate-900 uppercase leading-none">
+                Haloui Caisse
+              </span>
+              <span className="text-[10px] text-indigo-600 font-semibold leading-tight">
+                Point de Vente Tactile
+              </span>
+            </div>
           </div>
 
-          <Divider orientation="vertical" />
+          <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
-          {/* Statut de la Session */}
+          {/* Statut de la Session & Fond de caisse initial & Live Tiroir */}
           {activeSession ? (
-            <div className="flex items-center gap-2 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <span className="text-xs font-bold text-emerald-400">
-                {activeSession.numero_session}
-              </span>
-              <span className="text-[11px] text-slate-400 hidden md:inline">
-                · Fond : {formatNumber(activeSession.fond_caisse_ouverture)} DH
-              </span>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Numéro de session avec témoin actif */}
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/90 text-emerald-800 shadow-2xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-bold text-emerald-900 font-mono">
+                  {activeSession.numero_session}
+                </span>
+              </div>
+
+              {/* Fond de caisse initial - Très visible */}
+              <div
+                className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 text-slate-700 shadow-2xs"
+                title="Fond de caisse initial déclaré à l'ouverture"
+              >
+                <Store size={13} className="text-slate-500" />
+                <span className="text-[11px] font-semibold text-slate-600 hidden md:inline">Fond initial :</span>
+                <span className="text-xs font-black font-mono text-slate-900">
+                  {formatNumber(fondInitial)} DH
+                </span>
+              </div>
+
+              {/* Espèces en tiroir en direct */}
+              <div
+                className="hidden lg:flex items-center gap-1.5 bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200 text-teal-900 shadow-2xs"
+                title="Solde théorique d'espèces actuellement en tiroir (Fond + Ventes Espèces - Sorties)"
+              >
+                <Banknote size={13} className="text-teal-600" />
+                <span className="text-[11px] font-semibold text-teal-700">Tiroir :</span>
+                <span className="text-xs font-black font-mono text-teal-900">
+                  {formatNumber(liveDrawerCash)} DH
+                </span>
+              </div>
             </div>
           ) : (
             <Button
-              size="compact-sm"
+              size="compact-xs"
               color="teal"
-              leftSection={<Store size={14} />}
+              radius="lg"
+              leftSection={<Store size={13} />}
               onClick={() => setIsOuvertureModalOpen(true)}
             >
               Ouvrir Caisse
@@ -962,37 +1189,47 @@ export function PosTerminal({
           )}
 
           {/* Dépôt / Magasin */}
-          <span className="text-xs text-slate-400 font-medium hidden lg:inline">
+          <span className="text-xs text-slate-500 font-medium hidden 2xl:inline truncate max-w-[140px]">
             📍 {branches.find((b) => b.id === selectedBranchId)?.name}
           </span>
         </div>
 
-        {/* Onglets Tickets Multiples */}
-        <div className="flex items-center gap-1.5 overflow-x-auto max-w-[45%] py-1">
+        {/* CENTRE : Onglets Tickets Multiples */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-[40%] sm:max-w-[45%] no-scrollbar">
           {tickets.map((t) => {
             const isActive = t.id === activeTicketId;
             return (
               <div
                 key={t.id}
-                onClick={() => setActiveTicketId(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                onClick={() => {
+                  setActiveTicketId(t.id);
+                  setQuickCashTender(null);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shrink-0 ${
                   isActive
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200"
                 }`}
               >
                 <span>{t.label}</span>
                 {t.items.length > 0 && (
-                  <Badge size="xs" circle color={isActive ? "indigo.9" : "dark"}>
+                  <span
+                    className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                      isActive ? "bg-indigo-800 text-white" : "bg-white text-slate-700 border border-slate-200"
+                    }`}
+                  >
                     {t.items.length}
-                  </Badge>
+                  </span>
                 )}
                 {tickets.length > 1 && (
-                  <X
-                    size={12}
-                    className="hover:text-red-400 ml-1 opacity-70 hover:opacity-100"
+                  <button
+                    type="button"
                     onClick={(e) => handleCloseTicketTab(t.id, e)}
-                  />
+                    className="hover:text-red-500 opacity-60 hover:opacity-100 ml-0.5"
+                    title="Fermer ce ticket"
+                  >
+                    <X size={12} />
+                  </button>
                 )}
               </div>
             );
@@ -1001,17 +1238,18 @@ export function PosTerminal({
             size="sm"
             variant="light"
             color="indigo"
-            radius="md"
+            radius="lg"
             onClick={handleNewTicketTab}
-            title="Nouveau Ticket en attente"
+            title="Nouveau Ticket en attente (F2)"
+            className="shrink-0"
           >
             <Plus size={14} />
           </ActionIcon>
         </div>
 
-        {/* Horloge & Boutons d'Action Clôture / Mouvements / Retours / Mode Hors-Ligne */}
-        <div className="flex items-center gap-2">
-          {/* Indicateur Réseau & Synchronisation Hors-Ligne (Offline First PWA) */}
+        {/* DROITE : Statut Réseau, Horloge, Actions Caisse & Plein Écran */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Indicateur Réseau & Sync Offline */}
           {!isOnline ? (
             <Badge
               size="sm"
@@ -1019,7 +1257,7 @@ export function PosTerminal({
               variant="filled"
               leftSection={<WifiOff size={12} />}
               className="cursor-default animate-pulse"
-              title="Caisse autonome hors-ligne : les ventes sont sauvegardées localement et se synchroniseront au retour du réseau"
+              title="Mode autonome hors-ligne"
             >
               Hors-Ligne {queuedOfflineCount > 0 ? `(${queuedOfflineCount})` : ""}
             </Badge>
@@ -1031,88 +1269,92 @@ export function PosTerminal({
               loading={isSyncingOffline}
               leftSection={<RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />}
               onClick={handleSyncOfflineTickets}
-              title="Synchroniser les tickets enregistrés en mode hors-ligne"
+              title="Synchroniser les tickets enregistrés hors-ligne"
             >
               Sync ({queuedOfflineCount})
             </Button>
           ) : (
-            <Badge
-              size="sm"
-              color="teal"
-              variant="light"
-              leftSection={<Wifi size={12} />}
-              className="hidden md:inline-flex"
-              title="Caisse connectée au serveur"
-            >
-              En Ligne
-            </Badge>
+            <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>En Ligne</span>
+            </div>
           )}
 
-          <div className="hidden xl:flex items-center gap-1 text-xs text-slate-400 font-mono">
-            <Clock size={14} className="text-indigo-400" />
+          {/* Horloge */}
+          <div className="hidden xl:flex items-center gap-1 text-xs text-slate-600 font-mono bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+            <Clock size={13} className="text-indigo-600" />
             <span>{currentTime}</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {activeSession && (
-              <>
+          {/* Menu Déroulant Gestion & Opérations de Caisse */}
+          {activeSession && (
+            <Menu shadow="xl" width={220} position="bottom-end" radius="md">
+              <Menu.Target>
                 <Button
                   size="compact-xs"
                   variant="light"
-                  color="orange"
-                  leftSection={<RotateCcw size={13} />}
+                  color="indigo"
+                  radius="md"
+                  leftSection={<SlidersHorizontal size={13} />}
+                  rightSection={<ChevronDown size={11} />}
+                  className="font-bold"
+                >
+                  Opérations
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown className="bg-white border border-slate-200 text-slate-800 shadow-xl">
+                <Menu.Label className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">
+                  Gestion de Caisse
+                </Menu.Label>
+                <Menu.Item
+                  leftSection={<RotateCcw size={14} className="text-amber-500" />}
                   onClick={() => setIsRetourModalOpen(true)}
-                  title="Gestion des retours articles et émission de bons d'achat ou remboursement"
+                  className="hover:bg-slate-100 text-xs text-slate-700 font-medium"
                 >
                   Retours & Avoirs
-                </Button>
-
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="blue"
-                  leftSection={<DollarSign size={13} />}
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<DollarSign size={14} className="text-sky-600" />}
                   onClick={() => setIsMouvementModalOpen(true)}
+                  className="hover:bg-slate-100 text-xs text-slate-700 font-medium"
                 >
-                  Mouvement
-                </Button>
-
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="teal"
-                  leftSection={<FileText size={13} />}
+                  Mouvement de Fond
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<FileText size={14} className="text-teal-600" />}
                   onClick={() => setIsClotureModalOpen(true)}
+                  className="hover:bg-slate-100 text-xs text-slate-700 font-medium"
                 >
-                  Rapport X
-                </Button>
-
-                <Button
-                  size="compact-xs"
+                  Rapport X (Consultation)
+                </Menu.Item>
+                <Menu.Divider className="border-slate-200" />
+                <Menu.Item
                   color="red"
-                  variant="filled"
-                  leftSection={<Lock size={13} />}
+                  leftSection={<Lock size={14} />}
                   onClick={() => setIsClotureModalOpen(true)}
+                  className="hover:bg-red-50 text-xs font-bold text-red-600"
                 >
-                  Clôture Z
-                </Button>
-              </>
-            )}
+                  Clôture Z (Fin de Service)
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
 
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="gray"
-              onClick={toggleFullscreen}
-              title="Plein Écran"
-            >
-              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </ActionIcon>
-          </div>
+          {/* Plein Écran */}
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="gray"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Quitter Plein Écran" : "Plein Écran"}
+            radius="md"
+          >
+            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </ActionIcon>
         </div>
       </header>
 
-      {/* 1.1 Bannières Statut Réseau & Synchronisation Hors-Ligne */}
+      {/* 1.1 Bannières Statut Réseau & Sync */}
       {syncNotice && (
         <div className="bg-emerald-600/90 text-white px-4 py-1.5 text-xs font-semibold flex items-center justify-between shrink-0 shadow-md">
           <span>{syncNotice}</span>
@@ -1128,7 +1370,7 @@ export function PosTerminal({
         <div className="bg-amber-600/95 text-white px-4 py-1 text-xs font-semibold flex items-center justify-center gap-2 shrink-0 border-b border-amber-500">
           <WifiOff size={13} />
           <span>
-            <strong>Mode Hors-Ligne Actif (PWA) :</strong> La caisse continue d&apos;encaisser normalement. Les tickets sont stockés localement et seront synchronisés automatiquement dès le retour d&apos;Internet.
+            <strong>Mode Hors-Ligne Actif (PWA) :</strong> La caisse continue d&apos;encaisser normalement. Les tickets sont stockés localement et seront synchronisés dès le retour du réseau.
           </span>
           {queuedOfflineCount > 0 && (
             <Badge size="xs" color="dark" variant="filled">
@@ -1138,17 +1380,17 @@ export function PosTerminal({
         </div>
       )}
 
-      {/* 2. CORPS PRINCIPAL DIVISÉ : GAUCHE (CATALOGUE & DOUCHETTE) / DROITE (PANIER & ENCAISSEMENT) */}
+      {/* 2. CORPS PRINCIPAL DIVISÉ : GAUCHE (CATALOGUE & SCANNER) / DROITE (PANIER & ENCAISSEMENT) */}
       <div className="flex-1 grid grid-cols-12 overflow-hidden">
-        {/* === SECTION GAUCHE : CATALOGUE PRODUITS & SCANNER (7 COLS) === */}
-        <div className="col-span-7 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
-          {/* Barre de Recherche & Douchette Code-barres */}
-          <div className="p-3 bg-slate-900/90 border-b border-slate-800 shrink-0 space-y-2">
+        {/* === SECTION GAUCHE : CATALOGUE PRODUITS & SCANNER === */}
+        <div className="col-span-12 lg:col-span-7 xl:col-span-7 2xl:col-span-8 bg-slate-50/70 border-r border-slate-200/90 flex flex-col overflow-hidden">
+          {/* Barre de Recherche & Douchette Code-barres & Balance */}
+          <div className="p-3 bg-white border-b border-slate-200/90 shrink-0 space-y-2">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <TextInput
                   ref={searchInputRef}
-                  placeholder="Scanner un code-barres (douchette) ou taper réf/nom..."
+                  placeholder="Scanner un code-barres (douchette) ou chercher réf/nom..."
                   leftSection={<Search size={18} className="text-slate-400" />}
                   rightSection={
                     barcodeScanSuccess ? (
@@ -1156,19 +1398,21 @@ export function PosTerminal({
                         Scanné !
                       </Badge>
                     ) : (
-                      <Barcode size={20} className="text-indigo-400" />
+                      <div className="flex items-center gap-1 text-slate-400 mr-1" title="Lecteur code-barres actif">
+                        <Barcode size={20} className="text-indigo-500" />
+                      </div>
                     )
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.currentTarget.value)}
                   size="md"
-                  radius="lg"
+                  radius="xl"
                   styles={{
                     input: {
-                      backgroundColor: "#0f172a",
-                      borderColor: barcodeScanSuccess ? "#10b981" : "#334155",
-                      color: "#ffffff",
-                      fontSize: "0.95rem",
+                      backgroundColor: "#ffffff",
+                      borderColor: barcodeScanSuccess ? "#10b981" : "#cbd5e1",
+                      color: "#0f172a",
+                      fontSize: "0.92rem",
                     },
                   }}
                 />
@@ -1179,132 +1423,212 @@ export function PosTerminal({
                 variant="light"
                 color="teal"
                 size="md"
-                radius="lg"
+                radius="xl"
                 leftSection={<Scale size={18} />}
                 onClick={() => handleOpenBalanceModal()}
-                title="Peser un article / Connecter la Balance de pesage (F4)"
-                className="border border-teal-600/40 text-teal-300 font-bold hover:bg-teal-900/40 shrink-0"
+                title="Peser un article / Connecter la Balance (F4)"
+                className="border border-teal-200 bg-teal-50 text-teal-800 font-bold hover:bg-teal-100 shrink-0"
               >
-                Peser <span className="hidden xl:inline text-[10px] ml-1 opacity-80">(F4)</span>
+                Peser <span className="hidden xl:inline text-[10px] ml-1 opacity-75 font-mono">(F4)</span>
               </Button>
             </div>
 
-            {/* Notification de Scan Balance Code-Barres Variable */}
+            {/* Notification de Scan Balance Variable */}
             {scaleBarcodeScanNotice && (
-              <div className="p-2 bg-emerald-950/80 border border-emerald-500/60 rounded-lg flex items-center gap-2 text-xs text-emerald-300 shadow-sm animate-pulse">
-                <Scale size={16} className="text-emerald-400 shrink-0" />
+              <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2 text-xs text-emerald-800 shadow-2xs animate-pulse">
+                <Scale size={16} className="text-emerald-600 shrink-0" />
                 <span className="font-semibold">{scaleBarcodeScanNotice}</span>
               </div>
             )}
 
-            {/* Filtres Catégories Rapides */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 no-scrollbar">
-              <Button
-                size="compact-xs"
-                radius="xl"
-                variant={selectedCategory === "all" ? "filled" : "subtle"}
-                color="indigo"
+            {/* Filtres Catégories Rapides avec Défilement Fluide et Sans Troncature */}
+            <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 no-scrollbar scroll-smooth">
+              <button
+                type="button"
                 onClick={() => setSelectedCategory("all")}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  selectedCategory === "all"
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                    : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 shadow-2xs"
+                }`}
               >
-                Tous ({products.length})
-              </Button>
-              {categories.map((c) => (
-                <Button
-                  key={c}
-                  size="compact-xs"
-                  radius="xl"
-                  variant={selectedCategory === c ? "filled" : "subtle"}
-                  color="indigo"
-                  onClick={() => setSelectedCategory(c)}
+                <Tag size={13} className={selectedCategory === "all" ? "text-white" : "text-indigo-500"} />
+                <span>Tous</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold font-mono ${
+                    selectedCategory === "all" ? "bg-indigo-800 text-white" : "bg-slate-100 text-slate-600"
+                  }`}
                 >
-                  {c}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Grille Tactile des Produits */}
-          <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-              {filteredProducts.map((prod) => {
-                const inCart = currentTicket.items.find((i) => i.produitId === prod.id);
-                const isWeighed = prod.vendu_au_poids === 1 || prod.unite === "kg" || prod.unite === "g";
+                  {products.length}
+                </span>
+              </button>
+              {categories.map((c) => {
+                const isSelected = selectedCategory === c;
+                const count = categoryCounts[c] || 0;
                 return (
-                  <div
-                    key={prod.id}
-                    onClick={() => {
-                      if (isWeighed) {
-                        handleOpenBalanceModal(prod);
-                      } else {
-                        handleAddProduct(prod);
-                      }
-                    }}
-                    className={`relative p-3 rounded-xl border cursor-pointer transition-all duration-150 flex flex-col justify-between min-h-[105px] select-none active:scale-95 ${
-                      inCart
-                        ? "bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-900/20"
-                        : "bg-slate-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-slate-800"
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setSelectedCategory(c)}
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                        : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 shadow-2xs"
                     }`}
                   >
-                    {/* Badge de quantité déjà dans le panier */}
-                    {inCart && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white text-[10px] font-black px-1.5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900">
-                        {inCart.quantite % 1 === 0 ? inCart.quantite : inCart.quantite.toFixed(2)}
-                      </span>
-                    )}
-
-                    <div>
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="text-[10px] font-mono font-semibold text-slate-400 truncate max-w-[65%]">
-                          {prod.ref}
-                        </span>
-                        {isWeighed ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800/60 flex items-center gap-0.5">
-                            <Scale size={10} /> Au Poids
-                          </span>
-                        ) : prod.stock_actuel !== undefined ? (
-                          <span
-                            className={`text-[9px] font-bold px-1 rounded ${
-                              prod.stock_actuel > 0
-                                ? "bg-slate-700 text-emerald-400"
-                                : "bg-red-950 text-red-400"
-                            }`}
-                          >
-                            Stk: {prod.stock_actuel}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <h3 className="font-bold text-xs text-white line-clamp-2 mt-1 leading-snug">
-                        {prod.designation}
-                      </h3>
-                    </div>
-
-                    <div className="flex items-baseline justify-between mt-2 pt-1 border-t border-slate-700/50">
-                      <span className="text-[10px] text-slate-400 uppercase">
-                        {isWeighed ? "DH/KG" : "TTC"}
-                      </span>
-                      <span className="font-black text-sm text-emerald-400">
-                        {formatNumber(prod.prix_ttc)}{" "}
-                        <span className="text-[10px] font-bold text-slate-300">
-                          DH{isWeighed ? "/kg" : ""}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
+                    {getCategoryIcon(c)}
+                    <span>{c}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold font-mono ${
+                        isSelected ? "bg-indigo-800 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Grille Tactile des Produits avec Miniatures Photos & Fallbacks */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {filteredProducts.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 py-16">
+                <Search size={36} className="opacity-40 mb-2" />
+                <p className="text-sm font-semibold text-slate-700">Aucun produit trouvé</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Modifiez votre recherche ou sélectionnez une autre catégorie.
+                </p>
+                {(searchQuery || selectedCategory !== "all") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedCategory("all");
+                    }}
+                    className="mt-3 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-indigo-700 border border-slate-300 transition"
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {filteredProducts.map((prod) => {
+                  const inCart = currentTicket.items.find((i) => i.produitId === prod.id);
+                  const isWeighed = prod.vendu_au_poids === 1 || prod.unite === "kg" || prod.unite === "g";
+                  const catTheme = getCategoryVisualTheme(prod.categorie || "");
+
+                  return (
+                    <div
+                      key={prod.id}
+                      onClick={() => {
+                        if (isWeighed) {
+                          handleOpenBalanceModal(prod);
+                        } else {
+                          handleAddProduct(prod);
+                        }
+                      }}
+                      className={`group relative rounded-2xl border transition-all duration-150 flex flex-col justify-between select-none cursor-pointer active:scale-[0.98] shadow-xs hover:shadow-md overflow-hidden ${
+                        inCart
+                          ? "bg-indigo-50/70 border-indigo-500 ring-2 ring-indigo-400/40 shadow-sm"
+                          : "bg-white border-slate-200/90 hover:border-indigo-400 hover:bg-slate-50/40"
+                      }`}
+                    >
+                      {/* Badge quantité dans le panier */}
+                      {inCart && (
+                        <div className="absolute top-2 right-2 bg-indigo-600 text-white text-[11px] font-black px-2 py-0.5 rounded-full flex items-center justify-center shadow-md z-20 font-mono">
+                          {inCart.quantite % 1 === 0 ? inCart.quantite : inCart.quantite.toFixed(2)} ×
+                        </div>
+                      )}
+
+                      {/* 1. VISUEL PRODUIT : Photo réelle ou Dégradé de Catégorie avec Monogramme */}
+                      <div className="relative w-full h-24 sm:h-28 overflow-hidden bg-slate-100 flex items-center justify-center border-b border-slate-100">
+                        {prod.image_url ? (
+                          <img
+                            src={prod.image_url}
+                            alt={prod.designation}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div
+                            className={`w-full h-full bg-gradient-to-br ${catTheme.gradient} flex flex-col items-center justify-center p-2 relative`}
+                          >
+                            <div className="absolute top-2 left-2 p-1 rounded-md bg-white/80 shadow-2xs">
+                              {getCategoryIcon(prod.categorie || "")}
+                            </div>
+                            <span
+                              className={`text-2xl font-black font-mono tracking-wider ${catTheme.badgeText} opacity-80 group-hover:scale-110 transition-transform`}
+                            >
+                              {getProductMonogram(prod.designation, prod.ref)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Badges flottants sur la photo (Ref + Stock/Poids) */}
+                        <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/95 text-slate-700 shadow-2xs border border-slate-200/60 truncate max-w-[85px]">
+                            {prod.ref}
+                          </span>
+
+                          {isWeighed ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-600 text-white shadow-2xs flex items-center gap-0.5">
+                              <Scale size={10} /> Poids
+                            </span>
+                          ) : prod.stock_actuel !== undefined ? (
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-2xs ${
+                                prod.stock_actuel > 5
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : prod.stock_actuel > 0
+                                  ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                  : "bg-rose-100 text-rose-800 border border-rose-300"
+                              }`}
+                            >
+                              {prod.stock_actuel > 0 ? `Stk: ${prod.stock_actuel}` : "Épuisé"}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* 2. INFOS DU PRODUIT */}
+                      <div className="p-2.5 flex flex-col justify-between flex-1">
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-800 group-hover:text-indigo-600 line-clamp-2 leading-snug">
+                          {prod.designation}
+                        </h3>
+
+                        {/* Prix TTC & Devise */}
+                        <div className="flex items-baseline justify-between mt-2 pt-1.5 border-t border-slate-100">
+                          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                            {isWeighed ? "DH/KG" : "TTC"}
+                          </span>
+                          <div className="text-right">
+                            <span className="font-extrabold text-sm sm:text-base text-emerald-600 font-mono tracking-tight">
+                              {formatNumber(prod.prix_ttc)}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-500 ml-1">
+                              DH{isWeighed ? "/kg" : ""}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* === SECTION DROITE : PANIER TICKET & FAST CHECKOUT (5 COLS) === */}
-        <div className="col-span-5 bg-slate-950 flex flex-col overflow-hidden">
-          {/* Sélecteur Client & Commercial & Actions Panier */}
-          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex flex-col gap-2 shrink-0">
+        {/* === SECTION DROITE : PANIER TICKET & FAST CHECKOUT === */}
+        <div className="col-span-12 lg:col-span-5 xl:col-span-5 2xl:col-span-4 bg-white flex flex-col overflow-hidden border-l border-slate-200/90 shadow-sm">
+          {/* Sélecteur Client & Vendeur & Bouton Vider */}
+          <div className="p-3 bg-slate-50/80 border-b border-slate-200/90 flex flex-col gap-2 shrink-0">
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1">
                 <Select
-                  placeholder="Client"
+                  placeholder="Sélectionner Client"
                   leftSection={<UserRound size={14} className="text-slate-400" />}
                   data={[
                     { value: "0", label: "Client Comptoir (Standard)" },
@@ -1327,13 +1651,13 @@ export function PosTerminal({
                   size="xs"
                   radius="md"
                   styles={{
-                    input: { backgroundColor: "#0f172a", borderColor: "#334155", color: "#ffffff" },
+                    input: { backgroundColor: "#ffffff", borderColor: "#cbd5e1", color: "#0f172a" },
                   }}
                 />
               </div>
 
               {commerciaux && commerciaux.length > 0 && (
-                <div className="w-36">
+                <div className="w-32">
                   <Select
                     placeholder="Vendeur"
                     clearable
@@ -1353,7 +1677,7 @@ export function PosTerminal({
                     size="xs"
                     radius="md"
                     styles={{
-                      input: { backgroundColor: "#0f172a", borderColor: "#334155", color: "#ffffff" },
+                      input: { backgroundColor: "#ffffff", borderColor: "#cbd5e1", color: "#0f172a" },
                     }}
                   />
                 </div>
@@ -1363,9 +1687,11 @@ export function PosTerminal({
                 size="xs"
                 variant="subtle"
                 color="red"
+                radius="md"
                 leftSection={<Trash2 size={13} />}
                 onClick={handleClearCart}
                 disabled={currentTicket.items.length === 0}
+                title="Vider tout le ticket en cours"
               >
                 Vider
               </Button>
@@ -1386,16 +1712,16 @@ export function PosTerminal({
                   : "amber";
 
               return (
-                <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-900 rounded-lg border border-slate-800 text-xs">
+                <div className="flex items-center justify-between px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs shadow-2xs">
                   <div className="flex items-center gap-1.5">
-                    <Award size={14} className="text-amber-400" />
-                    <span className="text-slate-400 font-medium">Palier :</span>
+                    <Award size={14} className="text-amber-500" />
+                    <span className="text-slate-600 font-medium">Palier :</span>
                     <Badge size="xs" variant="light" color={badgeColor}>
                       {palier}
                     </Badge>
                   </div>
-                  <div className="text-slate-300">
-                    Solde : <span className="text-emerald-400 font-bold">{selectedC.fidelite_points || 0}</span> pts
+                  <div className="text-slate-700 font-medium">
+                    Solde : <span className="text-emerald-600 font-bold font-mono">{selectedC.fidelite_points || 0}</span> pts
                   </div>
                 </div>
               );
@@ -1403,14 +1729,31 @@ export function PosTerminal({
           </div>
 
           {/* Lignes du Panier */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          <div className="flex-1 overflow-y-auto p-3 space-y-1.5 bg-slate-50/40">
             {currentTicket.items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 py-12">
-                <ShoppingCart size={40} className="stroke-[1.2] mb-2 opacity-50" />
-                <p className="text-xs font-semibold">Le ticket est actuellement vide.</p>
-                <p className="text-[11px] text-slate-600 mt-0.5">
-                  Scannez un code-barres ou touchez un produit pour l&apos;ajouter.
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-4 shadow-xs">
+                  <ShoppingCart size={32} className="stroke-[1.5]" />
+                </div>
+                <p className="text-sm font-bold text-slate-700">Ticket en cours vide</p>
+                <p className="text-xs text-slate-500 max-w-[260px] mt-1 leading-relaxed">
+                  Scannez un code-barres avec la douchette ou touchez un article du catalogue pour l&apos;ajouter.
                 </p>
+
+                <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-[320px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 font-medium flex items-center gap-1.5 shadow-2xs">
+                    <Barcode size={13} className="text-indigo-600" /> Douchette active
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 font-medium flex items-center gap-1.5 shadow-2xs">
+                    <Scale size={13} className="text-teal-600" /> F4 : Pesée
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 font-medium flex items-center gap-1.5 shadow-2xs">
+                    <Banknote size={13} className="text-emerald-600" /> F8 : Espèces
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 font-medium flex items-center gap-1.5 shadow-2xs">
+                    <CreditCard size={13} className="text-blue-600" /> F9 : Carte
+                  </span>
+                </div>
               </div>
             ) : (
               currentTicket.items.map((item, idx) => {
@@ -1425,15 +1768,15 @@ export function PosTerminal({
                       setSelectedLineIndex(idx);
                       setNumpadBuffer("");
                     }}
-                    className={`p-2.5 rounded-xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2 ${
+                    className={`p-2.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2 ${
                       isSelected
-                        ? "bg-slate-800 border-indigo-500 ring-1 ring-indigo-500"
-                        : "bg-slate-900 border-slate-800 hover:border-slate-700"
+                        ? "bg-indigo-50/70 border-indigo-400 ring-2 ring-indigo-400/50 shadow-xs"
+                        : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 shadow-2xs"
                     }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-white truncate max-w-[70%]">
+                        <span className="font-bold text-xs text-slate-900 truncate max-w-[70%]">
                           {item.designation}
                         </span>
                         {item.remisePourcent > 0 && (
@@ -1442,50 +1785,49 @@ export function PosTerminal({
                           </Badge>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatNumber(item.prixUnitaireTtc)} DH ×{" "}
-                        <span className="font-semibold text-slate-200">
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        <span className="font-mono font-semibold">{formatNumber(item.prixUnitaireTtc)} DH</span> ×{" "}
+                        <span className="font-bold text-slate-800 font-mono">
                           {item.quantite % 1 === 0 ? item.quantite : item.quantite.toFixed(3)}
                         </span>
                       </div>
                     </div>
 
-                    {/* Steppers de quantité */}
+                    {/* Steppers de quantité ergonomiques */}
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <ActionIcon
-                        size="sm"
-                        variant="light"
-                        color="gray"
+                      <button
+                        type="button"
                         onClick={() => handleUpdateItemQty(idx, -1)}
+                        className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95 flex items-center justify-center font-bold transition border border-slate-200"
+                        title="Diminuer quantité (-1)"
                       >
-                        <Minus size={12} />
-                      </ActionIcon>
-                      <span className="text-xs font-bold px-1 min-w-6 text-center">
+                        <Minus size={14} />
+                      </button>
+                      <span className="text-xs font-black px-1 min-w-7 text-center font-mono text-slate-900">
                         {item.quantite % 1 === 0 ? item.quantite : item.quantite.toFixed(2)}
                       </span>
-                      <ActionIcon
-                        size="sm"
-                        variant="light"
-                        color="gray"
+                      <button
+                        type="button"
                         onClick={() => handleUpdateItemQty(idx, 1)}
+                        className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95 flex items-center justify-center font-bold transition border border-slate-200"
+                        title="Augmenter quantité (+1)"
                       >
-                        <Plus size={12} />
-                      </ActionIcon>
-                      <ActionIcon
-                        size="sm"
-                        variant="subtle"
-                        color="red"
+                        <Plus size={14} />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleRemoveItem(idx)}
-                        ml={4}
+                        className="w-8 h-8 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 active:scale-95 flex items-center justify-center transition ml-1"
+                        title="Supprimer la ligne"
                       >
-                        <Trash2 size={13} />
-                      </ActionIcon>
+                        <Trash2 size={14} />
+                      </button>
                     </div>
 
                     {/* Total de la ligne */}
                     <div className="text-right shrink-0 min-w-[70px]">
-                      <div className="font-black text-xs text-white">
-                        {formatNumber(lineTotal)} <span className="text-[10px] text-slate-400">DH</span>
+                      <div className="font-black text-xs sm:text-sm text-slate-900 font-mono">
+                        {formatNumber(lineTotal)} <span className="text-[10px] text-slate-500 font-sans">DH</span>
                       </div>
                     </div>
                   </div>
@@ -1496,33 +1838,46 @@ export function PosTerminal({
 
           {/* Clavier Tactile Numpad pour modifications rapides */}
           {selectedLineIndex !== null && currentTicket.items[selectedLineIndex] && (
-            <div className="p-2 bg-slate-900 border-t border-slate-800 shrink-0">
-              <div className="flex items-center justify-between mb-1.5 px-1">
-                <span className="text-[10px] font-bold text-slate-400 truncate max-w-[50%]">
-                  Ligne : {currentTicket.items[selectedLineIndex].designation}
-                </span>
+            <div className="p-3 bg-slate-50/90 border-t border-slate-200 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[11px] font-bold text-indigo-600">Ajuster ligne :</span>
+                  <span className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+                    {currentTicket.items[selectedLineIndex].designation}
+                  </span>
+                </div>
 
                 <SegmentedControl
                   size="xs"
+                  radius="md"
                   value={numpadTarget}
                   onChange={(v: any) => {
                     setNumpadTarget(v);
                     setNumpadBuffer("");
                   }}
                   data={[
-                    { label: "Qté", value: "qty" },
+                    { label: "Quantité", value: "qty" },
                     { label: "Remise %", value: "discount" },
                   ]}
                   color="indigo"
                 />
               </div>
 
-              <div className="grid grid-cols-6 gap-1">
-                {["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".", "C"].map((k) => (
+              <div className="grid grid-cols-4 gap-1.5">
+                {["7", "8", "9", "+1", "4", "5", "6", "+5", "1", "2", "3", "C", "0", ".", "00", "OK"].map((k) => (
                   <button
                     key={k}
+                    type="button"
                     onClick={() => handleNumpadPress(k)}
-                    className="h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-indigo-600 text-white font-bold text-xs flex items-center justify-center transition"
+                    className={`h-9 rounded-xl font-bold text-xs flex items-center justify-center transition active:scale-95 ${
+                      k === "OK"
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+                        : k === "C"
+                        ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
+                        : k.startsWith("+")
+                        ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold border border-indigo-200/60"
+                        : "bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs"
+                    }`}
                   >
                     {k}
                   </button>
@@ -1531,62 +1886,120 @@ export function PosTerminal({
             </div>
           )}
 
-          {/* Totaux Financiers du Ticket */}
-          <div className="p-3 bg-slate-900 border-t border-slate-800 shrink-0">
-            <div className="space-y-1 text-xs text-slate-400">
-              <div className="flex justify-between">
+          {/* Totaux Financiers du Ticket & Checkout */}
+          <div className="p-3.5 bg-slate-50/90 border-t border-slate-200/90 shrink-0 space-y-2.5">
+            <div className="space-y-1 text-xs text-slate-600">
+              <div className="flex justify-between items-center">
                 <span>Sous-total HT</span>
-                <span className="font-semibold text-slate-200">{formatNumber(ticketTotals.totalHt)} DH</span>
+                <span className="font-semibold text-slate-800 font-mono">{formatNumber(ticketTotals.totalHt)} DH</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span>TVA estimée</span>
-                <span className="font-semibold text-slate-200">{formatNumber(ticketTotals.totalTva)} DH</span>
+                <span className="font-semibold text-slate-800 font-mono">{formatNumber(ticketTotals.totalTva)} DH</span>
               </div>
               {currentTicket.remiseGlobale > 0 && (
-                <div className="flex justify-between text-orange-400">
+                <div className="flex justify-between items-center text-amber-600 font-semibold">
                   <span>Remise globale</span>
-                  <span>- {formatNumber(currentTicket.remiseGlobale)} DH</span>
+                  <span className="font-bold font-mono">- {formatNumber(currentTicket.remiseGlobale)} DH</span>
                 </div>
               )}
             </div>
 
-            {/* TOTAL À PAYER GÉANT */}
-            <div className="mt-2.5 p-3 rounded-xl bg-indigo-950/60 border border-indigo-500/50 flex items-baseline justify-between">
+            {/* RACCOURCIS RAPIDES COUPURES ESPÈCES (EXACT, 20 DH, 50 DH, 100 DH, 200 DH) */}
+            <div className="pt-2 border-t border-slate-200/80">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                  <Zap size={11} className="text-amber-500" />
+                  Coupures reçues
+                </span>
+                {quickChangeDue !== null && (
+                  <span className="text-[11px] font-black font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Rendu : {formatNumber(quickChangeDue)} DH
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                <button
+                  type="button"
+                  disabled={currentTicket.items.length === 0}
+                  onClick={() => handleSelectQuickCash("exact")}
+                  className={`py-1.5 px-1 rounded-xl text-xs font-black transition active:scale-95 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed ${
+                    quickCashTender === "exact"
+                      ? "bg-teal-600 text-white shadow-xs"
+                      : "bg-white hover:bg-slate-100 text-teal-700 border border-teal-200 shadow-2xs"
+                  }`}
+                  title="Règlement du montant exact"
+                >
+                  Exact
+                </button>
+                {[20, 50, 100, 200].map((denom) => (
+                  <button
+                    key={denom}
+                    type="button"
+                    disabled={currentTicket.items.length === 0}
+                    onClick={() => handleSelectQuickCash(denom)}
+                    className={`py-1.5 px-1 rounded-xl text-xs font-black font-mono transition active:scale-95 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed ${
+                      quickCashTender === denom
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-white hover:bg-slate-100 text-emerald-700 border border-emerald-200 shadow-2xs"
+                    }`}
+                    title={`Billet de ${denom} DH`}
+                  >
+                    {denom} DH
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TOTAL À PAYER & BOUTONS D'ENCAISSEMENT DIRECT */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-slate-50 to-white border border-indigo-200/80 shadow-sm flex items-center justify-between gap-3">
               <div>
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider block">
+                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider block">
                   NET À PAYER ({ticketTotals.totalItems} art.)
                 </span>
-                <span className="text-2xl font-black text-white leading-tight">
-                  {formatNumber(ticketTotals.totalTtc)}{" "}
-                  <span className="text-sm font-bold text-indigo-300">DH</span>
-                </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
+                    {formatNumber(ticketTotals.totalTtc)}
+                  </span>
+                  <span className="text-sm font-bold text-indigo-600">DH</span>
+                </div>
               </div>
 
-              {/* Raccourci rapide Espèces / Carte */}
-              <div className="flex gap-1.5">
-                <Button
-                  size="md"
-                  radius="lg"
-                  color="teal"
-                  leftSection={<Banknote size={18} />}
+              {/* Raccourci rapide Espèces / Carte / Mixte */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
                   onClick={() => handleOpenPayment("especes")}
                   disabled={currentTicket.items.length === 0}
-                  className="shadow-lg shadow-teal-900/30 font-bold"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                  title="Encaisser en Espèces (F8)"
                 >
-                  Espèces
-                </Button>
+                  <Banknote size={17} />
+                  <span>Espèces</span>
+                  <span className="hidden xl:inline text-[10px] opacity-80 font-mono">(F8)</span>
+                </button>
 
-                <Button
-                  size="md"
-                  radius="lg"
-                  color="indigo"
-                  leftSection={<CreditCard size={18} />}
+                <button
+                  type="button"
                   onClick={() => handleOpenPayment("carte")}
                   disabled={currentTicket.items.length === 0}
-                  className="shadow-lg shadow-indigo-900/30 font-bold"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-600/20 transition active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                  title="Encaisser par Carte TPE (F9)"
                 >
-                  Carte
-                </Button>
+                  <CreditCard size={17} />
+                  <span>Carte</span>
+                  <span className="hidden xl:inline text-[10px] opacity-80 font-mono">(F9)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenPayment("mixte")}
+                  disabled={currentTicket.items.length === 0}
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white text-slate-700 font-bold transition active:scale-95 cursor-pointer disabled:cursor-not-allowed border border-slate-200 shadow-2xs"
+                  title="Autres modes / Paiement fractionné"
+                >
+                  <Layers size={17} />
+                </button>
               </div>
             </div>
           </div>
@@ -1655,18 +2068,18 @@ export function PosTerminal({
           {paymentMode === "mixte" ? (
             <div className="space-y-3">
               {/* Synthèse Reste Dû / Total Réglé */}
-              <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center">
+              <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Total Dû</span>
-                  <span className="text-sm font-black text-white">{formatNumber(ticketTotals.totalTtc)} DH</span>
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">Total Dû</span>
+                  <span className="text-sm font-black text-slate-900">{formatNumber(ticketTotals.totalTtc)} DH</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Réglé</span>
-                  <span className="text-sm font-black text-emerald-400">{formatNumber(totalSplitRegle)} DH</span>
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">Réglé</span>
+                  <span className="text-sm font-black text-emerald-600">{formatNumber(totalSplitRegle)} DH</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase block">Reste à Payer</span>
-                  <span className={`text-sm font-black ${remainingSplitDue > 0.05 ? "text-amber-400" : "text-emerald-400"}`}>
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase block">Reste à Payer</span>
+                  <span className={`text-sm font-black ${remainingSplitDue > 0.05 ? "text-amber-600" : "text-emerald-600"}`}>
                     {formatNumber(remainingSplitDue)} DH
                   </span>
                 </div>
@@ -1674,10 +2087,10 @@ export function PosTerminal({
 
               {/* Liste des Paiements Déjà Enregistrés */}
               {splitPayments.length > 0 && (
-                <div className="border border-slate-800 rounded-lg overflow-hidden">
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <Table striped highlightOnHover verticalSpacing="xs">
                     <Table.Thead>
-                      <Table.Tr className="bg-slate-900 text-[11px] text-slate-400">
+                      <Table.Tr className="bg-slate-50 text-[11px] text-slate-600">
                         <Table.Th>Mode</Table.Th>
                         <Table.Th>Montant</Table.Th>
                         <Table.Th>Réf / Détail</Table.Th>
@@ -1714,10 +2127,10 @@ export function PosTerminal({
                                 : "Virement"}
                             </Badge>
                           </Table.Td>
-                          <Table.Td className="font-bold text-white">
+                          <Table.Td className="font-bold text-slate-900">
                             {formatNumber(p.montant)} DH
                           </Table.Td>
-                          <Table.Td className="text-slate-400 text-[11px]">
+                          <Table.Td className="text-slate-500 text-[11px]">
                             {p.reference || "-"}
                           </Table.Td>
                           <Table.Td>
@@ -1739,8 +2152,8 @@ export function PosTerminal({
 
               {/* Formulaire d'ajout d'une tranche de règlement */}
               {remainingSplitDue > 0.01 && (
-                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2.5">
-                  <Text size="xs" fw={700} c="indigo.3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <Text size="xs" fw={700} c="indigo.7">
                     + Ajouter un mode de paiement partiel :
                   </Text>
                   <div className="grid grid-cols-2 gap-2">
@@ -1793,11 +2206,11 @@ export function PosTerminal({
                   </div>
 
                   {splitModeDraft === "bon_achat" && bonAchatCheckStatus.valid === true && (
-                    <div className="p-2 bg-emerald-950/60 border border-emerald-800 rounded-lg flex items-center justify-between text-xs">
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
                       <div>
-                        <span className="text-emerald-400 font-bold">Bon Valide : </span>
-                        <span className="text-white font-black">{formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH disponible</span>
-                        {bonAchatCheckStatus.clientNom && <span className="text-slate-400 block text-[11px]">Client: {bonAchatCheckStatus.clientNom}</span>}
+                        <span className="text-emerald-700 font-bold">Bon Valide : </span>
+                        <span className="text-slate-900 font-black">{formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH disponible</span>
+                        {bonAchatCheckStatus.clientNom && <span className="text-slate-500 block text-[11px]">Client: {bonAchatCheckStatus.clientNom}</span>}
                       </div>
                       <Button
                         size="compact-xs"
@@ -1901,8 +2314,8 @@ export function PosTerminal({
             </div>
           ) : paymentMode === "bon_achat" ? (
             /* CAS 3 : PAIEMENT INTÉGRAL PAR BON D'ACHAT / CHÈQUE CADEAU */
-            <div className="space-y-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
-              <div className="flex items-center gap-2 text-grape-400">
+            <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2 text-grape-600">
                 <Tag size={18} />
                 <Text size="xs" fw={700}>
                   Règlement par Bon d&apos;Achat ou Titre Cadeau
@@ -1938,18 +2351,18 @@ export function PosTerminal({
 
               {/* Résultat de la vérification */}
               {bonAchatCheckStatus.valid === true && (
-                <div className="p-2.5 bg-emerald-950/60 border border-emerald-800 rounded-lg text-xs space-y-1">
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-emerald-400 font-bold">✓ Bon d&apos;Achat Actif</span>
-                    <span className="text-white font-black text-sm">
+                    <span className="text-emerald-700 font-bold">✓ Bon d&apos;Achat Actif</span>
+                    <span className="text-slate-900 font-black text-sm">
                       Solde : {formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH
                     </span>
                   </div>
                   {bonAchatCheckStatus.clientNom && (
-                    <div className="text-slate-400 text-[11px]">Client : {bonAchatCheckStatus.clientNom}</div>
+                    <div className="text-slate-500 text-[11px]">Client : {bonAchatCheckStatus.clientNom}</div>
                   )}
                   {Number(bonAchatCheckStatus.montantRestant) < ticketTotals.totalTtc && (
-                    <div className="text-amber-400 font-semibold text-[11px] mt-1">
+                    <div className="text-amber-600 font-semibold text-[11px] mt-1">
                       ⚠️ Le solde de ce bon ({formatNumber(bonAchatCheckStatus.montantRestant || 0)} DH) ne couvre pas la totalité du ticket ({formatNumber(ticketTotals.totalTtc)} DH). Privilégiez le mode Multi-Paiement.
                     </div>
                   )}
@@ -1957,7 +2370,7 @@ export function PosTerminal({
               )}
 
               {bonAchatCheckStatus.valid === false && (
-                <div className="p-2 bg-red-950/60 border border-red-800 rounded-lg text-xs text-red-300 font-semibold">
+                <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 font-semibold">
                   ⚠️ {bonAchatCheckStatus.message}
                 </div>
               )}
@@ -1968,11 +2381,11 @@ export function PosTerminal({
             </div>
           ) : (
             /* CAS 4 : CARTE TPE / CHÈQUE / VIREMENT */
-            <div className="space-y-3 p-3 bg-slate-900 rounded-xl border border-slate-800">
+            <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
               <Text size="xs" c="dimmed">
                 Montant à percevoir via {paymentMode === "carte" ? "TPE Carte Bancaire" : paymentMode === "cheque" ? "Chèque Bancaire" : "Virement"} :
               </Text>
-              <div className="text-xl font-black text-white">
+              <div className="text-xl font-black text-slate-900">
                 {formatNumber(ticketTotals.totalTtc)} DH
               </div>
               <TextInput

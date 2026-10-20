@@ -1451,6 +1451,7 @@ function migrateDatabase(db: Database.Database) {
   ensureColumnExists(db, "users", "taux_commission_defaut", "REAL NOT NULL DEFAULT 0");
   ensureColumnExists(db, "documents", "commercial_id", "INTEGER");
   ensureColumnExists(db, "caisse_tickets", "commercial_id", "INTEGER");
+  ensureColumnExists(db, "produits", "image_url", "TEXT DEFAULT ''");
 
   // Nouvelles colonnes RH (Pointeuse, Congés, Paie)
   ensureColumnExists(db, "employes", "code_pin", "TEXT DEFAULT '1234'");
